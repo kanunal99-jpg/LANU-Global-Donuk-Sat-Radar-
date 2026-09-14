@@ -5,14 +5,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 data class City(val name: String, val districts: List<String>)
-data class Business(val name: String, val type: String, val district: String, val potential: Int)
 
 private val cities = listOf(
     City("İstanbul", listOf("Kadıköy", "Beşiktaş", "Şişli", "Bakırköy", "Ataşehir")),
@@ -20,12 +18,6 @@ private val cities = listOf(
     City("İzmir", listOf("Konak", "Karşıyaka", "Bornova")),
     City("Bursa", listOf("Nilüfer", "Osmangazi")),
     City("Antalya", listOf("Muratpaşa", "Konyaaltı"))
-)
-
-private val demoBusinesses = listOf(
-    Business("Örnek HORECA İşletmesi", "Restoran", "Kadıköy", 82),
-    Business("Örnek Cafe", "Kafe", "Kadıköy", 64),
-    Business("Örnek Mutfak", "Catering", "Beşiktaş", 91)
 )
 
 class MainActivity : ComponentActivity() {
@@ -63,9 +55,10 @@ fun SalesRadarApp() {
                     }
                 }
                 item {
-                    ScrollableTabRow(selectedTabIndex = 0) {
-                        listOf("Tümü" to "Tümü") + selectedCity.districts.map { it to it }.forEach { (label, value) ->
-                            Tab(selected = selectedDistrict == value, onClick = { selectedDistrict = value }, text = { Text(label) })
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = selectedDistrict == "Tümü", onClick = { selectedDistrict = "Tümü" }, label = { Text("Tümü") })
+                        selectedCity.districts.forEach { district ->
+                            FilterChip(selected = selectedDistrict == district, onClick = { selectedDistrict = district }, label = { Text(district) })
                         }
                     }
                 }
@@ -75,18 +68,15 @@ fun SalesRadarApp() {
                             Text("Saha özeti", style = MaterialTheme.typography.titleMedium)
                             Text("Seçili şehir: ${selectedCity.name}")
                             Text("İlçe: $selectedDistrict")
-                            Text("Veri durumu: başlangıç / kaynaklandırılacak")
+                            Text("Arama: ${query.ifBlank { "tümü" }}")
                         }
                     }
                 }
-                items(demoBusinesses.filter { selectedDistrict == "Tümü" || it.district == selectedDistrict }.filter { query.isBlank() || it.name.contains(query, true) || it.type.contains(query, true) }) { business ->
+                item {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp)) {
-                            Text(business.name, style = MaterialTheme.typography.titleMedium)
-                            Text("${business.type} • ${business.district}")
-                            Text("Potansiyel: ${business.potential}/100 — DEMO VERİ")
-                            Spacer(Modifier.height(8.dp))
-                            Button(onClick = { }) { Text("A–Z satış raporunu aç") }
+                            Text("Henüz doğrulanmış işletme verisi yok", style = MaterialTheme.typography.titleMedium)
+                            Text("Uygulama bilinmeyen işletmeleri veya tahmini bilgileri gerçek müşteri gibi göstermeyecek. Veri kaynağı bağlandığında işletmeler burada listelenecek.")
                         }
                     }
                 }
