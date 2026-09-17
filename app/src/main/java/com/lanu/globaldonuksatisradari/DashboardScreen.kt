@@ -17,28 +17,30 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.lanu.globaldonuksatisradari.crm.CrmDashboardMetrics
 
 @Composable
 fun SalesDashboard(
     selectedCity: String,
     selectedDistrict: String,
     availableDistricts: List<String>,
+    metrics: CrmDashboardMetrics,
     onDistrictSelected: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Satış Dashboard", style = MaterialTheme.typography.headlineSmall)
-        Text("Gerçek CRM verisi bağlandığında otomatik dolacak Power BI benzeri saha özeti.")
+        Text("Cihazda kalıcı CRM verisinden hesaplanan saha özeti.")
 
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            DashboardCard("Müşteriler", "—", "Henüz veri yok")
-            DashboardCard("Potansiyeller", "—", "Henüz veri yok")
-            DashboardCard("Ziyaretler", "—", "Henüz veri yok")
-            DashboardCard("Teklifler", "—", "Henüz veri yok")
-            DashboardCard("Siparişler", "—", "Henüz veri yok")
-            DashboardCard("Satış", "—", "Henüz veri yok")
+            DashboardCard("Müşteriler", metrics.customers.toString(), "Yerel CRM")
+            DashboardCard("Potansiyeller", metrics.prospects.toString(), "Prospect")
+            DashboardCard("Ziyaretler", metrics.visits.toString(), "Aşama")
+            DashboardCard("Teklifler", metrics.proposals.toString(), "Aşama")
+            DashboardCard("Siparişler", metrics.orders.toString(), "Aşama")
+            DashboardCard("Satış", "—", "Tutar verisi tutulmuyor")
         }
 
         Card(modifier = Modifier.fillMaxWidth()) {
@@ -69,15 +71,15 @@ fun SalesDashboard(
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Satış Hunisi", style = MaterialTheme.typography.titleMedium)
-                FunnelRow("Potansiyel", "—")
-                FunnelRow("Ziyaret", "—")
-                FunnelRow("Görüşme", "—")
-                FunnelRow("Teklif", "—")
-                FunnelRow("Numune", "—")
-                FunnelRow("Sipariş", "—")
-                FunnelRow("Aktif müşteri", "—")
+                FunnelRow("Potansiyel", metrics.prospects.toString())
+                FunnelRow("Ziyaret", metrics.visits.toString())
+                FunnelRow("Görüşme", metrics.meetings.toString())
+                FunnelRow("Teklif", metrics.proposals.toString())
+                FunnelRow("Numune", metrics.samples.toString())
+                FunnelRow("Sipariş", metrics.orders.toString())
+                FunnelRow("Aktif müşteri", metrics.activeCustomers.toString())
                 Text(
-                    "Veri kaynağı bağlanmadan sayı gösterilmez. Bu ekran sahte KPI üretmez.",
+                    "Bu sayılar yalnızca cihazdaki kaydedilmiş CRM kayıtlarından hesaplanır; olmayan satış tutarı veya müşteri sayısı uydurulmaz.",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -86,10 +88,10 @@ fun SalesDashboard(
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Bölge Analizi", style = MaterialTheme.typography.titleMedium)
-                Text("Şehir → ilçe → mahalle → işletme kırılımı gerçek veri kaynağı geldiğinde burada gösterilecek.")
+                Text("Şehir → ilçe → müşteri kırılımı yerel CRM kayıtlarından genişletilebilir.")
                 Text("Seçili şehir: $selectedCity")
                 Spacer(Modifier.height(2.dp))
-                Text("Harita katmanı: veri kaynağı ve lisans doğrulamasından sonra etkinleştirilecek.")
+                Text("Kaynak araması ile CRM kayıtları birbirinden ayrı tutulur.")
             }
         }
     }
