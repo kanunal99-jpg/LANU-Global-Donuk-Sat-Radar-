@@ -39,4 +39,6 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test:2.0.21")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.0.21")
+    // JVM unit tests must use the real JSON implementation; android.jar's org.json stubs throw at runtime.
+    testImplementation("org.json:json:20260814")
 }
