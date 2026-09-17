@@ -34,14 +34,18 @@ LANU Global Donuk Satış Radarı; Global Donuk Gıda'nın HORECA satış faaliy
 - Sabit SHA dosyası: `Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256`.
 - README içinde sabit APK indirme bağlantısı bulunuyor.
 
-### Doğrulanmış son release
-- CI: `Android CI #9`.
-- Build/release commiti: `6d37060010be877877fe8510485bdb56a827f3f3`.
-- CI sonucu: başarılı.
-- Build adımı: başarılı.
-- SHA-256 adımı: başarılı.
-- Artifact upload: başarılı.
-- Latest Release yayınlama: başarılı.
+### Veri gerçekliği — yeni temel katman
+- `DataQuality` ile doğrulanmış resmi, doğrulanmış harici, tahmini, kullanıcı girişi, eski ve doğrulanmamış veri ayrımı tanımlandı.
+- `BusinessSourceContract` ile kaynak kapsamı, erişim yöntemi, kullanım izni, toplu erişim ve alan listesi uygulama öncesi sözleşmeye bağlandı.
+- Kaynak kullanım izni doğrulanmadan üretim bağlantısı kurulmasını engelleyen validation eklendi.
+- `BusinessSourceAdapter` dış kaynak ile uygulama domain'i arasına ingestion sınırı olarak eklendi.
+- Adapter'dan gelen kayıtlar domain'e alınmadan `VerifiedBusinessValidator` üzerinden savunmacı biçimde doğrulanıyor; geçersiz kayıtlar güvenli şekilde eleniyor.
+- `BusinessRepositoryFactory` henüz doğrulanmış ve yapılandırılmış gerçek kaynak bulunmadığı için güvenli boş repository döndürüyor.
+- Böylece kaynak erişimi hazır değilken uygulamanın sahte işletme verisi göstermesi engellenmiş oldu.
+
+### Kaynak adayları
+- İTO Bilgi Bankası ve Türkiye Ticaret Sicili Gazetesi için resmi kaynak/erişim doğrulama kayıtları `docs/VERI_KAYNAKLARI.md` altında tutuluyor.
+- Bu kaynaklar henüz kullanım şartları ve erişim yöntemi üretim entegrasyonu için doğrulanmadığından uygulamaya işletme kaydı aktarılmıyor.
 
 ## 3. Kullanıcı tarafından istenen ürün kapsamı
 
@@ -122,7 +126,7 @@ Dashboard kapsamı:
 
 Aşağıdakiler planlanan/istenen kapsamdır; kod ve CI kanıtı oluşmadan tamamlanmış sayılmaz:
 
-- Gerçek işletme veri kaynaklarının entegrasyonu.
+- Gerçek işletme veri kaynaklarının üretim entegrasyonu ve erişim/lisans onayı.
 - İstanbul ilçe/mahalle bazlı doğrulanmış HORECA işletme veri seti.
 - Harita üzerinde canlı işletme keşfi.
 - İşletme detay raporunun tam veri modeli ve ekranları.
