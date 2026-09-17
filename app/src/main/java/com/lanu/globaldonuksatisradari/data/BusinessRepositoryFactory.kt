@@ -1,23 +1,10 @@
 package com.lanu.globaldonuksatisradari.data
 
-/**
- * Single composition point for business-data access.
- * Until an official source contract is verified and configured, the app must stay empty rather than
- * silently falling back to fabricated or unlicensed records.
- */
+/** Single composition point for business-data access. */
 object BusinessRepositoryFactory {
-    fun create(contract: BusinessSourceContract?): BusinessRepository =
-        if (contract == null || !contract.validate().isSuccess) {
-            EmptyBusinessRepository()
-        } else {
-            EmptyBusinessRepository()
-        }
+    fun create(contract: BusinessSourceContract?): BusinessRepository = EmptyBusinessRepository()
 
-    /**
-     * Production wiring point for a verified source adapter.
-     * The adapter is never trusted directly: contract validation and per-record domain validation
-     * remain mandatory at this boundary.
-     */
+    /** Production wiring for a verified adapter; invalid records never enter the domain. */
     fun create(
         contract: BusinessSourceContract?,
         adapter: BusinessSourceAdapter?,
@@ -35,21 +22,16 @@ object BusinessRepositoryFactory {
             query: String,
             city: String,
             district: String?,
-        ): List<VerifiedBusiness> = adapter.fetchValidated(query, city, district)
+        ): List<VerifiedBusiness> = BusinessDeduplication.deduplicate(adapter.fetchValidated(query, city, district))
     }
 }
 
-/** Normalized ingestion boundary. Adapters may only emit domain records through validation. */
 interface BusinessSourceAdapter {
     val contract: BusinessSourceContract
-
     suspend fun fetch(query: String, city: String, district: String? = null): List<VerifiedBusiness>
 }
 
-/**
- * Defensive adapter wrapper: invalid records are rejected instead of entering the app domain.
- * The source contract itself must also pass validation before production wiring.
- */
+/** Defensive ingestion boundary: source contract + per-record validation are mandatory. */
 suspend fun BusinessSourceAdapter.fetchValidated(
     query: String,
     city: String,
