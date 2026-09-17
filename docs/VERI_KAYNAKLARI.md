@@ -2,54 +2,68 @@
 
 ## Amaç
 
-Bu belge, işletme verisinin uygulamaya alınmasından önce kaynak kapsamı, erişim yöntemi ve kullanım şartlarının doğrulanmasını zorunlu kılar.
+İşletme verisinin uygulamaya alınmasında kaynak kapsamı, erişim yöntemi, kullanım şartı, veri kalitesi ve son doğrulama zamanı zorunludur.
 
-## Aday resmî kaynaklar
+## Aktif gerçek kaynak
+
+### OpenStreetMap Nominatim
+- Kaynak kimliği: `osm-nominatim`
+- Yayıncı: OpenStreetMap Foundation
+- Kaynak: https://nominatim.openstreetmap.org/
+- Lisans/veri: ODbL; uygulamada görünür OpenStreetMap atıfı bulunmalıdır.
+- Erişim: Kullanıcı tarafından başlatılan tekil arama.
+- Uygulama davranışı: Otomatik tamamlama, periyodik tarama ve bir alanın bütün POI'lerini sistematik olarak indirme yapılmaz.
+- Hız sınırı: Uygulama tarafında en az 1,1 saniye aralık uygulanır ve özel User-Agent gönderilir.
+- Kapsam: Arama sonucu dönen OSM kayıtları; **İstanbul'daki tüm işletmelerin eksiksiz veri tabanı değildir**.
+- Alanlar: ad, şehir, ilçe, mahalle (varsa), koordinat (varsa), kategori (varsa), kaynak adresi (varsa).
+- Durum: **BAĞLANDI — GERÇEK KULLANICI TETİKLEMELİ ARAMA AKTİF**
+
+## Bekleyen resmî kaynaklar
 
 ### İstanbul Ticaret Odası Bilgi Bankası
 - Kaynak kimliği: `ito-bilgi-bankasi`
 - Yayıncı: İstanbul Ticaret Odası
 - Kaynak: https://bilgibankasi.ito.org.tr/tr/bilgi-bankasi/firma-bilgileri
-- Uygulama kapsamı: İTO'nun kendi veri/kapsam sınırları ile sınırlıdır.
-- Erişim yöntemi: Önce resmî erişim ve kullanım şartları doğrulanacaktır.
-- Toplu veri: "Toplu Bilgi Talebi" özelliğinin alanları, ücret/koşulları, teslim biçimi ve yeniden kullanım şartları doğrulanmadan otomatik toplu aktarım yapılmayacaktır.
-- Durum: **KULLANIMA AÇILMADI — ŞARTLAR/ERİŞİM DOĞRULAMASI BEKLİYOR**
+- Resmî sitede firma araması; Ticaret Sicil/Oda Sicil, ticaret unvanı, NACE kodu ve meslek grubu üzerinden sunuluyor.
+- "Toplu Bilgi Talebi" özelliği mevcut; fakat otomatik toplu aktarım için kapsam, teslim biçimi, ücret/koşullar ve yeniden kullanım şartları ayrıca doğrulanmalıdır.
+- Durum: **ÜRETİM TOPLU ENTEGRASYONU BEKLİYOR — ERİŞİM/KULLANIM ŞARTI DOĞRULANMALI**
 
 ### Türkiye Ticaret Sicili Gazetesi
 - Kaynak kimliği: `ticaret-sicili-gazetesi`
 - Yayıncı: Türkiye Odalar ve Borsalar Birliği / Türkiye Ticaret Sicili Gazetesi
 - Kaynak: https://www.ticaretsicil.gov.tr/
-- Uygulama kapsamı: Sicil tescil/ilan ve ilgili resmî hizmetlerin kapsamı ile sınırlıdır.
-- Erişim yöntemi: Kimlik doğrulama, captcha, görüntüleme ve kullanım koşulları dikkate alınacaktır.
-- Durum: **KULLANIMA AÇILMADI — ŞARTLAR/ERİŞİM DOĞRULAMASI BEKLİYOR**
+- Unvan sorgulama ve ilan görüntüleme hizmetleri vardır; üyelik/giriş ve bazı sorgularda doğrulama kontrolleri bulunur.
+- 2026 veri aboneliği web servisleri ücretlidir; uygulamaya ücretli abonelik eklenmeden önce kullanıcı/onay gereklidir.
+- Durum: **BAĞLANMADI — ÜCRETLİ VERİ ABONELİĞİ ONAYI/EKİP ERİŞİMİ BEKLİYOR**
 
 ## Veri kabul kapısı
 
-Bir kaynak aşağıdaki koşullar sağlanmadan `BusinessRepository` içine gerçek işletme kaynağı olarak bağlanamaz:
+Bir kaynak aşağıdaki koşullar sağlanmadan doğrulanmış üretim kaynağı olarak bağlanamaz:
 
-1. Kaynağın resmî adresi doğrulanır.
-2. Veri kapsamı yazılı olarak belirlenir.
+1. Resmî kaynak adresi doğrulanır.
+2. Veri kapsamı belirlenir.
 3. Erişim yöntemi ve otomasyon şartları doğrulanır.
 4. Lisans/kullanım/yeniden kullanım şartları doğrulanır.
 5. Uygulamanın kullanım amacıyla uyum doğrulanır.
 6. Alan listesi ve veri kalitesi doğrulanır.
 7. Son doğrulama zamanı kaydedilir.
 8. Gerekli izin/erişim sağlanır.
-9. Test verisiyle adapter doğrulanır.
+9. Adapter testleri geçer.
 10. CI başarılı olmadan üretim entegrasyonu tamamlanmış sayılmaz.
 
 ## Veri sınıfları
 
 - `VERIFIED_OFFICIAL`: doğrulanmış resmî kaynaktan gelen veri.
-- `VERIFIED_EXTERNAL`: kullanım şartları doğrulanmış harici kaynaktan gelen veri.
+- `VERIFIED_EXTERNAL`: şartları doğrulanmış harici kaynaktan gelen veri.
 - `ESTIMATED`: açıkça tahmin olarak işaretlenen veri.
 - `USER_ENTERED`: kullanıcı tarafından girilen veri.
-- `STALE`: doğrulama zamanı geçerli kabul eşiğini aşmış veri.
-- `UNVERIFIED`: doğrulanmamış veri; kritik işletme gerçeği olarak gösterilemez.
+- `UNVERIFIED`: doğrulanmamış veri.
+
+Tazelik ayrı tutulur: `FRESH` / `STALE`. Tazelik, kaynağın kökenini değiştirmez.
 
 ## Yasaklar
 
-- Kaynak erişimini captcha/auth/erişim kontrollerini aşarak otomatikleştirmek.
-- Kaynakta bulunmayan işletme, telefon, çalışan sayısı, satış potansiyeli veya benzeri bilgileri üretmek.
+- Captcha/auth/erişim kontrollerini aşarak kaynağı otomatikleştirmek.
+- Kaynakta bulunmayan işletme, telefon, çalışan sayısı, satış potansiyeli veya benzeri bilgileri gerçekmiş gibi üretmek.
 - Bir kaynağın kapsamını "İstanbul'daki tüm işletmeler" şeklinde genellemek.
-- Kaynak şartları doğrulanmadan toplu scraping/indirme mimarisi kurmak.
+- Kullanım şartları doğrulanmadan toplu scraping/indirme yapmak.
