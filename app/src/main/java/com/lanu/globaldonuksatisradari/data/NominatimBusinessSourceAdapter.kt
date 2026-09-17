@@ -7,6 +7,7 @@ import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.URLEncoder
 import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
 
 /** Real external OSM place search; user-triggered and explicitly non-exhaustive. */
 object NominatimBusinessSource {
@@ -33,21 +34,23 @@ object NominatimBusinessSource {
 }
 
 object NominatimQueryBuilder {
-    fun build(query: String, city: String, district: String?): String {
+    fun build(query: String, city: String, district: String?, baseUrl: String = NominatimBusinessSource.BASE_URL): String {
         require(query.isNotBlank()) { "Arama metni boş olamaz" }
         require(city.isNotBlank()) { "Şehir boş olamaz" }
+        require(baseUrl.startsWith("https://")) { "Kaynak endpoint HTTPS olmalı" }
         val location = listOfNotNull(
             query.trim(),
             district?.takeUnless { it.isBlank() || it.equals("Tümü", ignoreCase = true) },
             city.trim(),
             "Türkiye",
         ).joinToString(", ")
-        return "${NominatimBusinessSource.BASE_URL}?format=jsonv2&addressdetails=1&limit=20&countrycodes=tr&q=${URLEncoder.encode(location, Charsets.UTF_8.name())}"
+        return "$baseUrl?format=jsonv2&addressdetails=1&limit=20&countrycodes=tr&q=${URLEncoder.encode(location, Charsets.UTF_8.name())}"
     }
 }
 
 class NominatimBusinessSourceAdapter(
     private val nowEpochMs: () -> Long = { System.currentTimeMillis() },
+    private val baseUrlProvider: () -> String = { NominatimBusinessSource.BASE_URL },
 ) : BusinessSourceAdapter {
     override val contract: BusinessSourceContract = NominatimBusinessSource.contract
 
@@ -57,9 +60,12 @@ class NominatimBusinessSourceAdapter(
         district: String?,
     ): List<VerifiedBusiness> = withContext(Dispatchers.IO) {
         if (contract.validate().isFailure || query.isBlank()) return@withContext emptyList()
+
+        val cacheKey = listOf(query.trim().lowercase(), city.trim().lowercase(), district?.trim()?.lowercase().orEmpty(), baseUrlProvider()).joinToString("|")
+        SearchCache.get(cacheKey)?.let { return@withContext it }
         RateLimiter.await()
 
-        val connection = (URL(NominatimQueryBuilder.build(query, city, district)).openConnection() as HttpURLConnection).apply {
+        val connection = (URL(NominatimQueryBuilder.build(query, city, district, baseUrlProvider())).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 15_000
             readTimeout = 20_000
@@ -74,7 +80,9 @@ class NominatimBusinessSourceAdapter(
         try {
             if (connection.responseCode !in 200..299) return@withContext emptyList()
             val payload = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            parse(payload, city, district, nowEpochMs())
+            val parsed = parse(payload, city, district, nowEpochMs())
+            SearchCache.put(cacheKey, parsed)
+            parsed
         } finally {
             connection.disconnect()
         }
@@ -120,6 +128,25 @@ class NominatimBusinessSourceAdapter(
             )
         }
         return BusinessDeduplication.deduplicate(result)
+    }
+}
+
+private object SearchCache {
+    private const val MAX_AGE_MS = 5 * 60 * 1000L
+    private data class Entry(val createdAt: Long, val records: List<VerifiedBusiness>)
+    private val entries = ConcurrentHashMap<String, Entry>()
+
+    fun get(key: String): List<VerifiedBusiness>? {
+        val entry = entries[key] ?: return null
+        if (System.currentTimeMillis() - entry.createdAt > MAX_AGE_MS) {
+            entries.remove(key)
+            return null
+        }
+        return entry.records
+    }
+
+    fun put(key: String, records: List<VerifiedBusiness>) {
+        entries[key] = Entry(System.currentTimeMillis(), records)
     }
 }
 
