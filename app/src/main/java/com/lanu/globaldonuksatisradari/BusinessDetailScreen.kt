@@ -77,7 +77,8 @@ fun BusinessDetailCard(
             if (business.latitude != null && business.longitude != null) {
                 OutlinedButton(
                     onClick = {
-                        val uri = Uri.parse("geo:${business.latitude},${business.longitude}?q=${business.latitude},${business.longitude(${Uri.encode(business.name)})}")
+                        val label = Uri.encode(business.name)
+                        val uri = Uri.parse("geo:${business.latitude},${business.longitude}?q=${business.latitude},${business.longitude($label)}")
                         context.startActivity(Intent(Intent.ACTION_VIEW, uri))
                     },
                     modifier = Modifier.fillMaxWidth(),
