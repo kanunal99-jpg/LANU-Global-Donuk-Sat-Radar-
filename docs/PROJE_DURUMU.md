@@ -40,12 +40,19 @@ LANU Global Donuk Satış Radarı; Global Donuk Gıda'nın HORECA satış faaliy
 - Kaynak kullanım izni doğrulanmadan üretim bağlantısı kurulmasını engelleyen validation eklendi.
 - `BusinessSourceAdapter` dış kaynak ile uygulama domain'i arasına ingestion sınırı olarak eklendi.
 - Adapter'dan gelen kayıtlar domain'e alınmadan `VerifiedBusinessValidator` üzerinden savunmacı biçimde doğrulanıyor; geçersiz kayıtlar güvenli şekilde eleniyor.
-- `BusinessRepositoryFactory` henüz doğrulanmış ve yapılandırılmış gerçek kaynak bulunmadığı için güvenli boş repository döndürüyor.
-- Böylece kaynak erişimi hazır değilken uygulamanın sahte işletme verisi göstermesi engellenmiş oldu.
+- Doğrulanmış bir adapter'ın gerçekten repository'ye bağlanabilmesi için güvenli factory yolu eklendi; sözleşme veya adapter uyuşmazlığında boş repository korunuyor.
+- Aynı kaynak içindeki `sourceId + businessId` tekrarları deterministik olarak eleniyor; farklı kaynaklardaki kayıtlar stabil kimlik kanıtı olmadan otomatik birleştirilmiyor.
+- Veri tazeliği, veri kaynağının kalitesiyle karıştırılmadan ayrı `BusinessFreshnessState` olarak değerlendiriliyor.
+- Gelecek tarihli doğrulamalar geçersiz kabul ediliyor; eski kayıtlar tazelik sonucu üzerinden ayrıca işaretlenebilecek şekilde hazırlanıyor.
+- Bu katmanda gerçek işletme verisi üretilmedi; kaynak erişimi hazır değilken güvenli boş veri davranışı korunuyor.
 
 ### Kaynak adayları
 - İTO Bilgi Bankası ve Türkiye Ticaret Sicili Gazetesi için resmi kaynak/erişim doğrulama kayıtları `docs/VERI_KAYNAKLARI.md` altında tutuluyor.
 - Bu kaynaklar henüz kullanım şartları ve erişim yöntemi üretim entegrasyonu için doğrulanmadığından uygulamaya işletme kaydı aktarılmıyor.
+
+### Bu bölümün CI durumu
+- Yeni adapter, deduplikasyon, freshness ve test değişiklikleri `main` üzerinde ayrı commitlerle uygulandı.
+- Son değişiklik için GitHub Actions Android CI çalışmaktadır; CI başarılı olmadan bu yeni katman release'e tamamlanmış olarak işaretlenmez.
 
 ## 3. Kullanıcı tarafından istenen ürün kapsamı
 
