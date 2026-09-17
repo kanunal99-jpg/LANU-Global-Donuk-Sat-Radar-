@@ -58,8 +58,10 @@ fun SalesRadarApp() {
     MaterialTheme {
         Scaffold(topBar = { TopAppBar(title = { Text("LANU Global Donuk Satış Radarı") }) }) { padding ->
             LazyColumn(
-                modifier = Modifier.padding(padding).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier
+                    .padding(padding)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item {
                     Text("Satış Radarı", style = MaterialTheme.typography.headlineSmall)
@@ -78,11 +80,11 @@ fun SalesRadarApp() {
                     Box {
                         OutlinedButton(
                             onClick = { cityMenu = true },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
                         ) { Text("Şehir: ${selectedCity.name}") }
                         DropdownMenu(
                             expanded = cityMenu,
-                            onDismissRequest = { cityMenu = false }
+                            onDismissRequest = { cityMenu = false },
                         ) {
                             cities.forEach { city ->
                                 DropdownMenuItem(
@@ -93,7 +95,7 @@ fun SalesRadarApp() {
                                         cityMenu = false
                                         results = emptyList()
                                         selectedBusiness = null
-                                    }
+                                    },
                                 )
                             }
                         }
@@ -103,11 +105,11 @@ fun SalesRadarApp() {
                     Box {
                         OutlinedButton(
                             onClick = { districtMenu = true },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
                         ) { Text("İlçe: $selectedDistrict") }
                         DropdownMenu(
                             expanded = districtMenu,
-                            onDismissRequest = { districtMenu = false }
+                            onDismissRequest = { districtMenu = false },
                         ) {
                             (listOf("Tümü") + selectedCity.districts).forEach { district ->
                                 DropdownMenuItem(
@@ -117,7 +119,7 @@ fun SalesRadarApp() {
                                         districtMenu = false
                                         results = emptyList()
                                         selectedBusiness = null
-                                    }
+                                    },
                                 )
                             }
                         }
@@ -150,7 +152,7 @@ fun SalesRadarApp() {
                             }
                         },
                         enabled = !loading,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     ) { Text(if (loading) "Gerçek kaynak aranıyor…" else "Gerçek kaynaktan ara") }
                 }
                 item {
@@ -183,7 +185,7 @@ fun SalesRadarApp() {
                         onDistrictSelected = {
                             selectedDistrict = it
                             selectedBusiness = null
-                        }
+                        },
                     )
                 }
                 item {
@@ -197,6 +199,21 @@ fun SalesRadarApp() {
                         }
                     }
                 }
+                if (results.isNotEmpty()) {
+                    item {
+                        Text("Harita", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Harita yalnızca bu kullanıcı aramasından dönen gerçek koordinatları gösterir; toplu şehir taraması yapmaz.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    item {
+                        BusinessMapPreview(businesses = results)
+                    }
+                    item {
+                        Text("© OpenStreetMap contributors · ODbL", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
                 items(results, key = { it.id }) { business ->
                     BusinessResultCard(
                         business = business,
@@ -207,7 +224,7 @@ fun SalesRadarApp() {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp)) {
                             Text("Veri sınırı", style = MaterialTheme.typography.titleMedium)
-                            Text("OSM kaydı bulunan işletmeler gösterilir. Çalışan sayısı, satış potansiyeli, telefon ve benzeri alanlar kaynakta yoksa uygulama bunları uydurmaz.")
+                            Text("OSM kaydı bulunan işletmeler gösterilir. Çalışan sayısı, satış potansiyeli ve benzeri alanlar kaynakta yoksa uygulama bunları uydurmaz.")
                         }
                     }
                 }
@@ -231,6 +248,9 @@ private fun BusinessResultCard(
             Text("${business.city} • ${business.district}${business.neighborhood?.let { " • $it" } ?: ""}")
             business.category?.let { Text("Kategori: $it") }
             business.address?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            business.phone?.let { Text("Telefon: $it", style = MaterialTheme.typography.bodySmall) }
+            business.website?.let { Text("Web: $it", style = MaterialTheme.typography.bodySmall) }
+            business.openingHours?.let { Text("Saatler: $it", style = MaterialTheme.typography.bodySmall) }
             business.latitude?.let { lat ->
                 business.longitude?.let { lon ->
                     Text("Koordinat: $lat, $lon", style = MaterialTheme.typography.bodySmall)
