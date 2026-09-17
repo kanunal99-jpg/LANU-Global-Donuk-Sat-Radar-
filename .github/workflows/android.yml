@@ -25,20 +25,22 @@ jobs:
         run: gradle test
       - name: Build debug APK
         run: gradle assembleDebug
-      - name: Calculate APK SHA-256
-        run: sha256sum app/build/outputs/apk/debug/app-debug.apk > app-debug.apk.sha256
+      - name: Prepare release filenames
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk Lanu-Global-Donuk-Satis-Radari-latest.apk
+          sha256sum Lanu-Global-Donuk-Satis-Radari-latest.apk > Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: lanu-global-donuk-satis-radari-debug
           path: |
-            app/build/outputs/apk/debug/app-debug.apk
-            app-debug.apk.sha256
+            Lanu-Global-Donuk-Satis-Radari-latest.apk
+            Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256
       - name: Publish latest successful APK
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
-          APK_PATH: app/build/outputs/apk/debug/app-debug.apk
-          SHA_PATH: app-debug.apk.sha256
+          APK_PATH: Lanu-Global-Donuk-Satis-Radari-latest.apk
+          SHA_PATH: Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256
         run: |
           set -euo pipefail
           gh release view latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
@@ -65,5 +67,5 @@ jobs:
 
           gh release upload latest \
             --repo "$GITHUB_REPOSITORY" \
-            "$APK_PATH#Lanu-Global-Donuk-Satis-Radari-latest.apk" \
-            "$SHA_PATH#Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256"
+            "$APK_PATH" \
+            "$SHA_PATH"
