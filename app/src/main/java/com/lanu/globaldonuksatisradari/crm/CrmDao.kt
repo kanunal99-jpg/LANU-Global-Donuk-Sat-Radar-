@@ -14,6 +14,9 @@ interface CrmCustomerDao {
     @Query("SELECT * FROM crm_customer WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): CrmCustomerEntity?
 
+    @Query("SELECT * FROM crm_customer WHERE businessSourceId = :businessSourceId LIMIT 1")
+    suspend fun findByBusinessSourceId(businessSourceId: String): CrmCustomerEntity?
+
     @Query("SELECT * FROM crm_customer WHERE city = :city ORDER BY updatedAtEpochMs DESC")
     fun observeByCity(city: String): Flow<List<CrmCustomerEntity>>
 
