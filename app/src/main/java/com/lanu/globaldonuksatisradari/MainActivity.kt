@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lanu.globaldonuksatisradari.crm.CrmDashboardMetrics
+import com.lanu.globaldonuksatisradari.crm.CrmSyncScheduler
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.data.BusinessRepositoryFactory
@@ -35,6 +36,7 @@ private val cities = listOf(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CrmSyncScheduler.schedule(this)
         setContent { SalesRadarApp() }
     }
 }
@@ -97,51 +99,33 @@ fun SalesRadarApp() {
                 }
                 item {
                     Box {
-                        OutlinedButton(
-                            onClick = { cityMenu = true },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text("Şehir: ${selectedCity.name}") }
-                        DropdownMenu(
-                            expanded = cityMenu,
-                            onDismissRequest = { cityMenu = false },
-                        ) {
+                        OutlinedButton(onClick = { cityMenu = true }, modifier = Modifier.fillMaxWidth()) { Text("Şehir: ${selectedCity.name}") }
+                        DropdownMenu(expanded = cityMenu, onDismissRequest = { cityMenu = false }) {
                             cities.forEach { city ->
-                                DropdownMenuItem(
-                                    text = { Text(city.name) },
-                                    onClick = {
-                                        selectedCity = city
-                                        selectedDistrict = "Tümü"
-                                        cityMenu = false
-                                        results = emptyList()
-                                        selectedBusiness = null
-                                        crmMessage = null
-                                    },
-                                )
+                                DropdownMenuItem(text = { Text(city.name) }, onClick = {
+                                    selectedCity = city
+                                    selectedDistrict = "Tümü"
+                                    cityMenu = false
+                                    results = emptyList()
+                                    selectedBusiness = null
+                                    crmMessage = null
+                                })
                             }
                         }
                     }
                 }
                 item {
                     Box {
-                        OutlinedButton(
-                            onClick = { districtMenu = true },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text("İlçe: $selectedDistrict") }
-                        DropdownMenu(
-                            expanded = districtMenu,
-                            onDismissRequest = { districtMenu = false },
-                        ) {
+                        OutlinedButton(onClick = { districtMenu = true }, modifier = Modifier.fillMaxWidth()) { Text("İlçe: $selectedDistrict") }
+                        DropdownMenu(expanded = districtMenu, onDismissRequest = { districtMenu = false }) {
                             (listOf("Tümü") + selectedCity.districts).forEach { district ->
-                                DropdownMenuItem(
-                                    text = { Text(district) },
-                                    onClick = {
-                                        selectedDistrict = district
-                                        districtMenu = false
-                                        results = emptyList()
-                                        selectedBusiness = null
-                                        crmMessage = null
-                                    },
-                                )
+                                DropdownMenuItem(text = { Text(district) }, onClick = {
+                                    selectedDistrict = district
+                                    districtMenu = false
+                                    results = emptyList()
+                                    selectedBusiness = null
+                                    crmMessage = null
+                                })
                             }
                         }
                     }
@@ -159,16 +143,10 @@ fun SalesRadarApp() {
                                 loading = true
                                 scope.launch {
                                     val outcome = runCatching {
-                                        repository.search(
-                                            query = query,
-                                            city = selectedCity.name,
-                                            district = selectedDistrict.takeUnless { it == "Tümü" },
-                                        )
+                                        repository.search(query = query, city = selectedCity.name, district = selectedDistrict.takeUnless { it == "Tümü" })
                                     }
                                     results = outcome.getOrDefault(emptyList())
-                                    outcome.exceptionOrNull()?.let {
-                                        error = "Kaynak erişim hatası: ${it.message ?: "bilinmeyen hata"}"
-                                    }
+                                    outcome.exceptionOrNull()?.let { error = "Kaynak erişim hatası: ${it.message ?: "bilinmeyen hata"}" }
                                     loading = false
                                 }
                             }
@@ -178,34 +156,12 @@ fun SalesRadarApp() {
                     ) { Text(if (loading) "Gerçek kaynak aranıyor…" else "Gerçek kaynaktan ara") }
                 }
                 item {
-                    Text(
-                        "Kaynak: OpenStreetMap Nominatim • Kullanıcı tetiklemeli arama • Eksiksiz İstanbul işletme listesi değildir.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    Text("Kaynak: OpenStreetMap Nominatim • Kullanıcı tetiklemeli arama • Eksiksiz İstanbul işletme listesi değildir.", style = MaterialTheme.typography.bodySmall)
                     Text("© OpenStreetMap contributors", style = MaterialTheme.typography.bodySmall)
                 }
-                error?.let { message ->
-                    item {
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Text(message, modifier = Modifier.padding(16.dp))
-                        }
-                    }
-                }
-                crmMessage?.let { message ->
-                    item {
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Text(message, modifier = Modifier.padding(16.dp))
-                        }
-                    }
-                }
-                selectedBusiness?.let { business ->
-                    item {
-                        BusinessDetailCard(
-                            business = business,
-                            onClose = { selectedBusiness = null },
-                        )
-                    }
-                }
+                error?.let { message -> item { Card(modifier = Modifier.fillMaxWidth()) { Text(message, modifier = Modifier.padding(16.dp)) } } }
+                crmMessage?.let { message -> item { Card(modifier = Modifier.fillMaxWidth()) { Text(message, modifier = Modifier.padding(16.dp)) } } }
+                selectedBusiness?.let { business -> item { BusinessDetailCard(business = business, onClose = { selectedBusiness = null }) } }
                 item {
                     SalesDashboard(
                         selectedCity = selectedCity.name,
@@ -232,26 +188,17 @@ fun SalesRadarApp() {
                         Column(Modifier.padding(16.dp)) {
                             Text("Bulunan gerçek kayıtlar", style = MaterialTheme.typography.titleMedium)
                             Text("${results.size} kayıt")
-                            if (results.isNotEmpty()) {
-                                Text("Raporu açmak için bir işletme kaydına dokunun.", style = MaterialTheme.typography.bodySmall)
-                            }
+                            if (results.isNotEmpty()) Text("Raporu açmak için bir işletme kaydına dokunun.", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
                 if (results.isNotEmpty()) {
                     item {
                         Text("Harita", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Harita yalnızca bu kullanıcı aramasından dönen gerçek koordinatları gösterir; toplu şehir taraması yapmaz.",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                        Text("Harita yalnızca bu kullanıcı aramasından dönen gerçek koordinatları gösterir; toplu şehir taraması yapmaz.", style = MaterialTheme.typography.bodySmall)
                     }
-                    item {
-                        BusinessMapPreview(businesses = results)
-                    }
-                    item {
-                        Text("© OpenStreetMap contributors · ODbL", style = MaterialTheme.typography.bodySmall)
-                    }
+                    item { BusinessMapPreview(businesses = results) }
+                    item { Text("© OpenStreetMap contributors · ODbL", style = MaterialTheme.typography.bodySmall) }
                 }
                 items(results, key = { it.id }) { business ->
                     BusinessResultCard(
@@ -259,17 +206,9 @@ fun SalesRadarApp() {
                         onClick = { selectedBusiness = business },
                         onSaveToCrm = {
                             scope.launch {
-                                runCatching {
-                                    localCrmRepository.addBusinessAsCustomer(business)
-                                }.onSuccess { customer ->
-                                    crmMessage = if (customer.businessSourceId == business.id) {
-                                        "CRM: ${customer.businessName} kaydı kalıcı yerel CRM'e alındı / zaten kayıtlı."
-                                    } else {
-                                        "CRM kaydı oluşturuldu."
-                                    }
-                                }.onFailure { throwable ->
-                                    crmMessage = "CRM kaydı yapılamadı: ${throwable.message ?: "bilinmeyen hata"}"
-                                }
+                                runCatching { localCrmRepository.addBusinessAsCustomer(business) }
+                                    .onSuccess { customer -> crmMessage = "CRM: ${customer.businessName} kaydı kalıcı yerel CRM'e alındı / zaten kayıtlı." }
+                                    .onFailure { throwable -> crmMessage = "CRM kaydı yapılamadı: ${throwable.message ?: "bilinmeyen hata"}" }
                             }
                         },
                     )
@@ -288,16 +227,8 @@ fun SalesRadarApp() {
 }
 
 @Composable
-private fun BusinessResultCard(
-    business: VerifiedBusiness,
-    onClick: () -> Unit,
-    onSaveToCrm: () -> Unit,
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-    ) {
+private fun BusinessResultCard(business: VerifiedBusiness, onClick: () -> Unit, onSaveToCrm: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(business.name, style = MaterialTheme.typography.titleMedium)
             Text("${business.city} • ${business.district}${business.neighborhood?.let { " • $it" } ?: ""}")
@@ -306,19 +237,10 @@ private fun BusinessResultCard(
             business.phone?.let { Text("Telefon: $it", style = MaterialTheme.typography.bodySmall) }
             business.website?.let { Text("Web: $it", style = MaterialTheme.typography.bodySmall) }
             business.openingHours?.let { Text("Saatler: $it", style = MaterialTheme.typography.bodySmall) }
-            business.latitude?.let { lat ->
-                business.longitude?.let { lon ->
-                    Text("Koordinat: $lat, $lon", style = MaterialTheme.typography.bodySmall)
-                }
-            }
+            business.latitude?.let { lat -> business.longitude?.let { lon -> Text("Koordinat: $lat, $lon", style = MaterialTheme.typography.bodySmall) } }
             Text("Kaynak: ${business.source.name}", style = MaterialTheme.typography.bodySmall)
             Text("Detaylı satış raporunu açmak için dokunun.", style = MaterialTheme.typography.bodySmall)
-            OutlinedButton(
-                onClick = onSaveToCrm,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("CRM'e kaydet")
-            }
+            OutlinedButton(onClick = onSaveToCrm, modifier = Modifier.fillMaxWidth()) { Text("CRM'e kaydet") }
         }
     }
 }
