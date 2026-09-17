@@ -3,6 +3,7 @@ package com.lanu.globaldonuksatisradari
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -42,6 +43,7 @@ fun SalesRadarApp() {
     var selectedDistrict by remember { mutableStateOf("Tümü") }
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<VerifiedBusiness>>(emptyList()) }
+    var selectedBusiness by remember { mutableStateOf<VerifiedBusiness?>(null) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -90,6 +92,7 @@ fun SalesRadarApp() {
                                         selectedDistrict = "Tümü"
                                         cityMenu = false
                                         results = emptyList()
+                                        selectedBusiness = null
                                     }
                                 )
                             }
@@ -113,6 +116,7 @@ fun SalesRadarApp() {
                                         selectedDistrict = district
                                         districtMenu = false
                                         results = emptyList()
+                                        selectedBusiness = null
                                     }
                                 )
                             }
@@ -123,6 +127,7 @@ fun SalesRadarApp() {
                     Button(
                         onClick = {
                             error = null
+                            selectedBusiness = null
                             if (query.isBlank()) {
                                 results = emptyList()
                                 error = "Arama için bir işletme/HORECA terimi yazın."
@@ -162,11 +167,23 @@ fun SalesRadarApp() {
                         }
                     }
                 }
+                selectedBusiness?.let { business ->
+                    item {
+                        BusinessDetailCard(
+                            business = business,
+                            onClose = { selectedBusiness = null },
+                        )
+                    }
+                }
                 item {
                     SalesDashboard(
                         selectedCity = selectedCity.name,
                         selectedDistrict = selectedDistrict,
-                        onDistrictSelected = { selectedDistrict = it }
+                        availableDistricts = selectedCity.districts,
+                        onDistrictSelected = {
+                            selectedDistrict = it
+                            selectedBusiness = null
+                        }
                     )
                 }
                 item {
@@ -174,11 +191,17 @@ fun SalesRadarApp() {
                         Column(Modifier.padding(16.dp)) {
                             Text("Bulunan gerçek kayıtlar", style = MaterialTheme.typography.titleMedium)
                             Text("${results.size} kayıt")
+                            if (results.isNotEmpty()) {
+                                Text("Raporu açmak için bir işletme kaydına dokunun.", style = MaterialTheme.typography.bodySmall)
+                            }
                         }
                     }
                 }
-                items(results) { business ->
-                    BusinessResultCard(business)
+                items(results, key = { it.id }) { business ->
+                    BusinessResultCard(
+                        business = business,
+                        onClick = { selectedBusiness = business },
+                    )
                 }
                 item {
                     Card(modifier = Modifier.fillMaxWidth()) {
@@ -194,8 +217,15 @@ fun SalesRadarApp() {
 }
 
 @Composable
-private fun BusinessResultCard(business: VerifiedBusiness) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+private fun BusinessResultCard(
+    business: VerifiedBusiness,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(business.name, style = MaterialTheme.typography.titleMedium)
             Text("${business.city} • ${business.district}${business.neighborhood?.let { " • $it" } ?: ""}")
@@ -207,6 +237,7 @@ private fun BusinessResultCard(business: VerifiedBusiness) {
                 }
             }
             Text("Kaynak: ${business.source.name}", style = MaterialTheme.typography.bodySmall)
+            Text("Detaylı satış raporunu açmak için dokunun.", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
