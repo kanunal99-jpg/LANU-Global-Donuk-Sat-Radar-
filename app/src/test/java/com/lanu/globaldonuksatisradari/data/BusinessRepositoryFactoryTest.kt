@@ -1,5 +1,8 @@
 package com.lanu.globaldonuksatisradari.data
 
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.startCoroutine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -33,6 +36,17 @@ class BusinessRepositoryFactoryTest {
         verifiedAtEpochMs = 2L,
     )
 
+    private fun <T> runSuspend(block: suspend () -> T): T {
+        var outcome: Result<T>? = null
+        block.startCoroutine(object : Continuation<T> {
+            override val context = EmptyCoroutineContext
+            override fun resumeWith(result: Result<T>) {
+                outcome = result
+            }
+        })
+        return requireNotNull(outcome).getOrThrow()
+    }
+
     @Test
     fun `invalid records are filtered at adapter boundary`() {
         val invalid = validBusiness().copy(name = "")
@@ -43,7 +57,7 @@ class BusinessRepositoryFactoryTest {
         }
 
         val repository = BusinessRepositoryFactory.create(contract, adapter)
-        val result = kotlinx.coroutines.runBlocking {
+        val result = runSuspend {
             repository.search("Verified", "İstanbul", "Kadıköy")
         }
 
@@ -61,7 +75,7 @@ class BusinessRepositoryFactoryTest {
         }
 
         val repository = BusinessRepositoryFactory.create(unsafe, adapter)
-        val result = kotlinx.coroutines.runBlocking {
+        val result = runSuspend {
             repository.search("Verified", "İstanbul")
         }
 
