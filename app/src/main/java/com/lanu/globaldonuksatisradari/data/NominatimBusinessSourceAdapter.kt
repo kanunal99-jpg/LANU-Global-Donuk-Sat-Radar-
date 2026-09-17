@@ -29,7 +29,19 @@ object NominatimBusinessSource {
         scope = "User-triggered place search; non-exhaustive HORECA discovery; OSM/ODbL data",
         permittedUseVerified = true,
         supportsBulk = false,
-        fieldNames = setOf("name", "city", "district", "neighborhood", "latitude", "longitude", "category", "address"),
+        fieldNames = setOf(
+            "name",
+            "city",
+            "district",
+            "neighborhood",
+            "latitude",
+            "longitude",
+            "category",
+            "address",
+            "phone",
+            "website",
+            "opening_hours",
+        ),
     )
 }
 
@@ -44,7 +56,7 @@ object NominatimQueryBuilder {
             city.trim(),
             "Türkiye",
         ).joinToString(", ")
-        return "$baseUrl?format=jsonv2&addressdetails=1&limit=20&countrycodes=tr&q=${URLEncoder.encode(location, Charsets.UTF_8.name())}"
+        return "$baseUrl?format=jsonv2&addressdetails=1&extratags=1&namedetails=1&limit=20&countrycodes=tr&q=${URLEncoder.encode(location, Charsets.UTF_8.name())}"
     }
 }
 
@@ -61,7 +73,12 @@ class NominatimBusinessSourceAdapter(
     ): List<VerifiedBusiness> = withContext(Dispatchers.IO) {
         if (contract.validate().isFailure || query.isBlank()) return@withContext emptyList()
 
-        val cacheKey = listOf(query.trim().lowercase(), city.trim().lowercase(), district?.trim()?.lowercase().orEmpty(), baseUrlProvider()).joinToString("|")
+        val cacheKey = listOf(
+            query.trim().lowercase(),
+            city.trim().lowercase(),
+            district?.trim()?.lowercase().orEmpty(),
+            baseUrlProvider(),
+        ).joinToString("|")
         SearchCache.get(cacheKey)?.let { return@withContext it }
         RateLimiter.await()
 
@@ -101,6 +118,7 @@ class NominatimBusinessSourceAdapter(
             val name = item.optString("name").trim()
             if (name.isBlank()) continue
             val address = item.optJSONObject("address")
+            val extra = item.optJSONObject("extratags")
             val district = selectedDistrict?.takeUnless { it.isBlank() || it.equals("Tümü", ignoreCase = true) }
                 ?: address?.let {
                     listOfNotNull(
@@ -125,10 +143,18 @@ class NominatimBusinessSourceAdapter(
                 longitude = item.optString("lon").toDoubleOrNull(),
                 category = item.optString("type").takeIf(String::isNotBlank),
                 address = item.optString("display_name").takeIf(String::isNotBlank),
+                phone = firstExtraValue(extra, "phone", "contact:phone", "contact_phone"),
+                website = firstExtraValue(extra, "website", "contact:website", "url"),
+                openingHours = firstExtraValue(extra, "opening_hours"),
             )
         }
         return BusinessDeduplication.deduplicate(result)
     }
+
+    private fun firstExtraValue(extra: org.json.JSONObject?, vararg keys: String): String? =
+        keys.firstNotNullOfOrNull { key ->
+            extra?.optString(key)?.trim()?.takeIf(String::isNotBlank)
+        }
 }
 
 private object SearchCache {
