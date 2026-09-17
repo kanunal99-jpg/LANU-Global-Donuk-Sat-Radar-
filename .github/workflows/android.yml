@@ -21,7 +21,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - run: gradle assembleDebug
+      - name: Run unit tests
+        run: gradle test
+      - name: Build debug APK
+        run: gradle assembleDebug
       - name: Calculate APK SHA-256
         run: sha256sum app/build/outputs/apk/debug/app-debug.apk > app-debug.apk.sha256
       - uses: actions/upload-artifact@v4
