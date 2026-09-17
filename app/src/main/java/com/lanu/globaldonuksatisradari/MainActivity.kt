@@ -10,12 +10,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.lanu.globaldonuksatisradari.crm.CrmDashboardMetrics
+import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
+import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.data.BusinessRepositoryFactory
 import com.lanu.globaldonuksatisradari.data.NominatimBusinessSource
 import com.lanu.globaldonuksatisradari.data.NominatimBusinessSourceAdapter
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.launch
+
 
 data class City(val name: String, val districts: List<String>)
 
@@ -46,13 +51,27 @@ fun SalesRadarApp() {
     var selectedBusiness by remember { mutableStateOf<VerifiedBusiness?>(null) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var crmMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     val repository = remember {
         BusinessRepositoryFactory.create(
             NominatimBusinessSource.contract,
             NominatimBusinessSourceAdapter(),
         )
+    }
+    val localCrmRepository = remember(context) {
+        LocalCrmRepository(LanuCrmDatabase.getInstance(context))
+    }
+    val crmCustomers by localCrmRepository
+        .observeCustomers(selectedCity.name)
+        .collectAsState(initial = emptyList())
+    val filteredCrmCustomers = remember(crmCustomers, selectedDistrict) {
+        crmCustomers.filter { selectedDistrict == "Tümü" || it.district == selectedDistrict }
+    }
+    val dashboardMetrics = remember(filteredCrmCustomers) {
+        CrmDashboardMetrics.from(filteredCrmCustomers)
     }
 
     MaterialTheme {
@@ -95,6 +114,7 @@ fun SalesRadarApp() {
                                         cityMenu = false
                                         results = emptyList()
                                         selectedBusiness = null
+                                        crmMessage = null
                                     },
                                 )
                             }
@@ -119,6 +139,7 @@ fun SalesRadarApp() {
                                         districtMenu = false
                                         results = emptyList()
                                         selectedBusiness = null
+                                        crmMessage = null
                                     },
                                 )
                             }
@@ -130,6 +151,7 @@ fun SalesRadarApp() {
                         onClick = {
                             error = null
                             selectedBusiness = null
+                            crmMessage = null
                             if (query.isBlank()) {
                                 results = emptyList()
                                 error = "Arama için bir işletme/HORECA terimi yazın."
@@ -169,6 +191,13 @@ fun SalesRadarApp() {
                         }
                     }
                 }
+                crmMessage?.let { message ->
+                    item {
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Text(message, modifier = Modifier.padding(16.dp))
+                        }
+                    }
+                }
                 selectedBusiness?.let { business ->
                     item {
                         BusinessDetailCard(
@@ -182,11 +211,21 @@ fun SalesRadarApp() {
                         selectedCity = selectedCity.name,
                         selectedDistrict = selectedDistrict,
                         availableDistricts = selectedCity.districts,
+                        metrics = dashboardMetrics,
                         onDistrictSelected = {
                             selectedDistrict = it
                             selectedBusiness = null
                         },
                     )
+                }
+                item {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Yerel CRM", style = MaterialTheme.typography.titleMedium)
+                            Text("${filteredCrmCustomers.size} kayıt bu filtrede kalıcı olarak saklanıyor.")
+                            Text("Arama sonuçları otomatik müşteriye dönüşmez; kaydetme kullanıcı eylemidir.", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
                 }
                 item {
                     Card(modifier = Modifier.fillMaxWidth()) {
@@ -218,6 +257,21 @@ fun SalesRadarApp() {
                     BusinessResultCard(
                         business = business,
                         onClick = { selectedBusiness = business },
+                        onSaveToCrm = {
+                            scope.launch {
+                                runCatching {
+                                    localCrmRepository.addBusinessAsCustomer(business)
+                                }.onSuccess { customer ->
+                                    crmMessage = if (customer.businessSourceId == business.id) {
+                                        "CRM: ${customer.businessName} kaydı kalıcı yerel CRM'e alındı / zaten kayıtlı."
+                                    } else {
+                                        "CRM kaydı oluşturuldu."
+                                    }
+                                }.onFailure { throwable ->
+                                    crmMessage = "CRM kaydı yapılamadı: ${throwable.message ?: "bilinmeyen hata"}"
+                                }
+                            }
+                        },
                     )
                 }
                 item {
@@ -237,13 +291,14 @@ fun SalesRadarApp() {
 private fun BusinessResultCard(
     business: VerifiedBusiness,
     onClick: () -> Unit,
+    onSaveToCrm: () -> Unit,
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(business.name, style = MaterialTheme.typography.titleMedium)
             Text("${business.city} • ${business.district}${business.neighborhood?.let { " • $it" } ?: ""}")
             business.category?.let { Text("Kategori: $it") }
@@ -258,6 +313,12 @@ private fun BusinessResultCard(
             }
             Text("Kaynak: ${business.source.name}", style = MaterialTheme.typography.bodySmall)
             Text("Detaylı satış raporunu açmak için dokunun.", style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(
+                onClick = onSaveToCrm,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("CRM'e kaydet")
+            }
         }
     }
 }
