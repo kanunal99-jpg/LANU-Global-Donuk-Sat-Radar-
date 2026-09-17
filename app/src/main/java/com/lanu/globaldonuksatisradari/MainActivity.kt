@@ -5,10 +5,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.lanu.globaldonuksatisradari.data.BusinessRepositoryFactory
+import com.lanu.globaldonuksatisradari.data.NominatimBusinessSource
+import com.lanu.globaldonuksatisradari.data.NominatimBusinessSourceAdapter
+import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
+import kotlinx.coroutines.launch
 
 data class City(val name: String, val districts: List<String>)
 
@@ -32,8 +38,20 @@ class MainActivity : ComponentActivity() {
 fun SalesRadarApp() {
     var selectedCity by remember { mutableStateOf(cities.first()) }
     var cityMenu by remember { mutableStateOf(false) }
+    var districtMenu by remember { mutableStateOf(false) }
     var selectedDistrict by remember { mutableStateOf("Tümü") }
     var query by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<VerifiedBusiness>>(emptyList()) }
+    var loading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    val repository = remember {
+        BusinessRepositoryFactory.create(
+            NominatimBusinessSource.contract,
+            NominatimBusinessSourceAdapter(),
+        )
+    }
 
     MaterialTheme {
         Scaffold(topBar = { TopAppBar(title = { Text("LANU Global Donuk Satış Radarı") }) }) { padding ->
@@ -43,14 +61,15 @@ fun SalesRadarApp() {
             ) {
                 item {
                     Text("Satış Radarı", style = MaterialTheme.typography.headlineSmall)
-                    Text("Gerçek kaynaklı verilerle şehir → ilçe → mahalle → işletme keşfi")
+                    Text("Gerçek kaynaklı verilerle şehir → ilçe → işletme keşfi")
                 }
                 item {
                     OutlinedTextField(
                         value = query,
                         onValueChange = { query = it },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("İşletme / şehir / ilçe ara") }
+                        label = { Text("Örn. restoran, kafe, fırın") },
+                        singleLine = true,
                     )
                 }
                 item {
@@ -70,9 +89,76 @@ fun SalesRadarApp() {
                                         selectedCity = city
                                         selectedDistrict = "Tümü"
                                         cityMenu = false
+                                        results = emptyList()
                                     }
                                 )
                             }
+                        }
+                    }
+                }
+                item {
+                    Box {
+                        OutlinedButton(
+                            onClick = { districtMenu = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("İlçe: $selectedDistrict") }
+                        DropdownMenu(
+                            expanded = districtMenu,
+                            onDismissRequest = { districtMenu = false }
+                        ) {
+                            (listOf("Tümü") + selectedCity.districts).forEach { district ->
+                                DropdownMenuItem(
+                                    text = { Text(district) },
+                                    onClick = {
+                                        selectedDistrict = district
+                                        districtMenu = false
+                                        results = emptyList()
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+                item {
+                    Button(
+                        onClick = {
+                            error = null
+                            if (query.isBlank()) {
+                                results = emptyList()
+                                error = "Arama için bir işletme/HORECA terimi yazın."
+                            } else {
+                                loading = true
+                                scope.launch {
+                                    val outcome = runCatching {
+                                        repository.search(
+                                            query = query,
+                                            city = selectedCity.name,
+                                            district = selectedDistrict.takeUnless { it == "Tümü" },
+                                        )
+                                    }
+                                    results = outcome.getOrDefault(emptyList())
+                                    outcome.exceptionOrNull()?.let {
+                                        error = "Kaynak erişim hatası: ${it.message ?: "bilinmeyen hata"}"
+                                    }
+                                    loading = false
+                                }
+                            }
+                        },
+                        enabled = !loading,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (loading) "Gerçek kaynak aranıyor…" else "Gerçek kaynaktan ara") }
+                }
+                item {
+                    Text(
+                        "Kaynak: OpenStreetMap Nominatim • Kullanıcı tetiklemeli arama • Eksiksiz İstanbul işletme listesi değildir.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text("© OpenStreetMap contributors", style = MaterialTheme.typography.bodySmall)
+                }
+                error?.let { message ->
+                    item {
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Text(message, modifier = Modifier.padding(16.dp))
                         }
                     }
                 }
@@ -86,21 +172,41 @@ fun SalesRadarApp() {
                 item {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp)) {
-                            Text("Arama durumu", style = MaterialTheme.typography.titleMedium)
-                            Text("Arama: ${query.ifBlank { "tümü" }}")
-                            Text("İlçe: $selectedDistrict")
+                            Text("Bulunan gerçek kayıtlar", style = MaterialTheme.typography.titleMedium)
+                            Text("${results.size} kayıt")
                         }
                     }
+                }
+                items(results) { business ->
+                    BusinessResultCard(business)
                 }
                 item {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp)) {
-                            Text("Veri güvenliği", style = MaterialTheme.typography.titleMedium)
-                            Text("Henüz doğrulanmış işletme verisi yok. Uygulama bilinmeyen işletmeleri, çalışan sayılarını veya satış rakamlarını gerçekmiş gibi göstermeyecek.")
+                            Text("Veri sınırı", style = MaterialTheme.typography.titleMedium)
+                            Text("OSM kaydı bulunan işletmeler gösterilir. Çalışan sayısı, satış potansiyeli, telefon ve benzeri alanlar kaynakta yoksa uygulama bunları uydurmaz.")
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun BusinessResultCard(business: VerifiedBusiness) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(business.name, style = MaterialTheme.typography.titleMedium)
+            Text("${business.city} • ${business.district}${business.neighborhood?.let { " • $it" } ?: ""}")
+            business.category?.let { Text("Kategori: $it") }
+            business.address?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            business.latitude?.let { lat ->
+                business.longitude?.let { lon ->
+                    Text("Koordinat: $lat, $lon", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            Text("Kaynak: ${business.source.name}", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
