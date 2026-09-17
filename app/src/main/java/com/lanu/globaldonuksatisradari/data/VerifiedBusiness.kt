@@ -22,6 +22,12 @@ data class VerifiedBusiness(
     val longitude: Double? = null,
     val category: String? = null,
     val address: String? = null,
+    /** Present only when the verified source actually provides a phone number. */
+    val phone: String? = null,
+    /** Present only when the verified source actually provides a website URL. */
+    val website: String? = null,
+    /** Present only when the verified source actually provides opening-hours data. */
+    val openingHours: String? = null,
 )
 
 /** Keeps unverified external records out of the application domain. */
@@ -41,6 +47,11 @@ object VerifiedBusinessValidator {
             if (business.verifiedAtEpochMs <= 0) add("verifiedAtEpochMs doğrulanmalı")
             business.latitude?.let { if (it !in -90.0..90.0) add("latitude geçersiz") }
             business.longitude?.let { if (it !in -180.0..180.0) add("longitude geçersiz") }
+            business.website?.let {
+                if (!(it.startsWith("https://") || it.startsWith("http://"))) {
+                    add("business.website yalnızca HTTP(S) olabilir")
+                }
+            }
         }
         return if (errors.isEmpty()) Result.success(business) else Result.failure(IllegalArgumentException(errors.joinToString("; ")))
     }
