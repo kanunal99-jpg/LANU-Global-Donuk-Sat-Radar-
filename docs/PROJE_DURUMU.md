@@ -1,163 +1,191 @@
 # LANU Global Donuk Satış Radarı — Proje Durumu ve Yol Haritası
 
-> Bu belge gerçekleşen işleri ve henüz planlanan/istenen işleri birbirinden ayırır. Planlanan maddeler tamamlanmış özellik olarak kabul edilmez.
+> `[x]` yalnızca kod/test/CI veya kaynak kanıtı bulunan maddeler içindir. `[ ]` açık ödevdir. Bir özellik CI başarısızken tamamlanmış sayılmaz.
 
 ## 1. Projenin amacı
 
-LANU Global Donuk Satış Radarı; Global Donuk Gıda'nın HORECA satış faaliyetleri için gerçek ve kaynaklandırılmış işletme keşfi, saha planlama, satış fırsatı analizi, müşteri takibi ve satış yönetimi sağlayan şehir bağımsız bir Android + web/dashboard ekosistemi olarak geliştirilecektir.
+LANU Global Donuk Satış Radarı; Global Donuk Gıda'nın HORECA satış faaliyetleri için gerçek ve kaynaklandırılmış işletme keşfi, saha planlama, satış fırsatı analizi, müşteri takibi ve satış yönetimi sağlayan şehir bağımsız bir Android + web/dashboard ekosistemi olacaktır.
 
 İlk aktif coğrafya İstanbul'dur. Mimari ülke → şehir → ilçe → mahalle → işletme hiyerarşisini destekleyecek şekilde hazırlanır.
 
-## 2. Gerçekleşen işler
+## 2. Tamamlanan temel maddeler
 
 ### Proje temeli
-- Android proje iskeleti ve Gradle/CI yapısı mevcut.
-- Proje adı: `Lanu Global Donuk Satış Radarı`.
-- GitHub ana dalı: `main`.
-- Proje anayasası `docs/ANAYASA.md` altında tutuluyor.
-- Kaynak gerçekliği kuralları yazılı hale getirildi.
+- [x] Android proje iskeleti ve Gradle/CI yapısı.
+- [x] Proje adı: `Lanu Global Donuk Satış Radarı`.
+- [x] GitHub ana dalı: `main`.
+- [x] Proje anayasası `docs/ANAYASA.md`.
+- [x] Kaynak gerçekliği kuralları yazılı hale getirildi.
 
-### CI ve build düzeltmeleri
-- Java/Kotlin JVM hedef uyumsuzluğu giderildi.
-- Java 17 hedefi standartlaştırıldı.
-- Kotlin 2.x ile Compose Compiler yapılandırması düzeltildi.
-- Kotlin Compose plugin uygulandı ve Compose build özelliği etkinleştirildi.
-- Material 3 deneysel API kullanımındaki CI problemi giderildi.
-- `gradle assembleDebug` başarılı şekilde çalışıyor.
+### CI ve build altyapısı
+- [x] Java/Kotlin JVM hedef uyumsuzluğu giderildi.
+- [x] Java 17 hedefi standartlaştırıldı.
+- [x] Kotlin 2.x + Compose Compiler yapılandırması düzeltildi.
+- [x] Kotlin Compose plugin ve Compose build etkinleştirildi.
+- [x] Material 3 deneysel API kaynaklı CI problemi giderildi.
+- [x] `gradle test` ve `gradle assembleDebug` daha önce başarılı CI koşusunda doğrulandı.
+- [x] Debug APK artifact üretimi daha önce başarılı CI koşusunda doğrulandı.
 
 ### APK dağıtımı
-- GitHub Actions başarılı Android build üretiyor.
-- APK artifact olarak yükleniyor.
-- APK için SHA-256 hesaplanıyor.
-- Başarılı `main` CI sonrası `Latest APK` GitHub Release otomatik güncelleniyor.
-- Sabit APK dosyası: `Lanu-Global-Donuk-Satis-Radari-latest.apk`.
-- Sabit SHA dosyası: `Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256`.
-- README içinde sabit APK indirme bağlantısı bulunuyor.
+- [x] GitHub Actions APK üretim zinciri mevcut.
+- [x] APK için SHA-256 üretimi mevcut.
+- [x] `latest` release otomasyonu mevcut.
+- [ ] Güncel commit için `latest` release asset yükleme adımı yeniden doğrulanıyor; son denemede release metadata güncellendi ancak asset yükleme başarısız kaldı.
 
-### Veri gerçekliği — yeni temel katman
-- `DataQuality` ile doğrulanmış resmi, doğrulanmış harici, tahmini, kullanıcı girişi, eski ve doğrulanmamış veri ayrımı tanımlandı.
-- `BusinessSourceContract` ile kaynak kapsamı, erişim yöntemi, kullanım izni, toplu erişim ve alan listesi uygulama öncesi sözleşmeye bağlandı.
-- Kaynak kullanım izni doğrulanmadan üretim bağlantısı kurulmasını engelleyen validation eklendi.
-- `BusinessSourceAdapter` dış kaynak ile uygulama domain'i arasına ingestion sınırı olarak eklendi.
-- Adapter'dan gelen kayıtlar domain'e alınmadan `VerifiedBusinessValidator` üzerinden savunmacı biçimde doğrulanıyor; geçersiz kayıtlar güvenli şekilde eleniyor.
-- Doğrulanmış bir adapter'ın gerçekten repository'ye bağlanabilmesi için güvenli factory yolu eklendi; sözleşme veya adapter uyuşmazlığında boş repository korunuyor.
-- Aynı kaynak içindeki `sourceId + businessId` tekrarları deterministik olarak eleniyor; farklı kaynaklardaki kayıtlar stabil kimlik kanıtı olmadan otomatik birleştirilmiyor.
-- Veri tazeliği, veri kaynağının kalitesiyle karıştırılmadan ayrı `BusinessFreshnessState` olarak değerlendiriliyor.
-- Gelecek tarihli doğrulamalar geçersiz kabul ediliyor; eski kayıtlar tazelik sonucu üzerinden ayrıca işaretlenebilecek şekilde hazırlanıyor.
-- Bu katmanda gerçek işletme verisi üretilmedi; kaynak erişimi hazır değilken güvenli boş veri davranışı korunuyor.
+### Veri gerçekliği temeli
+- [x] `DataQuality` ile kaynaklı/tahmini/kullanıcı girişi/eski/doğrulanmamış veri ayrımı.
+- [x] `BusinessSourceContract` ile kaynak kapsamı, erişim yöntemi, kullanım izni ve alan listesi.
+- [x] Kullanım izni doğrulanmadan üretim bağlantısını engelleyen validation.
+- [x] `BusinessSourceAdapter` ingestion sınırı.
+- [x] `VerifiedBusinessValidator` ile domain'e giriş doğrulaması.
+- [x] Güvenli repository factory yolu ve boş repository fallback.
+- [x] Kaynak içi deterministik deduplikasyon.
+- [x] `BusinessFreshnessState` ile tazeliğin veri kalitesinden ayrılması.
+- [x] Gelecek tarihli doğrulamaların reddedilmesi.
 
-### Kaynak adayları
-- İTO Bilgi Bankası ve Türkiye Ticaret Sicili Gazetesi için resmi kaynak/erişim doğrulama kayıtları `docs/VERI_KAYNAKLARI.md` altında tutuluyor.
-- Bu kaynaklar henüz kullanım şartları ve erişim yöntemi üretim entegrasyonu için doğrulanmadığından uygulamaya işletme kaydı aktarılmıyor.
+## 3. Gerçek veri kaynağı durumu
 
-### Bu bölümün CI durumu
-- Yeni adapter, deduplikasyon, freshness ve test değişiklikleri `main` üzerinde ayrı commitlerle uygulandı.
-- Son değişiklik için GitHub Actions Android CI çalışmaktadır; CI başarılı olmadan bu yeni katman release'e tamamlanmış olarak işaretlenmez.
+### OpenStreetMap Nominatim
+- [x] Gerçek kullanıcı tetiklemeli arama adapter'ı.
+- [x] HTTPS endpoint ve kaynak sözleşmesi.
+- [x] Özel User-Agent.
+- [x] En az 1,1 saniyelik istemci rate-limit.
+- [x] 5 dakikalık arama cache'i.
+- [x] `addressdetails=1` ile adres alanları.
+- [x] Araştırma sonucuna göre `extratags=1` + `namedetails=1` desteği kodlandı.
+- [ ] Bu yeni iletişim alanlarının güncel CI/release doğrulaması.
+- [ ] Gerçek cihazda canlı Nominatim smoke testi.
 
-## 3. Kullanıcı tarafından istenen ürün kapsamı
+### İstanbul Ticaret Odası / Türkiye Ticaret Sicili
+- [x] Kaynak adayları ve erişim/kullanım riskleri belgelenmiş durumda.
+- [ ] Resmî erişim ve yeniden kullanım şartlarının üretim entegrasyonu için doğrulanması.
+- [ ] Yetkili erişim sağlanmadan toplu veri entegrasyonu yapılmayacak.
+
+### İstanbul için kapsamlı HORECA veri kümesi
+- [ ] İlçe/mahalle bazında güncel, doğrulanmış ve yeniden kullanım hakkı belirlenmiş veri kümesi.
+- [ ] “İstanbul'daki tüm işletmeler” iddiasını destekleyecek kapsamlı kaynak.
+
+## 4. Kullanıcı tarafından istenen ürün kapsamı
 
 ### HORECA müşteri keşfi
-- İstanbul ile başlama.
-- Şehir değiştirme / şehir ekleme.
-- İlçe ve mahalle filtreleri.
-- Harita + liste görünümü.
-- Gerçek potansiyel HORECA işletmelerini kaynaklandırılmış verilerle göstermek.
-- İşletmeye dokununca detaylı rapor açmak.
+- [x] İstanbul ile başlama.
+- [x] Şehir değiştirme / şehir ekleme mimari başlangıcı.
+- [x] İlçe filtresi.
+- [x] Gerçek kaynak tetiklemeli işletme araması.
+- [ ] Mahalle bazında kapsamlı veri kaynağı ve filtreleme.
+- [ ] CI sonrası canlı harita yüzeyinin doğrulanması.
+- [ ] Kapsamlı HORECA veri seti.
 
 ### İşletme detay raporu
-Her işletme için mümkün olan alanlar kaynak durumu ile birlikte gösterilecek:
-- İşletme adı ve türü.
-- Adres / şehir / ilçe / mahalle.
-- Telefon, web ve diğer iletişim kanalları.
-- Harita konumu.
-- Kaynak ve son doğrulama tarihi.
-- Çalışan sayısı: gerçekse kaynaklı, değilse tahmin olarak etiketli.
-- Satış potansiyeli: kriterleri açıklanmış tahmin.
-- Global Donuk ürün eşleşmeleri.
-- İşletmeye yaklaşım / satış konuşması önerileri.
-- Arama, WhatsApp, navigasyon ve web aksiyonları.
+- [x] İşletme adı, tür/kategori, şehir, ilçe, mahalle, adres.
+- [x] Koordinat ve kaynak/son doğrulama bilgisi.
+- [x] Çalışan sayısı kaynakta yoksa uydurmama kuralı.
+- [x] Satış potansiyelini kaynak verisi olmadan hesaplamama kuralı.
+- [x] Kategoriye göre saha keşif soruları ve satış görüşme çerçevesi.
+- [x] Kaynakta bulunursa telefon/web/çalışma saatlerini taşıyan veri modeli ve ekran alanları.
+- [x] Telefon ve web için güvenli Android aksiyonları.
+- [ ] CI sonrası rapor + navigasyon akışının gerçek cihaz doğrulaması.
+- [ ] Gerçek Global Donuk ürün kataloğu ile doğrulanmış ürün eşleştirme.
 
-### Saha CRM akışı
-- Potansiyel müşteri oluşturma.
-- Ziyaret planlama ve kaydı.
-- Görüşme sonucu.
-- Notlar.
-- Numune süreci.
-- Teklif oluşturma/takip.
-- Sipariş takibi.
-- Aktif müşteri / kaybedilen müşteri durumu.
-- Senkronizasyon başarısız olduğunda yerel veri kaybını önleme.
+### Harita
+- [ ] CI/release doğrulaması bekleyen gerçek arama sonuçları haritası.
+- [x] Harita yalnızca mevcut kullanıcı aramasındaki koordinatları kullanacak şekilde tasarlandı.
+- [x] Görünür OpenStreetMap atfı eklendi.
+- [ ] Gerçek cihazda tile + marker + popup smoke testi.
+- [ ] OSM tile kullanımının saha ölçeği/yoğunluğu için nihai operasyon kontrolü.
 
-### Satış hunisi
+## 5. Saha CRM — açık ödev
+
+- [ ] Potansiyel müşteri kaydı.
+- [ ] Ziyaret planlama ve ziyaret sonucu.
+- [ ] Görüşme notları.
+- [ ] Numune süreci.
+- [ ] Teklif oluşturma/takip.
+- [ ] Sipariş takibi.
+- [ ] Aktif müşteri / kaybedilen müşteri durumu.
+- [ ] Yerel veri kaybına dayanıklı offline-first kayıt.
+- [ ] Bulut senkronizasyonu.
+- [ ] Conflict çözümü.
+
+## 6. Satış hunisi — açık ödev
+
 `Potansiyel → Ziyaret → Görüşme → Teklif → Numune → Sipariş → Aktif Müşteri`
 
-- Huni aşamaları dashboard'da tıklanabilir olacak.
-- Bir aşamaya tıklanınca o aşamadaki işletmeler listelenecek.
+- [x] Dashboard'da temel satış huni görselleştirmesinin ilk katmanı mevcut.
+- [ ] Huni aşamalarının tıklanabilir işletme listelerine bağlanması.
+- [ ] Her aşama için kalıcı CRM verisi.
+- [ ] Aşama geçiş geçmişi ve zaman damgaları.
 
-### Dashboard / Power BI benzeri görünüm
-Bilgisayar gerektirmeden telefondan kullanılabilecek web/mobil dashboard hedefleniyor.
+## 7. Dashboard / Power BI benzeri görünüm — açık ödev
 
-Dashboard kapsamı:
-- Toplam müşteri.
-- Potansiyel müşteri.
-- Ziyaretler.
-- Aramalar.
-- Açık teklifler.
-- Siparişler.
-- Satış toplamı.
-- Dönüşüm oranları.
-- Gün/hafta/ay karşılaştırması.
-- Hedef/gerçekleşen.
-- Trendler.
-- Müşteri başına satış.
-- Aktif/prospect/won/lost müşteri analizi.
-- İlçe/mahalle yoğunluk analizi.
-- Harita üzerinde fırsat dağılımı.
-- İlçe → mahalle → işletme drill-down.
+- [x] Mobil dashboard ekranının ilk KPI/funnel/filtre katmanı mevcut.
+- [ ] Gerçek backend veri pipeline'ı.
+- [ ] İlçe → mahalle → işletme drill-down.
+- [ ] Gerçek ziyaret/arama/teklif/sipariş metrikleri.
+- [ ] Gün/hafta/ay karşılaştırması.
+- [ ] Hedef/gerçekleşen.
+- [ ] Gerçek dönüşüm oranları.
+- [ ] Müşteri başına satış.
+- [ ] Harita üzerinde gerçek fırsat yoğunluğu.
 
-### Veri ve backend hedefi
-- Telefon-first mimari.
-- Android uygulama + bulut veri katmanı + mobil web dashboard.
-- Uygun bir aşamada Supabase benzeri yönetilebilir backend kullanılabilir.
-- Gerçek veri kaynakları ve kullanım lisansları doğrulanacak.
-- Uydurma müşteri, çalışan, satış, ciro, fiyat veya trafik verisi kullanılmayacak.
+## 8. Veri ve backend — açık ödev
 
-### Satış koçluğu / yapay zeka hedefi
-- İşletme türü, menü sinyalleri ve doğrulanmış operasyonel ihtiyaçlardan hareketle satış yaklaşımı önerileri.
-- Ürün eşleştirme.
-- Görüşme için soru önerileri.
-- Teklif sonrası takip önerileri.
-- Yapay zeka çıktısı kaynak gerçeklerinin yerine geçmeyecek.
+- [ ] Android + bulut veri katmanı + mobil web dashboard.
+- [ ] Kalıcı işletme/CRM tabloları.
+- [ ] Yetkilendirme ve kullanıcı sahipliği.
+- [ ] RLS / veri erişim sınırları.
+- [ ] Senkronizasyon kuyruğu ve conflict yönetimi.
+- [ ] Offline-first saha kullanım testi.
 
-## 4. Henüz tamamlanmış kabul edilmeyenler
+## 9. Global Donuk ürün kataloğu — açık ödev
 
-Aşağıdakiler planlanan/istenen kapsamdır; kod ve CI kanıtı oluşmadan tamamlanmış sayılmaz:
+- [x] Kurumsal sitedeki HORECA kullanım senaryosu araştırıldı.
+- [ ] Güncel ürün/SKU/gramaj gibi doğrulanmış katalog verisi edinilecek.
+- [ ] Kaynak ve kullanım şartı doğrulanacak.
+- [ ] Ürün eşleştirme motoru gerçek katalog geldikten sonra bağlanacak.
+- [ ] Uydurma ürün adı, SKU, fiyat veya gramaj kullanılmayacak.
 
-- Gerçek işletme veri kaynaklarının üretim entegrasyonu ve erişim/lisans onayı.
-- İstanbul ilçe/mahalle bazlı doğrulanmış HORECA işletme veri seti.
-- Harita üzerinde canlı işletme keşfi.
-- İşletme detay raporunun tam veri modeli ve ekranları.
-- Saha CRM ekranlarının tamamı.
-- Ziyaret/teklif/numune/sipariş veri modelinin kalıcı backend ile tamamlanması.
-- Dashboard veri pipeline'ı ve drill-down ekranları.
-- Hedef/gerçekleşen satış analitiği.
-- Gerçek Global Donuk ürün kataloğu ile ürün eşleştirme.
-- Offline-first senkronizasyon ve conflict yönetiminin üretim seviyesinde tamamlanması.
-- Kaynak doğrulama, deduplikasyon ve veri kalite kontrollerinin genişletilmesi.
-- Kritik akışların unit/integration/UI/smoke test kapsamının artırılması.
-- Release APK'nın gerçek cihaz üzerinde kurulum ve temel saha akışlarının doğrulanması.
+## 10. Satış koçluğu / yapay zeka — açık ödev
 
-## 5. Geliştirme kuralı
+- [x] Kategoriye bağlı saha keşif soruları ve görüşme çerçevesi ilk katmanda mevcut.
+- [ ] Doğrulanmış menü/operasyon sinyallerinden ürün ve yaklaşım önerisi.
+- [ ] Kullanıcı CRM geçmişini dikkate alan takip önerileri.
+- [ ] Yapay zekâ çıktısının kaynak gerçeklerinin yerine geçmesini engelleyen doğrulama katmanı.
+
+## 11. Test ve saha doğrulama
+
+- [x] Veri kalite testleri.
+- [x] Repository factory testleri.
+- [x] Deduplication/freshness testleri.
+- [x] Nominatim sözleşme/query testleri.
+- [x] Satış fırsatı testleri.
+- [ ] `extratags` parser için doğrudan birim test kapsamının genişletilmesi.
+- [ ] UI/integration testleri.
+- [ ] Gerçek cihaz kurulumu.
+- [ ] Canlı kaynak araması.
+- [ ] Harita marker/popup/navigasyon akışı.
+- [ ] Ağ yok / kaynak hata / rate-limit / boş sonuç smoke testleri.
+
+## 12. 2026-09-17 araştırma ve uygulama kayıtları
+
+- Araştırma ödevi: `docs/ARASTIRMA_2026-09-17.md`.
+- Nominatim `extratags` ve `namedetails` desteği kodlandı.
+- Kaynakta gerçekten varsa telefon/web/çalışma saatleri domain'e taşındı.
+- İşletme raporunda bu alanlar kaynak yoksa açıkça `Kaynakta yok` gösteriliyor.
+- Sonuçlara kullanıcı aramasına bağlı harita yüzeyi eklendi.
+- OSM atfı görünür bırakıldı; toplu tarama/prefetch uygulanmadı.
+- Güncel CI/release doğrulaması tamamlanmadan bu yeni katmanlar tamamlanmış kabul edilmez.
+
+## 13. Geliştirme kuralı
 
 Her yeni özellik şu sırayı izler:
 
-`Kaynak/veri tasarımı → kod → uygun test → CI → başarılı build → doğrulama → release → durum belgesini güncelleme`
+`Kaynak/veri tasarımı → araştırma → kod → uygun test → CI → başarılı build → doğrulama → release → durum belgesini güncelleme`
 
-Bir özellik CI başarısızken tamamlanmış sayılmaz.
-
-## 6. Kaynak gerçekliği standardı
+## 14. Kaynak gerçekliği standardı
 
 - Gerçek veri, tahmin ve kullanıcı girişi ayrı etiketlenir.
 - Her kritik veri mümkünse kaynağı ve son doğrulama zamanı ile tutulur.
 - Kaynaksız kritik veri gerçekmiş gibi yayınlanmaz.
 - Veri sağlayıcının şartlarını ihlal eden toplu scraping mimarinin temeli yapılamaz.
+- Kaynak kapsamı, "İstanbul'daki tüm işletmeler" gibi kanıtlanmamış bir iddiaya dönüştürülemez.
