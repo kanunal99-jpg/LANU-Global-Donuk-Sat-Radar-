@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -38,23 +38,25 @@ jobs:
           SHA_PATH: app-debug.apk.sha256
         run: |
           set -euo pipefail
-          if gh release view latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release edit latest \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "Latest APK" \
-              --notes "Automatically published from the latest successful main CI build. Commit: $GITHUB_SHA" \
-              --target "$GITHUB_SHA"
-          else
+          gh release view latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
             gh release create latest \
               --repo "$GITHUB_REPOSITORY" \
               --title "Latest APK" \
               --notes "Automatically published from the latest successful main CI build. Commit: $GITHUB_SHA" \
               --target "$GITHUB_SHA"
-          fi
-          cp "$APK_PATH" "Lanu-Global-Donuk-Satis-Radari-latest.apk"
-          cp "$SHA_PATH" "Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256"
+
+          gh release edit latest \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Latest APK" \
+            --notes "Automatically published from the latest successful main CI build. Commit: $GITHUB_SHA" \
+            --target "$GITHUB_SHA"
+
+          gh release delete-asset latest Lanu-Global-Donuk-Satis-Radari-latest.apk \
+            --repo "$GITHUB_REPOSITORY" --yes || true
+          gh release delete-asset latest Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256 \
+            --repo "$GITHUB_REPOSITORY" --yes || true
+
           gh release upload latest \
             --repo "$GITHUB_REPOSITORY" \
-            "Lanu-Global-Donuk-Satis-Radari-latest.apk" \
-            "Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256" \
-            --clobber
+            "$APK_PATH#Lanu-Global-Donuk-Satis-Radari-latest.apk" \
+            "$SHA_PATH#Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256"
