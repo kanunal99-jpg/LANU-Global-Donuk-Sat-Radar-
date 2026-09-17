@@ -1,5 +1,7 @@
 package com.lanu.globaldonuksatisradari
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +14,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 
@@ -21,6 +24,7 @@ fun BusinessDetailCard(
     onClose: () -> Unit,
 ) {
     val opportunity = buildSalesOpportunity(business.category)
+    val context = LocalContext.current
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -45,6 +49,40 @@ fun BusinessDetailCard(
             Text("Kaynak kullanım şartı: ${business.source.licenseOrTerms}")
             Text("Kaynak: ${business.source.sourceUrl}", style = MaterialTheme.typography.bodySmall)
             Text("Uygulama kaydının doğrulama zamanı: ${business.verifiedAtEpochMs}", style = MaterialTheme.typography.bodySmall)
+
+            Text("Kaynakta bulunan iletişim", style = MaterialTheme.typography.titleMedium)
+            Text("Telefon: ${business.phone ?: "Kaynakta yok"}")
+            Text("Web: ${business.website ?: "Kaynakta yok"}")
+            Text("Çalışma saatleri: ${business.openingHours ?: "Kaynakta yok"}")
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                business.phone?.let { phone ->
+                    OutlinedButton(
+                        onClick = {
+                            context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(phone)}")))
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Ara") }
+                }
+                business.website?.let { website ->
+                    OutlinedButton(
+                        onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(website)))
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Web") }
+                }
+            }
+
+            if (business.latitude != null && business.longitude != null) {
+                OutlinedButton(
+                    onClick = {
+                        val uri = Uri.parse("geo:${business.latitude},${business.longitude}?q=${business.latitude},${business.longitude(${Uri.encode(business.name)})}")
+                        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Haritada / navigasyonda aç") }
+            }
 
             Text("Ticari değerlendirme", style = MaterialTheme.typography.titleMedium)
             Text(opportunity.focus)
