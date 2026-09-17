@@ -45,3 +45,18 @@ Anayasadaki kritik kurallar dokümantasyon olarak kalmayacak; mümkün olanlar t
 
 ## 14. Değişmez ilke
 "Çalışıyor" iddiası yalnızca gerçek kod, gerçek test/CI kaydı ve gerekiyorsa gerçek artifact kanıtı ile yapılır.
+
+## 15. Başarılı CI sonrası APK yayınlama — ZORUNLU
+- `main` dalındaki her başarılı Android CI build'i, oluşturduğu doğrulanmış APK'yı GitHub Release içindeki `latest` yayınına otomatik olarak yükler.
+- APK yalnızca build ve gerekli yayınlama adımları yeşil olduğunda güncel APK olarak kabul edilir.
+- Güncel APK'nın sabit dosya adı: `Lanu-Global-Donuk-Satis-Radari-latest.apk`.
+- Güncel SHA-256 dosyası birlikte yayınlanır: `Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256`.
+- `latest` Release etiketi, yayınlanan APK'nın üretildiği başarılı commit'i göstermelidir.
+- Başarısız, iptal edilmiş veya doğrulanmamış bir build mevcut `latest` APK'nın yerine geçemez.
+- README içinde güncel APK için sabit indirme bağlantısı bulunmalıdır.
+- APK, Git geçmişine her build'de tekrar tekrar ikili dosya olarak commit edilmez; GitHub Release asset'i dağıtım yüzeyidir.
+
+## 16. Durum ve yol haritası doğruluğu
+- Gerçekleşmiş özellikler ile planlanan/istenen özellikler ayrı tutulur.
+- Planlanan özellikler tamamlanmış gibi gösterilemez.
+- Proje durumu, CI/release kanıtı ve ilgili commitlerle ilişkilendirilir.
