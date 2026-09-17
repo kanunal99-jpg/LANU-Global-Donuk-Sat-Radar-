@@ -17,6 +17,7 @@
 - [x] APK artifact + SHA-256.
 - [x] `latest` release asset yükleme zinciri.
 - [x] Release asset doğrulaması: `Lanu-Global-Donuk-Satis-Radari-latest.apk` ve `.sha256` mevcut.
+- [x] CRM + Room değişiklikleri için CI Run #88: unit test + debug APK + artifact + release başarıyla tamamlandı.
 
 ### Veri gerçekliği
 - [x] `DataQuality` ayrımı.
@@ -73,31 +74,32 @@
 - [ ] Gerçek cihazda tile/marker/popup smoke testi.
 - [ ] Saha ölçeğinde OSM tile kullanımının operasyon kontrolü.
 
-## 5. Saha CRM — açık ödev
+## 5. Saha CRM
 
-- [ ] Potansiyel müşteri kaydı.
-- [ ] Ziyaret planlama/sonucu.
-- [ ] Görüşme notları.
-- [ ] Numune.
-- [ ] Teklif/takip.
-- [ ] Sipariş takibi.
-- [ ] Aktif/kaybedilen müşteri durumu.
-- [ ] Offline-first kayıt ve veri kaybı koruması.
+- [x] Potansiyel müşteri kalıcı Room kaydı.
+- [x] CRM müşteri gözlem akışı.
+- [x] Ziyaret/görüşme/numune/teklif/sipariş aktiviteleri için domain modeli ve kayıt kuyruğu.
+- [x] Aktif/kaybedilen müşteri durumları için aşama modeli.
+- [x] Offline-first yerel kayıt: önce cihaz veritabanı, sonra senkronizasyon kuyruğu.
+- [x] Aşama geçiş geçmişinin kalıcı tutulması.
+- [x] Conflict çözümleyici ve sürüm alanları.
 - [ ] Bulut senkronizasyonu.
-- [ ] Conflict çözümü.
+- [ ] Gerçek conflict çözümü için çok cihazlı backend testi.
 
-## 6. Satış hunisi — açık ödev
+## 6. Satış hunisi
 
 `Potansiyel → Ziyaret → Görüşme → Teklif → Numune → Sipariş → Aktif Müşteri`
 
 - [x] Temel dashboard funnel görselleştirmesi.
-- [ ] Huni aşamalarını işletme listelerine bağlama.
-- [ ] Kalıcı CRM aşama verisi.
-- [ ] Aşama geçiş geçmişi.
+- [x] Kalıcı CRM aşama verisi.
+- [x] Aşama geçiş geçmişi.
+- [ ] Huni aşamalarını ayrıntılı işletme listelerine bağlama.
+- [ ] Gerçek ziyaret/teklif/sipariş aktivitelerinden dönüşüm oranları.
 
-## 7. Dashboard — açık ödev
+## 7. Dashboard
 
 - [x] İlk KPI/funnel/filtre ekranı.
+- [x] Dashboard müşteri sayısını gerçek yerel CRM kayıtlarından okuyor.
 - [ ] Gerçek backend veri pipeline'ı.
 - [ ] İlçe → mahalle → işletme drill-down.
 - [ ] Gerçek ziyaret/arama/teklif/sipariş metrikleri.
@@ -107,17 +109,18 @@
 - [ ] Müşteri başına satış.
 - [ ] Gerçek fırsat yoğunluğu haritası.
 
-## 8. Backend / offline — açık ödev
+## 8. Backend / offline
 
-- [ ] Kalıcı işletme/CRM veri modeli.
+- [x] Yerel kalıcı CRM veri katmanı.
+- [x] Yerel senkronizasyon kuyruğu ve payload sürümü.
+- [x] Conflict çözümleme çekirdeği.
 - [ ] Bulut veri katmanı.
 - [ ] Kullanıcı sahipliği ve yetkilendirme.
 - [ ] RLS / veri erişim sınırları.
-- [ ] Senkronizasyon kuyruğu.
-- [ ] Conflict yönetimi.
-- [ ] Offline-first saha testi.
+- [ ] Gerçek senkronizasyon worker'ı ve retry/backoff.
+- [ ] Conflict yönetiminin backend ile uçtan uca testi.
 
-## 9. Global Donuk ürün kataloğu — açık ödev
+## 9. Global Donuk ürün kataloğu
 
 - [x] HORECA kullanım senaryosu araştırıldı.
 - [ ] Güncel ürün/SKU/gramaj kataloğu doğrulanacak.
@@ -139,7 +142,9 @@
 - [x] Deduplication/freshness testleri.
 - [x] Nominatim sözleşme/query testleri.
 - [x] Satış fırsatı testleri.
-- [ ] `extratags` parser için doğrudan birim test kapsamını genişletme.
+- [x] `extratags` parser doğrudan birim testleri.
+- [x] CRM aşama/conflict/persistans testleri.
+- [x] CRM + Room CI build doğrulaması.
 - [ ] UI/integration testleri.
 - [ ] Gerçek cihaz APK kurulumu.
 - [ ] Canlı kaynak araması.
@@ -156,6 +161,9 @@
 - Kaynakta varsa telefon/web/çalışma saatleri rapora bağlandı.
 - Gerçek sonuçlara bağlı harita eklendi.
 - OSM atfı görünür tutuldu; toplu tarama/prefetch yapılmadı.
+- Room yerel CRM, sync queue, stage history ve conflict çekirdeği eklendi.
+- Arama sonucu → CRM kaydı → dashboard veri zinciri bağlandı.
+- CI Run #88 ile unit test + debug APK + release zinciri doğrulandı.
 
 ## 13. Geliştirme kuralı
 
