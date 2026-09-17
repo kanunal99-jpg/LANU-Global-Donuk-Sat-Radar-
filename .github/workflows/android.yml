@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,7 +22,39 @@ jobs:
         with:
           gradle-version: '8.9'
       - run: gradle assembleDebug
+      - name: Calculate APK SHA-256
+        run: sha256sum app/build/outputs/apk/debug/app-debug.apk > app-debug.apk.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: lanu-global-donuk-satis-radari-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app-debug.apk.sha256
+      - name: Publish latest successful APK
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APK_PATH: app/build/outputs/apk/debug/app-debug.apk
+          SHA_PATH: app-debug.apk.sha256
+        run: |
+          set -euo pipefail
+          if gh release view latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit latest \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Latest APK" \
+              --notes "Automatically published from the latest successful main CI build. Commit: $GITHUB_SHA" \
+              --target "$GITHUB_SHA"
+          else
+            gh release create latest \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Latest APK" \
+              --notes "Automatically published from the latest successful main CI build. Commit: $GITHUB_SHA" \
+              --target "$GITHUB_SHA"
+          fi
+          cp "$APK_PATH" "Lanu-Global-Donuk-Satis-Radari-latest.apk"
+          cp "$SHA_PATH" "Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256"
+          gh release upload latest \
+            --repo "$GITHUB_REPOSITORY" \
+            "Lanu-Global-Donuk-Satis-Radari-latest.apk" \
+            "Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256" \
+            --clobber
