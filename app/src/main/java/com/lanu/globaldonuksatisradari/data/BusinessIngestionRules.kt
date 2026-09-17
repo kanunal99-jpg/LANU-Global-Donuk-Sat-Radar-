@@ -1,20 +1,26 @@
 package com.lanu.globaldonuksatisradari.data
 
+enum class BusinessFreshnessState {
+    FRESH,
+    STALE,
+    INVALID,
+}
+
 /**
- * Deterministic freshness policy. A record is stale only by age; no business fact is inferred.
+ * Deterministic freshness policy. Freshness never changes the source quality classification.
  */
 object BusinessFreshness {
     fun classify(
         business: VerifiedBusiness,
         nowEpochMs: Long,
         maxAgeMs: Long,
-    ): DataQuality {
-        if (nowEpochMs <= 0L || maxAgeMs <= 0L) return DataQuality.UNVERIFIED
-        if (business.verifiedAtEpochMs > nowEpochMs) return DataQuality.UNVERIFIED
+    ): BusinessFreshnessState {
+        if (nowEpochMs <= 0L || maxAgeMs <= 0L) return BusinessFreshnessState.INVALID
+        if (business.verifiedAtEpochMs > nowEpochMs) return BusinessFreshnessState.INVALID
         return if (nowEpochMs - business.verifiedAtEpochMs > maxAgeMs) {
-            DataQuality.STALE
+            BusinessFreshnessState.STALE
         } else {
-            DataQuality.VERIFIED_OFFICIAL
+            BusinessFreshnessState.FRESH
         }
     }
 }
@@ -41,7 +47,7 @@ object BusinessIngestionGate {
     ): List<VerifiedBusiness> {
         return BusinessDeduplicator.deduplicate(records).mapNotNull { business ->
             if (VerifiedBusinessValidator.validate(business).isFailure) return@mapNotNull null
-            if (BusinessFreshness.classify(business, nowEpochMs, maxAgeMs) == DataQuality.UNVERIFIED) {
+            if (BusinessFreshness.classify(business, nowEpochMs, maxAgeMs) == BusinessFreshnessState.INVALID) {
                 return@mapNotNull null
             }
             business
