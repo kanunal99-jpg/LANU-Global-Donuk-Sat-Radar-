@@ -1,22 +1,26 @@
 package com.lanu.globaldonuksatisradari.data
 
-/**
- * Describes how a business field was obtained. These states must never be
- * silently treated as equivalent in the UI or analytics layer.
- */
+/** Provenance/quality is independent from freshness. */
 enum class DataQuality {
     VERIFIED_OFFICIAL,
     VERIFIED_EXTERNAL,
     ESTIMATED,
     USER_ENTERED,
-    STALE,
     UNVERIFIED,
 }
 
-/**
- * Describes how a source may be consumed. It intentionally does not grant
- * permission; the configured source terms must be verified separately.
- */
+enum class Freshness { FRESH, STALE }
+
+data class FreshnessPolicy(val maxAgeMs: Long) {
+    init { require(maxAgeMs > 0) { "maxAgeMs pozitif olmalı" } }
+
+    fun evaluate(verifiedAtEpochMs: Long, nowEpochMs: Long): Freshness {
+        require(verifiedAtEpochMs > 0) { "verifiedAtEpochMs doğrulanmalı" }
+        require(nowEpochMs >= verifiedAtEpochMs) { "nowEpochMs doğrulama zamanından küçük olamaz" }
+        return if (nowEpochMs - verifiedAtEpochMs <= maxAgeMs) Freshness.FRESH else Freshness.STALE
+    }
+}
+
 enum class SourceAccessMethod {
     PUBLIC_SEARCH,
     OFFICIAL_BULK_REQUEST,
@@ -31,12 +35,9 @@ data class BusinessField<T>(
     val quality: DataQuality,
     val sourceId: String? = null,
     val verifiedAtEpochMs: Long? = null,
+    val freshness: Freshness = Freshness.FRESH,
 )
 
-/**
- * Machine-readable source contract used before an external business source
- * can be connected to the application domain.
- */
 data class BusinessSourceContract(
     val descriptor: DataSourceDescriptor,
     val accessMethod: SourceAccessMethod,
