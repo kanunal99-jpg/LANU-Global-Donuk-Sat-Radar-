@@ -51,6 +51,10 @@ jobs:
             --notes "Automatically published from the latest successful main CI build. Commit: $GITHUB_SHA" \
             --target "$GITHUB_SHA"
 
+          gh release delete-asset latest app-debug.apk \
+            --repo "$GITHUB_REPOSITORY" --yes || true
+          gh release delete-asset latest app-debug.apk.sha256 \
+            --repo "$GITHUB_REPOSITORY" --yes || true
           gh release delete-asset latest Lanu-Global-Donuk-Satis-Radari-latest.apk \
             --repo "$GITHUB_REPOSITORY" --yes || true
           gh release delete-asset latest Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256 \
