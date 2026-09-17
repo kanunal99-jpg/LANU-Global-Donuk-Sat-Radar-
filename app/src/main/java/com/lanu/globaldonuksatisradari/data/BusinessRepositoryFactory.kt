@@ -6,15 +6,40 @@ package com.lanu.globaldonuksatisradari.data
  * silently falling back to fabricated or unlicensed records.
  */
 object BusinessRepositoryFactory {
-    fun create(contract: BusinessSourceContract?): BusinessRepository {
-        if (contract == null) return EmptyBusinessRepository()
-        if (!contract.permittedUseVerified) return EmptyBusinessRepository()
-        if (contract.accessMethod == SourceAccessMethod.NOT_CONFIGURED) return EmptyBusinessRepository()
-        return EmptyBusinessRepository()
+    fun create(contract: BusinessSourceContract?): BusinessRepository =
+        if (contract == null || !contract.validate().isSuccess) {
+            EmptyBusinessRepository()
+        } else {
+            EmptyBusinessRepository()
+        }
+
+    /**
+     * Production wiring point for a verified source adapter.
+     * The adapter is never trusted directly: contract validation and per-record domain validation
+     * remain mandatory at this boundary.
+     */
+    fun create(
+        contract: BusinessSourceContract?,
+        adapter: BusinessSourceAdapter?,
+    ): BusinessRepository {
+        if (contract == null || adapter == null) return EmptyBusinessRepository()
+        if (adapter.contract != contract) return EmptyBusinessRepository()
+        if (!contract.validate().isSuccess) return EmptyBusinessRepository()
+        return AdapterBusinessRepository(adapter)
+    }
+
+    private class AdapterBusinessRepository(
+        private val adapter: BusinessSourceAdapter,
+    ) : BusinessRepository {
+        override suspend fun search(
+            query: String,
+            city: String,
+            district: String?,
+        ): List<VerifiedBusiness> = adapter.fetchValidated(query, city, district)
     }
 }
 
-/** Normalized ingestion boundary. Adapters may only emit validated domain records. */
+/** Normalized ingestion boundary. Adapters may only emit domain records through validation. */
 interface BusinessSourceAdapter {
     val contract: BusinessSourceContract
 
@@ -30,7 +55,7 @@ suspend fun BusinessSourceAdapter.fetchValidated(
     city: String,
     district: String? = null,
 ): List<VerifiedBusiness> {
-    contract.validate().getOrElse { return emptyList() }
+    if (!contract.validate().isSuccess) return emptyList()
     return fetch(query, city, district).mapNotNull { business ->
         VerifiedBusinessValidator.validate(business).getOrNull()
     }
