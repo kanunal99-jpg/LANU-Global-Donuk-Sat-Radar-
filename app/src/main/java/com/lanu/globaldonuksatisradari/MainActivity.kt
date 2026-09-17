@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SalesRadarApp() {
     var selectedCity by remember { mutableStateOf(cities.first()) }
