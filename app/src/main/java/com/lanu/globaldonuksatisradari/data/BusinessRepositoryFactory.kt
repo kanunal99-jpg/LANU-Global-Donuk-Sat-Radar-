@@ -14,17 +14,24 @@ object BusinessRepositoryFactory {
     }
 }
 
-/** Normalized ingestion boundary; adapters must validate before creating domain records. */
+/** Normalized ingestion boundary. Adapters may only emit validated domain records. */
 interface BusinessSourceAdapter {
     val contract: BusinessSourceContract
 
     suspend fun fetch(query: String, city: String, district: String? = null): List<VerifiedBusiness>
 }
 
-fun BusinessSourceAdapter.fetchValidated(
+/**
+ * Defensive adapter wrapper: invalid records are rejected instead of entering the app domain.
+ * The source contract itself must also pass validation before production wiring.
+ */
+suspend fun BusinessSourceAdapter.fetchValidated(
     query: String,
     city: String,
     district: String? = null,
 ): List<VerifiedBusiness> {
-    error("fetchValidated must be implemented with a suspend-aware adapter wrapper")
+    contract.validate().getOrElse { return emptyList() }
+    return fetch(query, city, district).mapNotNull { business ->
+        VerifiedBusinessValidator.validate(business).getOrNull()
+    }
 }
