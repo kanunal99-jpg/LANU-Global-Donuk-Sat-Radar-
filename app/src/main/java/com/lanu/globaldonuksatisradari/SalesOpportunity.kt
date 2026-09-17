@@ -6,7 +6,7 @@ data class SalesOpportunity(
     val focus: String,
     val discoveryQuestions: List<String>,
     val conversation: String,
-    val sourceUrl: String = "https://globaldonukgida.com/is-ortakligi/",
+    val sourceUrl: String = "https://globaldonukgida.com/",
 )
 
 /**
@@ -80,4 +80,5 @@ fun buildSalesOpportunity(category: String?): SalesOpportunity {
             ),
             conversation = "Kategori kaynağı yeterince ayrıntılı olmadığı için önce işletmenin gerçek operasyonunu keşfet; ürün veya satış rakamı varsayma.",
         )
+    }
 }
