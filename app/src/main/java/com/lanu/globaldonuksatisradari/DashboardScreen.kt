@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 fun SalesDashboard(
     selectedCity: String,
     selectedDistrict: String,
+    availableDistricts: List<String>,
     onDistrictSelected: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -54,7 +55,7 @@ fun SalesDashboard(
                         onClick = { onDistrictSelected("Tümü") },
                         label = { Text("Tümü") }
                     )
-                    listOf("Kadıköy", "Beşiktaş", "Şişli", "Bakırköy", "Ataşehir").forEach { district ->
+                    availableDistricts.forEach { district ->
                         FilterChip(
                             selected = selectedDistrict == district,
                             onClick = { onDistrictSelected(district) },
