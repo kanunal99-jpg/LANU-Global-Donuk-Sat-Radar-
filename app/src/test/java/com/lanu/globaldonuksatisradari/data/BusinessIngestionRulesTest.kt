@@ -46,11 +46,11 @@ class BusinessIngestionRulesTest {
     }
 
     @Test
-    fun `stale records remain available to callers that inspect freshness but are not rejected by gate`() {
+    fun `stale state is separate from source quality`() {
         val record = business("1", 1_000L)
 
         assertEquals(
-            DataQuality.STALE,
+            BusinessFreshnessState.STALE,
             BusinessFreshness.classify(record, nowEpochMs = 3_000L, maxAgeMs = 1_000L),
         )
         assertEquals(
