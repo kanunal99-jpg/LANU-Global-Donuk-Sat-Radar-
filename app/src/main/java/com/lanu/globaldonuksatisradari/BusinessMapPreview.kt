@@ -75,8 +75,7 @@ private fun buildMapHtml(businesses: List<VerifiedBusiness>): String {
         <html lang="tr">
         <head>
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-                integrity="sha256-p4NxAoJBhIINfQ3iy6DfQvK5QjFQO5w5QzjLkMZ8x0M=" crossorigin=""/>
+          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
           <style>
             html, body, #map { height: 100%; margin: 0; }
             body { font-family: sans-serif; }
@@ -84,8 +83,7 @@ private fun buildMapHtml(businesses: List<VerifiedBusiness>): String {
         </head>
         <body>
           <div id="map"></div>
-          <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-                  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+          <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
           <script>
             const businesses = [$points];
             const map = L.map('map', { zoomControl: true });
