@@ -36,47 +36,66 @@ fun SalesRadarApp() {
 
     MaterialTheme {
         Scaffold(topBar = { TopAppBar(title = { Text("LANU Global Donuk Satış Radarı") }) }) { padding ->
-            LazyColumn(modifier = Modifier.padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            LazyColumn(
+                modifier = Modifier.padding(padding).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 item {
                     Text("Satış Radarı", style = MaterialTheme.typography.headlineSmall)
                     Text("Gerçek kaynaklı verilerle şehir → ilçe → mahalle → işletme keşfi")
                 }
                 item {
-                    OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(), label = { Text("İşletme / şehir / ilçe ara") })
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("İşletme / şehir / ilçe ara") }
+                    )
                 }
                 item {
                     Box {
-                        OutlinedButton(onClick = { cityMenu = true }, modifier = Modifier.fillMaxWidth()) { Text("Şehir: ${selectedCity.name}") }
-                        DropdownMenu(expanded = cityMenu, onDismissRequest = { cityMenu = false }) {
+                        OutlinedButton(
+                            onClick = { cityMenu = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Şehir: ${selectedCity.name}") }
+                        DropdownMenu(
+                            expanded = cityMenu,
+                            onDismissRequest = { cityMenu = false }
+                        ) {
                             cities.forEach { city ->
-                                DropdownMenuItem(text = { Text(city.name) }, onClick = { selectedCity = city; selectedDistrict = "Tümü"; cityMenu = false })
+                                DropdownMenuItem(
+                                    text = { Text(city.name) },
+                                    onClick = {
+                                        selectedCity = city
+                                        selectedDistrict = "Tümü"
+                                        cityMenu = false
+                                    }
+                                )
                             }
                         }
                     }
                 }
                 item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = selectedDistrict == "Tümü", onClick = { selectedDistrict = "Tümü" }, label = { Text("Tümü") })
-                        selectedCity.districts.forEach { district ->
-                            FilterChip(selected = selectedDistrict == district, onClick = { selectedDistrict = district }, label = { Text(district) })
-                        }
-                    }
+                    SalesDashboard(
+                        selectedCity = selectedCity.name,
+                        selectedDistrict = selectedDistrict,
+                        onDistrictSelected = { selectedDistrict = it }
+                    )
                 }
                 item {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp)) {
-                            Text("Saha özeti", style = MaterialTheme.typography.titleMedium)
-                            Text("Seçili şehir: ${selectedCity.name}")
-                            Text("İlçe: $selectedDistrict")
+                            Text("Arama durumu", style = MaterialTheme.typography.titleMedium)
                             Text("Arama: ${query.ifBlank { "tümü" }}")
+                            Text("İlçe: $selectedDistrict")
                         }
                     }
                 }
                 item {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp)) {
-                            Text("Henüz doğrulanmış işletme verisi yok", style = MaterialTheme.typography.titleMedium)
-                            Text("Uygulama bilinmeyen işletmeleri veya tahmini bilgileri gerçek müşteri gibi göstermeyecek. Veri kaynağı bağlandığında işletmeler burada listelenecek.")
+                            Text("Veri güvenliği", style = MaterialTheme.typography.titleMedium)
+                            Text("Henüz doğrulanmış işletme verisi yok. Uygulama bilinmeyen işletmeleri, çalışan sayılarını veya satış rakamlarını gerçekmiş gibi göstermeyecek.")
                         }
                     }
                 }
