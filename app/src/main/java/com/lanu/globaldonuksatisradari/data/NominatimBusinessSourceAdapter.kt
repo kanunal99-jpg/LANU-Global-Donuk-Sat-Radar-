@@ -30,17 +30,8 @@ object NominatimBusinessSource {
         permittedUseVerified = true,
         supportsBulk = false,
         fieldNames = setOf(
-            "name",
-            "city",
-            "district",
-            "neighborhood",
-            "latitude",
-            "longitude",
-            "category",
-            "address",
-            "phone",
-            "website",
-            "opening_hours",
+            "name", "city", "district", "neighborhood", "latitude", "longitude",
+            "category", "address", "phone", "website", "opening_hours",
         ),
     )
 }
@@ -66,51 +57,29 @@ class NominatimBusinessSourceAdapter(
 ) : BusinessSourceAdapter {
     override val contract: BusinessSourceContract = NominatimBusinessSource.contract
 
-    override suspend fun fetch(
-        query: String,
-        city: String,
-        district: String?,
-    ): List<VerifiedBusiness> = withContext(Dispatchers.IO) {
+    override suspend fun fetch(query: String, city: String, district: String?): List<VerifiedBusiness> = withContext(Dispatchers.IO) {
         if (contract.validate().isFailure || query.isBlank()) return@withContext emptyList()
-
-        val cacheKey = listOf(
-            query.trim().lowercase(),
-            city.trim().lowercase(),
-            district?.trim()?.lowercase().orEmpty(),
-            baseUrlProvider(),
-        ).joinToString("|")
+        val cacheKey = listOf(query.trim().lowercase(), city.trim().lowercase(), district?.trim()?.lowercase().orEmpty(), baseUrlProvider()).joinToString("|")
         SearchCache.get(cacheKey)?.let { return@withContext it }
         RateLimiter.await()
-
         val connection = (URL(NominatimQueryBuilder.build(query, city, district, baseUrlProvider())).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 15_000
             readTimeout = 20_000
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Accept-Language", "tr")
-            setRequestProperty(
-                "User-Agent",
-                "LANU-Global-Donuk-Satis-Radari/0.1 (+https://github.com/kanunal99-jpg/LANU-Global-Donuk-Sat-Radar-)"
-            )
+            setRequestProperty("User-Agent", "LANU-Global-Donuk-Satis-Radari/0.1 (+https://github.com/kanunal99-jpg/LANU-Global-Donuk-Sat-Radar-)")
         }
-
         try {
             if (connection.responseCode !in 200..299) return@withContext emptyList()
             val payload = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
             val parsed = parse(payload, city, district, nowEpochMs())
             SearchCache.put(cacheKey, parsed)
             parsed
-        } finally {
-            connection.disconnect()
-        }
+        } finally { connection.disconnect() }
     }
 
-    private fun parse(
-        payload: String,
-        selectedCity: String,
-        selectedDistrict: String?,
-        verifiedAtEpochMs: Long,
-    ): List<VerifiedBusiness> {
+    internal fun parse(payload: String, selectedCity: String, selectedDistrict: String?, verifiedAtEpochMs: Long): List<VerifiedBusiness> {
         val json = JSONArray(payload)
         val result = mutableListOf<VerifiedBusiness>()
         for (index in 0 until json.length()) {
@@ -120,27 +89,15 @@ class NominatimBusinessSourceAdapter(
             val address = item.optJSONObject("address")
             val extra = item.optJSONObject("extratags")
             val district = selectedDistrict?.takeUnless { it.isBlank() || it.equals("Tümü", ignoreCase = true) }
-                ?: address?.let {
-                    listOfNotNull(
-                        it.optString("suburb").takeIf(String::isNotBlank),
-                        it.optString("city_district").takeIf(String::isNotBlank),
-                        it.optString("town").takeIf(String::isNotBlank),
-                    ).firstOrNull()
-                }
+                ?: address?.let { listOfNotNull(it.optString("suburb").takeIf(String::isNotBlank), it.optString("city_district").takeIf(String::isNotBlank), it.optString("town").takeIf(String::isNotBlank)).firstOrNull() }
                 ?: continue
             val id = "${item.optString("osm_type")}:${item.optString("osm_id")}".trim(':')
             if (id.isBlank()) continue
-
             result += VerifiedBusiness(
-                id = id,
-                name = name,
-                city = selectedCity,
-                district = district,
+                id = id, name = name, city = selectedCity, district = district,
                 neighborhood = address?.optString("neighbourhood")?.takeIf(String::isNotBlank),
-                source = contract.descriptor,
-                verifiedAtEpochMs = verifiedAtEpochMs,
-                latitude = item.optString("lat").toDoubleOrNull(),
-                longitude = item.optString("lon").toDoubleOrNull(),
+                source = contract.descriptor, verifiedAtEpochMs = verifiedAtEpochMs,
+                latitude = item.optString("lat").toDoubleOrNull(), longitude = item.optString("lon").toDoubleOrNull(),
                 category = item.optString("type").takeIf(String::isNotBlank),
                 address = item.optString("display_name").takeIf(String::isNotBlank),
                 phone = firstExtraValue(extra, "phone", "contact:phone", "contact_phone"),
@@ -151,37 +108,27 @@ class NominatimBusinessSourceAdapter(
         return BusinessDeduplication.deduplicate(result)
     }
 
-    private fun firstExtraValue(extra: org.json.JSONObject?, vararg keys: String): String? =
-        keys.firstNotNullOfOrNull { key ->
-            extra?.optString(key)?.trim()?.takeIf(String::isNotBlank)
-        }
+    private fun firstExtraValue(extra: org.json.JSONObject?, vararg keys: String): String? = keys.firstNotNullOfOrNull { key ->
+        extra?.optString(key)?.trim()?.takeIf(String::isNotBlank)
+    }
 }
 
 private object SearchCache {
     private const val MAX_AGE_MS = 5 * 60 * 1000L
     private data class Entry(val createdAt: Long, val records: List<VerifiedBusiness>)
     private val entries = ConcurrentHashMap<String, Entry>()
-
     fun get(key: String): List<VerifiedBusiness>? {
         val entry = entries[key] ?: return null
-        if (System.currentTimeMillis() - entry.createdAt > MAX_AGE_MS) {
-            entries.remove(key)
-            return null
-        }
+        if (System.currentTimeMillis() - entry.createdAt > MAX_AGE_MS) { entries.remove(key); return null }
         return entry.records
     }
-
-    fun put(key: String, records: List<VerifiedBusiness>) {
-        entries[key] = Entry(System.currentTimeMillis(), records)
-    }
+    fun put(key: String, records: List<VerifiedBusiness>) { entries[key] = Entry(System.currentTimeMillis(), records) }
 }
 
 private object RateLimiter {
     private const val MIN_INTERVAL_MS = 1_100L
     private var lastRequestAt = 0L
-
-    @Synchronized
-    fun await() {
+    @Synchronized fun await() {
         val now = SystemClock.elapsedRealtime()
         val wait = MIN_INTERVAL_MS - (now - lastRequestAt)
         if (wait > 0) Thread.sleep(wait)
