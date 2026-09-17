@@ -1,5 +1,7 @@
 package com.lanu.globaldonuksatisradari.data
 
+import java.util.Locale
+
 /** Conservative deduplication: merge only identical source + stable record ID. */
 object BusinessDeduplication {
     fun exactIdentityKey(business: VerifiedBusiness): String =
@@ -10,7 +12,9 @@ object BusinessDeduplication {
 
     fun normalizeForComparison(value: String): String = value
         .trim()
-        .lowercase()
+        .replace('İ', 'I')
+        .lowercase(Locale.ROOT)
+        .replace("\u0307", "")
         .replace('ı', 'i')
         .replace('ğ', 'g')
         .replace('ü', 'u')
