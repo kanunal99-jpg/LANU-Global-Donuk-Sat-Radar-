@@ -60,3 +60,55 @@ Anayasadaki kritik kurallar dokümantasyon olarak kalmayacak; mümkün olanlar t
 - Gerçekleşmiş özellikler ile planlanan/istenen özellikler ayrı tutulur.
 - Planlanan özellikler tamamlanmış gibi gösterilemez.
 - Proje durumu, CI/release kanıtı ve ilgili commitlerle ilişkilendirilir.
+
+## 17. Denetim eksikleri — ZORUNLU ÖDEV LİSTESİ
+Aşağıdaki eksikler denetimde tespit edilmiş olup tamamlanmadan ürün tamamlanmış kabul edilmez:
+- Gerçek işletme veri kaynağı entegrasyonu ve kaynak/lisans doğrulaması.
+- Ülke → şehir → ilçe → mahalle → işletme veri modeli ve İstanbul'un doğrulanmış ilçe/mahalle kapsamı.
+- Gerçek HORECA işletme keşfi; arama, filtreleme, liste ve harita akışı.
+- İşletme detay raporu ve kaynak/son doğrulama metadata'sı.
+- Gerçek Global Donuk ürün kataloğu ve ürün-işletme eşleştirmesi.
+- Saha CRM: müşteri, ziyaret, görüşme, not, numune, teklif, sipariş, aktif/kayıp durumları.
+- Kalıcı backend, kimlik doğrulama, yetkilendirme ve güvenli veri erişimi.
+- Offline-first yerel veri katmanı, kuyruklu senkronizasyon ve conflict çözümü.
+- Dashboard gerçek veri pipeline'ı, KPI hesapları, dönem karşılaştırması ve drill-down.
+- Satış hunisinin gerçek CRM durumlarına bağlanması.
+- İlçe → mahalle → işletme drill-down ve fırsat yoğunluk analizi.
+- AI satış koçluğu yalnızca doğrulanmış veriye dayalı ve kaynak gerçeklerinden ayrı olacak şekilde uygulanması.
+- Kaynak doğrulama, deduplikasyon, veri kalite ve stale-data kontrolleri.
+- Kritik akışlar için unit/integration/UI/smoke testleri.
+- Gerçek cihaz kurulumu, offline/online geçişi, saha akışları ve release APK doğrulaması.
+
+## 18. Hatalı işe geçişi engelleyen kapılar — ZORUNLU
+- Kaynak doğrulanmadan gerçek müşteri/işletme verisi ürün ekranına alınamaz.
+- Veri modeli olmadan UI'da sahte veya hard-coded işletme/KPI gösterilemez.
+- Gerçek veri kaynağı ve lisans şartları incelenmeden scraping veya harita entegrasyonu yapılamaz.
+- Kaynağı ve doğrulama zamanı olmayan kritik veri gerçekmiş gibi sunulamaz.
+- Tahmin, kullanıcı girdisi ve doğrulanmış gerçek veri aynı alan/etiket altında birleştirilemez.
+- Backend güvenliği kurulmadan üretim müşteri verisi kullanılmaz.
+- Offline veri güvenliği kurulmadan saha CRM'si tamamlandı kabul edilmez.
+- Senkronizasyon ve conflict testi olmadan offline-first tamamlandı denilemez.
+- Dashboard veri pipeline'ı olmadan KPI, dönüşüm veya satış rakamı gösterilemez.
+- Funnel aşamaları gerçek CRM durumlarına bağlanmadan funnel tamamlandı sayılamaz.
+- Gerçek ürün kataloğu doğrulanmadan ürün önerisi/eşleştirmesi yayınlanamaz.
+- AI, doğrulanmış katalog ve işletme verisi dışında gerçekmiş gibi bilgi üretemez; doğrulanmış veri yoksa güvenli boş sonuç vermelidir.
+- Kritik özellik için uygun test yoksa özellik tamamlanmış sayılmaz.
+- CI kırmızıysa merge/release ve “tamamlandı” statüsü yoktur.
+- Release artifact ve SHA doğrulanmadan APK yayınlanmış kabul edilmez.
+- Gerçek cihazda temel kritik akışlar doğrulanmadan saha kullanıma hazır denilemez.
+- Hata sessizce yutulamaz; kullanıcıya güvenli durum gösterilmeli ve teknik hata loglanmalıdır.
+- Başarısız ana kaynakta alternatif/fallback zinciri doğrulanmadan kritik servis tek kaynağa bağımlı bırakılamaz.
+
+## 19. Denetim ve görev yürütme standardı
+- Her ödev maddesi kod → test → CI → doğrulama kanıtı ile kapatılır.
+- Sadece dokümana madde eklemek veya UI çizmek ödevi tamamlamaz.
+- Her kapatılan madde için ilgili commit, test/CI sonucu ve gerekiyorsa APK artifact'i kayıt altına alınır.
+- Bir maddede hata tespit edilirse sonraki katmana geçilmez; hata düzeltilir, test edilir ve yeniden CI doğrulaması yapılır.
+- Hata oluşturan değişiklik “geçici olarak çalışıyor” kabul edilmez; kök neden giderilir.
+- Denetimde bulunan eksik veya riskli iş, tamamlandı olarak işaretlenemez.
+- Yeni özellik geliştirmeden önce mevcut denetim ödevlerinin durumu güncellenir.
+
+## 20. Geliştirme sırası — ZORUNLU
+`kaynak/lisans → veri modeli → veri doğrulama → repository/backend → güvenlik → UI → hata/fallback → test → CI → gerçek cihaz → release → durum güncellemesi`
+
+Bu sırayı atlayarak üst katmanda geliştirme yapmak, sonraki aşamalarda hatayı büyütme riski taşıdığı için kabul edilmez.
