@@ -22,6 +22,16 @@ enum class CrmActivityType {
     NOTE,
 }
 
+enum class CrmNextActionType {
+    CALL,
+    VISIT,
+    MEETING,
+    SAMPLE_FOLLOW_UP,
+    PROPOSAL_FOLLOW_UP,
+    ORDER_FOLLOW_UP,
+    NOTE,
+}
+
 enum class SyncState {
     LOCAL_ONLY,
     PENDING_UPLOAD,
@@ -61,6 +71,20 @@ data class CrmActivity(
     val createdByUserId: String? = null,
     val createdAtEpochMs: Long,
     val version: Long = 0L,
+    val syncState: SyncState = SyncState.LOCAL_ONLY,
+)
+
+data class CrmNextAction(
+    val id: String,
+    val customerId: String,
+    val type: CrmNextActionType,
+    val dueAtEpochMs: Long,
+    val note: String? = null,
+    val createdByUserId: String? = null,
+    val createdAtEpochMs: Long,
+    val completedAtEpochMs: Long? = null,
+    val completedByUserId: String? = null,
+    val version: Long = 1L,
     val syncState: SyncState = SyncState.LOCAL_ONLY,
 )
 
