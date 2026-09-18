@@ -29,27 +29,75 @@ class CrmSyncEngine(
 ) {
     suspend fun processOne(): SyncProcessResult {
         val operation = syncDao.pending(1).firstOrNull() ?: return SyncProcessResult.NoWork
+
         return when (val result = remote.apply(operation)) {
             RemoteSyncResult.Success -> {
                 syncDao.delete(operation.id)
                 SyncProcessResult.Synced(operation.id)
             }
             RemoteSyncResult.NotConfigured -> SyncProcessResult.RemoteNotConfigured
-            is RemoteSyncResult.Conflict -> SyncProcessResult.Conflict(operation.id, result.reason)
+            is RemoteSyncResult.Conflict -> {
+                val nextAttempt = operation.attemptCount + 1
+                syncDao.updateAttemptAndState(
+                    id = operation.id,
+                    attemptCount = nextAttempt,
+                    lastError = result.reason,
+                    state = SyncOperationState.CONFLICT.name,
+                )
+                SyncProcessResult.Conflict(operation.id, result.reason)
+            }
             is RemoteSyncResult.PermanentFailure -> {
-                syncDao.updateAttempt(operation.id, operation.attemptCount + 1, result.reason)
+                val nextAttempt = operation.attemptCount + 1
+                syncDao.updateAttemptAndState(
+                    id = operation.id,
+                    attemptCount = nextAttempt,
+                    lastError = result.reason,
+                    state = SyncOperationState.FAILED.name,
+                )
                 SyncProcessResult.Failed(operation.id, result.reason)
             }
             is RemoteSyncResult.RetryableFailure -> {
                 val nextAttempt = operation.attemptCount + 1
-                syncDao.updateAttempt(operation.id, nextAttempt, result.reason)
-                if (policy.shouldRetry(nextAttempt)) {
+                val shouldRetry = policy.shouldRetry(nextAttempt)
+                syncDao.updateAttemptAndState(
+                    id = operation.id,
+                    attemptCount = nextAttempt,
+                    lastError = result.reason,
+                    state = if (shouldRetry) {
+                        SyncOperationState.PENDING.name
+                    } else {
+                        SyncOperationState.FAILED.name
+                    },
+                )
+                if (shouldRetry) {
                     SyncProcessResult.Deferred(operation.id, nextAttempt, result.reason)
                 } else {
                     SyncProcessResult.Failed(operation.id, result.reason)
                 }
             }
         }
+    }
+
+    suspend fun processBatch(maxOperations: Int = DEFAULT_BATCH_SIZE): List<SyncProcessResult> {
+        require(maxOperations >= 1)
+        val results = mutableListOf<SyncProcessResult>()
+        repeat(maxOperations) {
+            when (val result = processOne()) {
+                SyncProcessResult.NoWork,
+                SyncProcessResult.RemoteNotConfigured,
+                is SyncProcessResult.Deferred,
+                -> {
+                    results += result
+                    return results
+                }
+                else -> results += result
+            }
+        }
+        return results
+    }
+
+    companion object {
+        const val DEFAULT_BATCH_SIZE = 20
     }
 }
 
