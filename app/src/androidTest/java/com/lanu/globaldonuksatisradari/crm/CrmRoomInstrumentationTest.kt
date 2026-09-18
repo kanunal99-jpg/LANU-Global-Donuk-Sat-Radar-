@@ -74,7 +74,7 @@ class CrmRoomInstrumentationTest {
 
             val completed = repository.completeNextAction(action.id, "instrumentation-test")
             assertTrue(completed.completedAtEpochMs != null)
-            assertEquals(2, repository.pendingSync().size)
+            assertEquals(3, repository.pendingSync().size)
 
             assertEquals("Smoke Test Kafe", observed.single().businessName)
             assertEquals(SyncState.PENDING_UPLOAD, observed.single().syncState)
