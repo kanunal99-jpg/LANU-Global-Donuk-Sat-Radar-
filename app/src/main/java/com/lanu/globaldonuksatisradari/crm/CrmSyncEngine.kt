@@ -112,7 +112,7 @@ class CrmSyncEngine(
         val results = mutableListOf<SyncProcessResult>()
         repeat(maxOperations) {
             when (val result = processOne()) {
-                SyncProcessResult.NoWork,
+                SyncProcessResult.NoWork -> return results
                 SyncProcessResult.RemoteNotConfigured,
                 is SyncProcessResult.Deferred,
                 -> {
