@@ -25,6 +25,7 @@ abstract class LanuCrmDatabase : RoomDatabase() {
     abstract fun activityDao(): CrmActivityDao
     abstract fun stageTransitionDao(): CrmStageTransitionDao
     abstract fun syncOperationDao(): SyncOperationDao
+    abstract fun nextActionDao(): CrmNextActionDao
 
     companion object {
         private val MIGRATION_2_3 = object : Migration(2, 3) {
