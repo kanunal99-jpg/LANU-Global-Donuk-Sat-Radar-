@@ -18,6 +18,7 @@
 - [x] `latest` release asset yükleme zinciri.
 - [x] Release asset doğrulaması: `Lanu-Global-Donuk-Satis-Radari-latest.apk` ve `.sha256` mevcut.
 - [x] CRM + Room değişiklikleri için CI Run #88: unit test + debug APK + artifact + release başarıyla tamamlandı.
+- [x] CI Run #110: sync queue düzeltmesi sonrası unit test + debug APK + artifact + latest APK publish başarıyla tamamlandı.
 
 ### Veri gerçekliği
 - [x] `DataQuality` ayrımı.
@@ -117,7 +118,8 @@
 - [ ] Bulut veri katmanı.
 - [ ] Kullanıcı sahipliği ve yetkilendirme.
 - [ ] RLS / veri erişim sınırları.
-- [ ] Gerçek senkronizasyon worker'ı ve retry/backoff.
+- [x] WorkManager senkronizasyon worker'ı, CONNECTED constraint, unique periodic scheduling ve exponential backoff kodlandı/test edildi.
+- [ ] Yetkili backend bağlandıktan sonra gerçek senkronizasyon worker'ı uçtan uca doğrulanacak.
 - [ ] Conflict yönetiminin backend ile uçtan uca testi.
 
 ## 9. Global Donuk ürün kataloğu
@@ -145,6 +147,8 @@
 - [x] `extratags` parser doğrudan birim testleri.
 - [x] CRM aşama/conflict/persistans testleri.
 - [x] CRM + Room CI build doğrulaması.
+- [x] Sync engine retry/conflict/permanent-failure/no-backend davranışları unit testlerle doğrulandı.
+- [x] WorkManager scheduler ve worker kodu CI debug APK build zincirinden geçti.
 - [ ] UI/integration testleri.
 - [ ] Gerçek cihaz APK kurulumu.
 - [ ] Canlı kaynak araması.
@@ -164,6 +168,7 @@
 - Room yerel CRM, sync queue, stage history ve conflict çekirdeği eklendi.
 - Arama sonucu → CRM kaydı → dashboard veri zinciri bağlandı.
 - CI Run #88 ile unit test + debug APK + release zinciri doğrulandı.
+- CI Run #110 ile sync queue düzeltmesi sonrası unit test + debug APK + artifact + latest APK publish zinciri tekrar doğrulandı.
 
 ## 13. Geliştirme kuralı
 
