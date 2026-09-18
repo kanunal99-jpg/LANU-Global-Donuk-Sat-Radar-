@@ -32,6 +32,10 @@ abstract class LanuCrmDatabase : RoomDatabase() {
                     "ALTER TABLE crm_sync_operation " +
                         "ADD COLUMN state TEXT NOT NULL DEFAULT 'PENDING'",
                 )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_crm_sync_operation_state_createdAtEpochMs " +
+                        "ON crm_sync_operation(state, createdAtEpochMs)",
+                )
             }
         }
 
