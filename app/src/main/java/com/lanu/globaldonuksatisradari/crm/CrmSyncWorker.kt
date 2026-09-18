@@ -25,6 +25,7 @@ class CrmSyncWorker(
         val engine = CrmSyncEngine(
             syncDao = database.syncOperationDao(),
             remote = CrmSyncRemoteProvider.dataSource,
+            stateStore = RoomCrmSyncStateStore(database),
         )
         val results = engine.processBatch()
 
