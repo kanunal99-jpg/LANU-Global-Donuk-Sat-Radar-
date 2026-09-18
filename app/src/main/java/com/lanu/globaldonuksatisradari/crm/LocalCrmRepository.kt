@@ -163,12 +163,100 @@ class LocalCrmRepository(
         return activity
     }
 
+    fun observeNextActions(customerId: String): Flow<List<CrmNextAction>> =
+        database.nextActionDao().observeForCustomer(customerId).map { it.map(CrmMappings::toDomain) }
+
+    fun observeOpenNextActions(limit: Int = 100): Flow<List<CrmNextAction>> =
+        database.nextActionDao().observeOpen(limit).map { it.map(CrmMappings::toDomain) }
+
+    fun observeDueNextActions(nowEpochMs: Long = now(), limit: Int = 100): Flow<List<CrmNextAction>> =
+        database.nextActionDao().observeDue(nowEpochMs, limit).map { it.map(CrmMappings::toDomain) }
+
+    suspend fun createNextAction(
+        customerId: String,
+        type: CrmNextActionType,
+        dueAtEpochMs: Long,
+        note: String? = null,
+        createdByUserId: String? = null,
+    ): CrmNextAction {
+        require(database.customerDao().findById(customerId) != null) {
+            "Takip aksiyonu için CRM müşterisi bulunamadı: $customerId"
+        }
+        require(dueAtEpochMs > 0L) { "Takip zamanı geçerli olmalıdır." }
+
+        val timestamp = now()
+        val action = CrmNextAction(
+            id = idGenerator(),
+            customerId = customerId,
+            type = type,
+            dueAtEpochMs = dueAtEpochMs,
+            note = note,
+            createdByUserId = createdByUserId,
+            createdAtEpochMs = timestamp,
+            syncState = SyncState.PENDING_UPLOAD,
+        )
+        database.withTransaction {
+            database.nextActionDao().upsert(CrmMappings.toEntity(action))
+            database.syncOperationDao().insert(
+                SyncOperationEntity(
+                    id = idGenerator(),
+                    entityType = ENTITY_NEXT_ACTION,
+                    entityId = action.id,
+                    operation = OP_CREATE,
+                    payloadVersion = action.version,
+                    payloadJson = CrmPayloads.nextAction(action),
+                    createdAtEpochMs = timestamp,
+                    attemptCount = 0,
+                    lastError = null,
+                ),
+            )
+        }
+        return action
+    }
+
+    suspend fun completeNextAction(
+        actionId: String,
+        completedByUserId: String? = null,
+    ): CrmNextAction {
+        val current = database.nextActionDao().findById(actionId)
+            ?: error("Takip aksiyonu bulunamadı: $actionId")
+        require(current.completedAtEpochMs == null) { "Takip aksiyonu zaten tamamlandı." }
+
+        val timestamp = now()
+        database.withTransaction {
+            val updated = database.nextActionDao().complete(
+                id = actionId,
+                completedAtEpochMs = timestamp,
+                completedByUserId = completedByUserId,
+                syncState = SyncState.PENDING_UPLOAD.name,
+            )
+            check(updated == 1) { "Takip aksiyonu tamamlanamadı: $actionId" }
+            val latest = database.nextActionDao().findById(actionId)
+                ?: error("Tamamlanan takip aksiyonu okunamadı: $actionId")
+            database.syncOperationDao().insert(
+                SyncOperationEntity(
+                    id = idGenerator(),
+                    entityType = ENTITY_NEXT_ACTION,
+                    entityId = actionId,
+                    operation = OP_UPDATE,
+                    payloadVersion = latest.version,
+                    payloadJson = CrmPayloads.nextAction(CrmMappings.toDomain(latest)),
+                    createdAtEpochMs = timestamp,
+                    attemptCount = 0,
+                    lastError = null,
+                ),
+            )
+        }
+        return CrmMappings.toDomain(database.nextActionDao().findById(actionId)!!)
+    }
+
     suspend fun pendingSync(limit: Int = 100): List<SyncOperation> =
         database.syncOperationDao().pending(limit).map(CrmMappings::toDomain)
 
     companion object {
         const val ENTITY_CUSTOMER = "customer"
         const val ENTITY_ACTIVITY = "activity"
+        const val ENTITY_NEXT_ACTION = "next_action"
         const val OP_CREATE = "create"
         const val OP_UPDATE = "update"
     }
@@ -203,6 +291,34 @@ private object CrmMappings {
         notes = entity.notes,
         createdAtEpochMs = entity.createdAtEpochMs,
         updatedAtEpochMs = entity.updatedAtEpochMs,
+        version = entity.version,
+        syncState = SyncState.valueOf(entity.syncState),
+    )
+
+    fun toEntity(model: CrmNextAction) = CrmNextActionEntity(
+        id = model.id,
+        customerId = model.customerId,
+        type = model.type.name,
+        dueAtEpochMs = model.dueAtEpochMs,
+        note = model.note,
+        createdByUserId = model.createdByUserId,
+        createdAtEpochMs = model.createdAtEpochMs,
+        completedAtEpochMs = model.completedAtEpochMs,
+        completedByUserId = model.completedByUserId,
+        version = model.version,
+        syncState = model.syncState.name,
+    )
+
+    fun toDomain(entity: CrmNextActionEntity) = CrmNextAction(
+        id = entity.id,
+        customerId = entity.customerId,
+        type = CrmNextActionType.valueOf(entity.type),
+        dueAtEpochMs = entity.dueAtEpochMs,
+        note = entity.note,
+        createdByUserId = entity.createdByUserId,
+        createdAtEpochMs = entity.createdAtEpochMs,
+        completedAtEpochMs = entity.completedAtEpochMs,
+        completedByUserId = entity.completedByUserId,
         version = entity.version,
         syncState = SyncState.valueOf(entity.syncState),
     )
@@ -257,6 +373,19 @@ private object CrmPayloads {
         put("createdAtEpochMs", customer.createdAtEpochMs)
         put("updatedAtEpochMs", customer.updatedAtEpochMs)
         put("version", customer.version)
+    }.toString()
+
+    fun nextAction(action: CrmNextAction): String = JSONObject().apply {
+        put("id", action.id)
+        put("customerId", action.customerId)
+        put("type", action.type.name)
+        put("dueAtEpochMs", action.dueAtEpochMs)
+        put("note", action.note)
+        put("createdByUserId", action.createdByUserId)
+        put("createdAtEpochMs", action.createdAtEpochMs)
+        put("completedAtEpochMs", action.completedAtEpochMs)
+        put("completedByUserId", action.completedByUserId)
+        put("version", action.version)
     }.toString()
 
     fun activity(activity: CrmActivity): String = JSONObject().apply {
