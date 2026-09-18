@@ -1,6 +1,7 @@
 package com.lanu.globaldonuksatisradari.crm
 
 import android.content.Context
+import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -25,16 +26,12 @@ class CrmSyncWorker(
             syncDao = database.syncOperationDao(),
             remote = CrmSyncRemoteProvider.dataSource,
         )
+        val results = engine.processBatch()
 
-        return when (engine.processOne()) {
-            SyncProcessResult.NoWork,
-            SyncProcessResult.RemoteNotConfigured,
-            is SyncProcessResult.Synced,
-            is SyncProcessResult.Conflict,
-            is SyncProcessResult.Failed,
-            -> Result.success()
-
-            is SyncProcessResult.Deferred -> Result.retry()
+        return if (results.any { it is SyncProcessResult.Deferred }) {
+            Result.retry()
+        } else {
+            Result.success()
         }
     }
 }
@@ -55,6 +52,11 @@ object CrmSyncScheduler {
 
         val request = PeriodicWorkRequestBuilder<CrmSyncWorker>(15, TimeUnit.MINUTES)
             .setConstraints(constraints)
+            .setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                30L,
+                TimeUnit.SECONDS,
+            )
             .build()
 
         WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
