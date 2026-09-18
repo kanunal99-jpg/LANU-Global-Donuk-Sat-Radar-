@@ -1,5 +1,6 @@
 package com.lanu.globaldonuksatisradari.crm
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -82,5 +83,6 @@ data class SyncOperationEntity(
     val createdAtEpochMs: Long,
     val attemptCount: Int,
     val lastError: String?,
+    @ColumnInfo(defaultValue = "'PENDING'")
     val state: String = SyncOperationState.PENDING.name,
 )
