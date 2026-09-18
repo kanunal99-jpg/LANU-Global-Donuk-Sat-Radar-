@@ -1,6 +1,6 @@
 package com.lanu.globaldonuksatisradari
 
-import androidx.compose.ui.test.assertExists
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -9,6 +9,7 @@ import androidx.work.WorkManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -23,8 +24,8 @@ class MainActivitySmokeTest {
         composeRule.onNodeWithText("LANU Global Donuk Satış Radarı").assertIsDisplayed()
         composeRule.onNodeWithText("Satış Radarı").assertIsDisplayed()
         composeRule.onNodeWithText("Gerçek kaynaktan ara").assertIsDisplayed()
-        composeRule.onNodeWithText("Yerel CRM").assertExists()
-        composeRule.onNodeWithText("Veri sınırı").assertExists()
+        composeRule.onNodeWithText("Yerel CRM").assertCountEquals(1)
+        composeRule.onNodeWithText("Veri sınırı").assertCountEquals(1)
     }
 
     @Test
