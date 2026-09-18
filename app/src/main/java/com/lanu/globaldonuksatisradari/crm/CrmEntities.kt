@@ -50,6 +50,28 @@ data class CrmActivityEntity(
 )
 
 @Entity(
+    tableName = "crm_next_action",
+    indices = [
+        Index(value = ["customerId", "dueAtEpochMs"]),
+        Index(value = ["dueAtEpochMs", "completedAtEpochMs"]),
+        Index(value = ["syncState"]),
+    ],
+)
+data class CrmNextActionEntity(
+    @PrimaryKey val id: String,
+    val customerId: String,
+    val type: String,
+    val dueAtEpochMs: Long,
+    val note: String?,
+    val createdByUserId: String?,
+    val createdAtEpochMs: Long,
+    val completedAtEpochMs: Long?,
+    val completedByUserId: String?,
+    val version: Long,
+    val syncState: String,
+)
+
+@Entity(
     tableName = "crm_stage_transition",
     indices = [
         Index(value = ["customerId", "changedAtEpochMs"]),
