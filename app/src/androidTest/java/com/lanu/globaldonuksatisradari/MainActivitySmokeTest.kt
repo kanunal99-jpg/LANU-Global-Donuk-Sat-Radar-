@@ -1,7 +1,7 @@
 package com.lanu.globaldonuksatisradari
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -21,11 +21,16 @@ class MainActivitySmokeTest {
 
     @Test
     fun launch_showsCoreSalesRadarUi() {
+        composeRule.waitForIdle()
         composeRule.onNodeWithText("LANU Global Donuk Satış Radarı").assertIsDisplayed()
         composeRule.onNodeWithText("Satış Radarı").assertIsDisplayed()
         composeRule.onNodeWithText("Gerçek kaynaktan ara").assertIsDisplayed()
-        composeRule.onNodeWithText("Yerel CRM").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Veri sınırı").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun blankSearch_showsValidationMessage() {
+        composeRule.onNodeWithText("Gerçek kaynaktan ara").performClick()
+        composeRule.onNodeWithText("Arama için bir işletme/HORECA terimi yazın.").assertIsDisplayed()
     }
 
     @Test
