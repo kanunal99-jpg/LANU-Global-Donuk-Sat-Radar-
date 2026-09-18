@@ -92,7 +92,7 @@ class CrmSyncEngineTest {
         )
 
         assertEquals(SyncProcessResult.Failed("op-1", "still offline"), engine.processOne())
-        assertEquals(SyncOperationState.FAILED.name, dao.operation?.state)
+        assertEquals(SyncOperationState.FAILED.name, dao.operationById("op-1")?.state)
         assertEquals(SyncState.FAILED, stateStore.syncStates["customer-1"])
         assertEquals(SyncProcessResult.NoWork, engine.processOne())
     }
@@ -148,6 +148,8 @@ class CrmSyncEngineTest {
         val allOperations = initial.toMutableList()
         val operation: SyncOperationEntity?
             get() = allOperations.firstOrNull { it.state == SyncOperationState.PENDING.name }
+        fun operationById(id: String): SyncOperationEntity? =
+            allOperations.firstOrNull { it.id == id }
 
         override suspend fun insert(operation: SyncOperationEntity) {
             allOperations.removeAll { it.id == operation.id }
