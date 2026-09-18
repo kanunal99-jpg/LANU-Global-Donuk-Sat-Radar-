@@ -14,8 +14,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CrmActivityEntity::class,
         CrmStageTransitionEntity::class,
         SyncOperationEntity::class,
+        CrmNextActionEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 @TypeConverters(CrmRoomConverters::class)
@@ -26,6 +27,29 @@ abstract class LanuCrmDatabase : RoomDatabase() {
     abstract fun syncOperationDao(): SyncOperationDao
 
     companion object {
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS crm_next_action (" +
+                        "id TEXT NOT NULL PRIMARY KEY, " +
+                        "customerId TEXT NOT NULL, " +
+                        "type TEXT NOT NULL, " +
+                        "dueAtEpochMs INTEGER NOT NULL, " +
+                        "note TEXT, " +
+                        "createdByUserId TEXT, " +
+                        "createdAtEpochMs INTEGER NOT NULL, " +
+                        "completedAtEpochMs INTEGER, " +
+                        "completedByUserId TEXT, " +
+                        "version INTEGER NOT NULL, " +
+                        "syncState TEXT NOT NULL" +
+                        ")",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_next_action_customerId_dueAtEpochMs ON crm_next_action(customerId, dueAtEpochMs)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_next_action_dueAtEpochMs_completedAtEpochMs ON crm_next_action(dueAtEpochMs, completedAtEpochMs)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_next_action_syncState ON crm_next_action(syncState)")
+            }
+        }
+
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -49,7 +73,7 @@ abstract class LanuCrmDatabase : RoomDatabase() {
                     LanuCrmDatabase::class.java,
                     "lanu_global_donuk_crm.db",
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { instance = it }
             }
