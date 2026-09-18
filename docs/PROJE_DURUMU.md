@@ -19,6 +19,7 @@
 - [x] Release asset doğrulaması: `Lanu-Global-Donuk-Satis-Radari-latest.apk` ve `.sha256` mevcut.
 - [x] CRM + Room değişiklikleri için CI Run #88: unit test + debug APK + artifact + release başarıyla tamamlandı.
 - [x] CI Run #110: sync queue düzeltmesi sonrası unit test + debug APK + artifact + latest APK publish başarıyla tamamlandı.
+- [x] CI Run #123: Android instrumentation smoke testleri + Room CRM persistans testi + WorkManager scheduling testi + release artifact/latest APK zinciri başarıyla tamamlandı.
 
 ### Veri gerçekliği
 - [x] `DataQuality` ayrımı.
@@ -42,6 +43,7 @@
 - [x] Kaynakta gerçekten varsa telefon / web / çalışma saatlerini domain'e taşıma.
 - [x] Kaynak kapsamının eksiksiz İstanbul verisi olmadığı açıkça belirtiliyor.
 - [ ] Gerçek cihazda canlı Nominatim smoke testi.
+- [x] CI emülatöründe Activity/Compose başlangıç ve temel kullanıcı etkileşimi smoke testi.
 
 ### İTO / Ticaret Sicili
 - [x] Kaynak adayları ve kullanım/erişim riskleri araştırıldı.
@@ -64,6 +66,7 @@
 - [x] Telefon ve web aksiyonları.
 - [x] Navigasyon intent'i.
 - [ ] Gerçek cihazda rapor + navigasyon akışı.
+- [x] Android instrumentation ile uygulama açılışı ve temel arama doğrulaması.
 - [ ] Gerçek Global Donuk ürün kataloğu ile ürün eşleştirme.
 
 ## 4. Harita
@@ -73,6 +76,7 @@
 - [x] Görünür OpenStreetMap atfı ve ODbL ibaresi.
 - [x] Toplu şehir taraması/prefetch yapılmıyor.
 - [ ] Gerçek cihazda tile/marker/popup smoke testi.
+- [x] Harita HTML/OSM attribution/gerçek koordinat marker sözleşmesi unit test ile doğrulandı.
 - [ ] Saha ölçeğinde OSM tile kullanımının operasyon kontrolü.
 
 ## 5. Saha CRM
@@ -149,7 +153,7 @@
 - [x] CRM + Room CI build doğrulaması.
 - [x] Sync engine retry/conflict/permanent-failure/no-backend davranışları unit testlerle doğrulandı.
 - [x] WorkManager scheduler ve worker kodu CI debug APK build zincirinden geçti.
-- [ ] UI/integration testleri.
+- [x] UI/integration smoke testleri: Activity/Compose + WorkManager + Room instrumentation.
 - [ ] Gerçek cihaz APK kurulumu.
 - [ ] Canlı kaynak araması.
 - [ ] Harita marker/popup/navigasyon testi.
@@ -169,6 +173,8 @@
 - Arama sonucu → CRM kaydı → dashboard veri zinciri bağlandı.
 - CI Run #88 ile unit test + debug APK + release zinciri doğrulandı.
 - CI Run #110 ile sync queue düzeltmesi sonrası unit test + debug APK + artifact + latest APK publish zinciri tekrar doğrulandı.
+- CI Run #123 ile Android emülatör smoke gate'i dahil tam CI → APK → artifact → latest APK publish zinciri doğrulandı.
+- Run #123 artifact SHA-256: `22df4cfc9ba997a6e43e515d52b1f8f4d03505d6dba07ad6d4735ad3d9d60176`.
 
 ## 13. Geliştirme kuralı
 
