@@ -58,7 +58,7 @@ fun BusinessMapPreview(
     )
 }
 
-private fun buildMapHtml(businesses: List<VerifiedBusiness>): String {
+internal fun buildMapHtml(businesses: List<VerifiedBusiness>): String {
     val valid = businesses.filter { it.latitude != null && it.longitude != null }
     val points = valid.joinToString(",") { business ->
         """{
