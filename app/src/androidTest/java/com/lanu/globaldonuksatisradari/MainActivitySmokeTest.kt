@@ -1,7 +1,7 @@
 package com.lanu.globaldonuksatisradari
 
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -24,8 +24,8 @@ class MainActivitySmokeTest {
         composeRule.onNodeWithText("LANU Global Donuk Satış Radarı").assertIsDisplayed()
         composeRule.onNodeWithText("Satış Radarı").assertIsDisplayed()
         composeRule.onNodeWithText("Gerçek kaynaktan ara").assertIsDisplayed()
-        composeRule.onNodeWithText("Yerel CRM").assertCountEquals(1)
-        composeRule.onNodeWithText("Veri sınırı").assertCountEquals(1)
+        composeRule.onNodeWithText("Yerel CRM").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Veri sınırı").performScrollTo().assertIsDisplayed()
     }
 
     @Test
