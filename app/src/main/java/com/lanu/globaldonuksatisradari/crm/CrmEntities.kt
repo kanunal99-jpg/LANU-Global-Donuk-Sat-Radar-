@@ -69,6 +69,7 @@ data class CrmStageTransitionEntity(
     indices = [
         Index(value = ["entityType", "entityId"]),
         Index(value = ["createdAtEpochMs"]),
+        Index(value = ["state", "createdAtEpochMs"]),
     ],
 )
 data class SyncOperationEntity(
@@ -81,4 +82,5 @@ data class SyncOperationEntity(
     val createdAtEpochMs: Long,
     val attemptCount: Int,
     val lastError: String?,
+    val state: String = SyncOperationState.PENDING.name,
 )
