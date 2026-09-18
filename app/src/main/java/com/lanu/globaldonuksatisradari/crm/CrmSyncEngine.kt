@@ -1,5 +1,27 @@
 package com.lanu.globaldonuksatisradari.crm
 
+interface CrmSyncStateStore {
+    suspend fun mark(entityType: String, entityId: String, state: SyncState)
+}
+
+object NoOpCrmSyncStateStore : CrmSyncStateStore {
+    override suspend fun mark(entityType: String, entityId: String, state: SyncState) = Unit
+}
+
+class RoomCrmSyncStateStore(
+    private val database: LanuCrmDatabase,
+) : CrmSyncStateStore {
+    override suspend fun mark(entityType: String, entityId: String, state: SyncState) {
+        when (entityType) {
+            LocalCrmRepository.ENTITY_CUSTOMER ->
+                database.customerDao().updateSyncState(entityId, state.name)
+
+            LocalCrmRepository.ENTITY_ACTIVITY ->
+                database.activityDao().updateSyncState(entityId, state.name)
+        }
+    }
+}
+
 /** Remote boundary for CRM synchronization. No concrete backend is assumed here. */
 interface RemoteCrmDataSource {
     suspend fun apply(operation: SyncOperationEntity): RemoteSyncResult
@@ -26,18 +48,21 @@ class CrmSyncEngine(
     private val syncDao: SyncOperationDao,
     private val remote: RemoteCrmDataSource,
     private val policy: CrmSyncRetryPolicy = CrmSyncRetryPolicy(),
+    private val stateStore: CrmSyncStateStore = NoOpCrmSyncStateStore,
 ) {
     suspend fun processOne(): SyncProcessResult {
         val operation = syncDao.pending(1).firstOrNull() ?: return SyncProcessResult.NoWork
 
         return when (val result = remote.apply(operation)) {
             RemoteSyncResult.Success -> {
+                stateStore.mark(operation.entityType, operation.entityId, SyncState.SYNCED)
                 syncDao.delete(operation.id)
                 SyncProcessResult.Synced(operation.id)
             }
             RemoteSyncResult.NotConfigured -> SyncProcessResult.RemoteNotConfigured
             is RemoteSyncResult.Conflict -> {
                 val nextAttempt = operation.attemptCount + 1
+                stateStore.mark(operation.entityType, operation.entityId, SyncState.CONFLICT)
                 syncDao.updateAttemptAndState(
                     id = operation.id,
                     attemptCount = nextAttempt,
@@ -48,6 +73,7 @@ class CrmSyncEngine(
             }
             is RemoteSyncResult.PermanentFailure -> {
                 val nextAttempt = operation.attemptCount + 1
+                stateStore.mark(operation.entityType, operation.entityId, SyncState.FAILED)
                 syncDao.updateAttemptAndState(
                     id = operation.id,
                     attemptCount = nextAttempt,
@@ -59,6 +85,9 @@ class CrmSyncEngine(
             is RemoteSyncResult.RetryableFailure -> {
                 val nextAttempt = operation.attemptCount + 1
                 val shouldRetry = policy.shouldRetry(nextAttempt)
+                if (!shouldRetry) {
+                    stateStore.mark(operation.entityType, operation.entityId, SyncState.FAILED)
+                }
                 syncDao.updateAttemptAndState(
                     id = operation.id,
                     attemptCount = nextAttempt,
