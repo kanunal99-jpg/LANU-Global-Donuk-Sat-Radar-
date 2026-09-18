@@ -59,6 +59,22 @@ class CrmRoomInstrumentationTest {
             val observed = repository.observeCustomers("İstanbul").first()
             val pending = repository.pendingSync()
             val transitions = database.stageTransitionDao().observeForCustomer(customer.id).first()
+            val action = repository.createNextAction(
+                customerId = customer.id,
+                type = CrmNextActionType.PROPOSAL_FOLLOW_UP,
+                dueAtEpochMs = 2_000L,
+                note = "Teklif takibi",
+                createdByUserId = "instrumentation-test",
+            )
+            val actions = repository.observeNextActions(customer.id).first()
+            assertEquals(1, actions.size)
+            assertEquals(CrmNextActionType.PROPOSAL_FOLLOW_UP, actions.single().type)
+            assertEquals(2_000L, actions.single().dueAtEpochMs)
+            assertEquals(SyncState.PENDING_UPLOAD, actions.single().syncState)
+
+            val completed = repository.completeNextAction(action.id, "instrumentation-test")
+            assertTrue(completed.completedAtEpochMs != null)
+            assertEquals(2, repository.pendingSync().size)
 
             assertEquals("Smoke Test Kafe", observed.single().businessName)
             assertEquals(SyncState.PENDING_UPLOAD, observed.single().syncState)
