@@ -43,6 +43,46 @@ interface CrmActivityDao {
 }
 
 @Dao
+interface CrmNextActionDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(action: CrmNextActionEntity)
+
+    @Query("SELECT * FROM crm_next_action WHERE customerId = :customerId ORDER BY dueAtEpochMs ASC")
+    fun observeForCustomer(customerId: String): Flow<List<CrmNextActionEntity>>
+
+    @Query(
+        "SELECT * FROM crm_next_action " +
+            "WHERE completedAtEpochMs IS NULL " +
+            "ORDER BY dueAtEpochMs ASC " +
+            "LIMIT :limit",
+    )
+    fun observeOpen(limit: Int): Flow<List<CrmNextActionEntity>>
+
+    @Query(
+        "SELECT * FROM crm_next_action " +
+            "WHERE completedAtEpochMs IS NULL AND dueAtEpochMs <= :nowEpochMs " +
+            "ORDER BY dueAtEpochMs ASC " +
+            "LIMIT :limit",
+    )
+    fun observeDue(nowEpochMs: Long, limit: Int): Flow<List<CrmNextActionEntity>>
+
+    @Query("SELECT * FROM crm_next_action WHERE id = :id LIMIT 1")
+    suspend fun findById(id: String): CrmNextActionEntity?
+
+    @Query(
+        "UPDATE crm_next_action SET completedAtEpochMs = :completedAtEpochMs, " +
+            "completedByUserId = :completedByUserId, version = version + 1, syncState = :syncState " +
+            "WHERE id = :id AND completedAtEpochMs IS NULL",
+    )
+    suspend fun complete(
+        id: String,
+        completedAtEpochMs: Long,
+        completedByUserId: String?,
+        syncState: String,
+    ): Int
+}
+
+@Dao
 interface CrmStageTransitionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(transition: CrmStageTransitionEntity)
