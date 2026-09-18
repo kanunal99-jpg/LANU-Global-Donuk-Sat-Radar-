@@ -30,6 +30,12 @@ enum class SyncState {
     FAILED,
 }
 
+enum class SyncOperationState {
+    PENDING,
+    CONFLICT,
+    FAILED,
+}
+
 data class CrmCustomer(
     val id: String,
     val businessSourceId: String,
@@ -77,6 +83,7 @@ data class SyncOperation(
     val createdAtEpochMs: Long,
     val attemptCount: Int = 0,
     val lastError: String? = null,
+    val state: SyncOperationState = SyncOperationState.PENDING,
 )
 
 /** Centralized stage-transition rules prevent UI and dashboard from inventing pipeline states. */
