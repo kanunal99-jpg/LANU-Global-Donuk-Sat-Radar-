@@ -22,6 +22,9 @@ interface CrmCustomerDao {
 
     @Query("SELECT * FROM crm_customer ORDER BY updatedAtEpochMs DESC")
     fun observeAll(): Flow<List<CrmCustomerEntity>>
+
+    @Query("UPDATE crm_customer SET syncState = :state WHERE id = :id")
+    suspend fun updateSyncState(id: String, state: String)
 }
 
 @Dao
@@ -34,6 +37,9 @@ interface CrmActivityDao {
 
     @Query("SELECT * FROM crm_activity WHERE customerId = :customerId ORDER BY occurredAtEpochMs DESC")
     fun observeForCustomer(customerId: String): Flow<List<CrmActivityEntity>>
+
+    @Query("UPDATE crm_activity SET syncState = :state WHERE id = :id")
+    suspend fun updateSyncState(id: String, state: String)
 }
 
 @Dao
