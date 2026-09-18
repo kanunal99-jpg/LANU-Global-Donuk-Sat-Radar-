@@ -9,10 +9,11 @@ class CrmSyncEngineTest {
     private fun operation(
         id: String = "op-1",
         attemptCount: Int = 0,
+        entityId: String = "customer-1",
     ) = SyncOperationEntity(
         id = id,
         entityType = "customer",
-        entityId = "customer-1",
+        entityId = entityId,
         operation = "UPDATE",
         payloadVersion = 1,
         payloadJson = "{}",
@@ -26,7 +27,7 @@ class CrmSyncEngineTest {
         val dao = FakeSyncOperationDao(listOf(operation()))
         val engine = CrmSyncEngine(
             dao,
-            object : RemoteCrmDataSource {
+            remote = object : RemoteCrmDataSource {
                 override suspend fun apply(operation: SyncOperationEntity) =
                     RemoteSyncResult.RetryableFailure("network")
             },
@@ -41,58 +42,67 @@ class CrmSyncEngineTest {
     }
 
     @Test
-    fun success_deletesOperation_andIsIdempotentAtQueueBoundary() = runTest {
+    fun success_deletesOperation_andMarksEntitySynced() = runTest {
         val dao = FakeSyncOperationDao(listOf(operation()))
+        val stateStore = FakeSyncStateStore()
         val engine = CrmSyncEngine(
             dao,
-            object : RemoteCrmDataSource {
+            remote = object : RemoteCrmDataSource {
                 override suspend fun apply(operation: SyncOperationEntity) = RemoteSyncResult.Success
             },
+            stateStore = stateStore,
         )
 
         assertEquals(SyncProcessResult.Synced("op-1"), engine.processOne())
         assertEquals(null, dao.operation)
+        assertEquals(SyncState.SYNCED, stateStore.syncStates["customer-1"])
         assertEquals(SyncProcessResult.NoWork, engine.processOne())
     }
 
     @Test
-    fun conflict_parksOperation_andDoesNotBlockFutureQueueRuns() = runTest {
+    fun conflict_parksOperation_marksEntityConflict_andDoesNotBlockQueueRuns() = runTest {
         val dao = FakeSyncOperationDao(listOf(operation()))
+        val stateStore = FakeSyncStateStore()
         val engine = CrmSyncEngine(
             dao,
-            object : RemoteCrmDataSource {
+            remote = object : RemoteCrmDataSource {
                 override suspend fun apply(operation: SyncOperationEntity) =
                     RemoteSyncResult.Conflict("version mismatch")
             },
+            stateStore = stateStore,
         )
 
         assertEquals(SyncProcessResult.Conflict("op-1", "version mismatch"), engine.processOne())
         assertEquals(SyncOperationState.CONFLICT.name, dao.allOperations.single().state)
+        assertEquals(SyncState.CONFLICT, stateStore.syncStates["customer-1"])
         assertEquals(SyncProcessResult.NoWork, engine.processOne())
     }
 
     @Test
-    fun retryExhaustion_marksOperationFailed_andRemovesItFromPendingQueue() = runTest {
+    fun retryExhaustion_marksOperationFailed_andEntityFailed() = runTest {
         val dao = FakeSyncOperationDao(listOf(operation(attemptCount = 4)))
+        val stateStore = FakeSyncStateStore()
         val engine = CrmSyncEngine(
             dao,
-            object : RemoteCrmDataSource {
+            remote = object : RemoteCrmDataSource {
                 override suspend fun apply(operation: SyncOperationEntity) =
                     RemoteSyncResult.RetryableFailure("still offline")
             },
+            stateStore = stateStore,
         )
 
         assertEquals(SyncProcessResult.Failed("op-1", "still offline"), engine.processOne())
         assertEquals(SyncOperationState.FAILED.name, dao.operation?.state)
+        assertEquals(SyncState.FAILED, stateStore.syncStates["customer-1"])
         assertEquals(SyncProcessResult.NoWork, engine.processOne())
     }
 
     @Test
     fun batch_processesMultipleSuccessfulOperations() = runTest {
-        val dao = FakeSyncOperationDao(listOf(operation("op-1"), operation("op-2")))
+        val dao = FakeSyncOperationDao(listOf(operation("op-1"), operation("op-2", entityId = "customer-2")))
         val engine = CrmSyncEngine(
             dao,
-            object : RemoteCrmDataSource {
+            remote = object : RemoteCrmDataSource {
                 override suspend fun apply(operation: SyncOperationEntity) = RemoteSyncResult.Success
             },
         )
@@ -122,6 +132,14 @@ class CrmSyncEngineTest {
         assertEquals(4000L, policy.delayMs(3))
         assertEquals(5000L, policy.delayMs(4))
         assertEquals(false, policy.shouldRetry(5))
+    }
+
+    private class FakeSyncStateStore : CrmSyncStateStore {
+        val syncStates = mutableMapOf<String, SyncState>()
+
+        override suspend fun mark(entityType: String, entityId: String, state: SyncState) {
+            syncStates[entityId] = state
+        }
     }
 
     private class FakeSyncOperationDao(
