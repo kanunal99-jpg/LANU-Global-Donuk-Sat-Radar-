@@ -15,8 +15,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CrmStageTransitionEntity::class,
         SyncOperationEntity::class,
         CrmNextActionEntity::class,
+        CrmOpportunityEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 @TypeConverters(CrmRoomConverters::class)
@@ -26,6 +27,7 @@ abstract class LanuCrmDatabase : RoomDatabase() {
     abstract fun stageTransitionDao(): CrmStageTransitionDao
     abstract fun syncOperationDao(): SyncOperationDao
     abstract fun nextActionDao(): CrmNextActionDao
+    abstract fun opportunityDao(): CrmOpportunityDao
 
     companion object {
         private val MIGRATION_2_3 = object : Migration(2, 3) {
@@ -48,6 +50,30 @@ abstract class LanuCrmDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_next_action_customerId_dueAtEpochMs ON crm_next_action(customerId, dueAtEpochMs)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_next_action_dueAtEpochMs_completedAtEpochMs ON crm_next_action(dueAtEpochMs, completedAtEpochMs)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_next_action_syncState ON crm_next_action(syncState)")
+            }
+        }
+
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS crm_opportunity (" +
+                        "id TEXT NOT NULL PRIMARY KEY, " +
+                        "customerId TEXT NOT NULL, " +
+                        "title TEXT NOT NULL, " +
+                        "status TEXT NOT NULL, " +
+                        "notes TEXT, " +
+                        "estimatedValueMinor INTEGER, " +
+                        "currency TEXT, " +
+                        "valueOrigin TEXT NOT NULL, " +
+                        "createdAtEpochMs INTEGER NOT NULL, " +
+                        "updatedAtEpochMs INTEGER NOT NULL, " +
+                        "version INTEGER NOT NULL, " +
+                        "syncState TEXT NOT NULL" +
+                        ")",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_opportunity_customerId_updatedAtEpochMs ON crm_opportunity(customerId, updatedAtEpochMs)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_opportunity_status ON crm_opportunity(status)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_opportunity_syncState ON crm_opportunity(syncState)")
             }
         }
 
@@ -74,7 +100,7 @@ abstract class LanuCrmDatabase : RoomDatabase() {
                     LanuCrmDatabase::class.java,
                     "lanu_global_donuk_crm.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { instance = it }
             }
