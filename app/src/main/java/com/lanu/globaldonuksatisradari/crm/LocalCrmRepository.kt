@@ -20,6 +20,51 @@ class LocalCrmRepository(
     fun observeActivities(customerId: String): Flow<List<CrmActivity>> =
         database.activityDao().observeForCustomer(customerId).map { it.map(CrmMappings::toDomain) }
 
+    fun observeStageTransitions(customerId: String): Flow<List<CrmStageTransition>> =
+        database.stageTransitionDao()
+            .observeForCustomer(customerId)
+            .map { it.map(CrmMappings::toDomain) }
+
+    suspend fun updateCustomerNotes(
+        customerId: String,
+        notes: String?,
+    ): CrmCustomer {
+        val current = database.customerDao().findById(customerId)
+            ?: error("CRM müşterisi bulunamadı: $customerId")
+        val timestamp = now()
+        val updated = current.copy(
+            notes = notes?.trim()?.takeIf { it.isNotEmpty() },
+            updatedAtEpochMs = timestamp,
+            version = current.version + 1L,
+            syncState = SyncState.PENDING_UPLOAD.name,
+        )
+        database.withTransaction {
+            check(
+                database.customerDao().updateNotes(
+                    id = updated.id,
+                    notes = updated.notes,
+                    updatedAtEpochMs = updated.updatedAtEpochMs,
+                    version = updated.version,
+                    state = updated.syncState,
+                ) == 1,
+            ) { "CRM notu güncellenemedi: $customerId" }
+            database.syncOperationDao().insert(
+                SyncOperationEntity(
+                    id = idGenerator(),
+                    entityType = ENTITY_CUSTOMER,
+                    entityId = updated.id,
+                    operation = OP_UPDATE,
+                    payloadVersion = updated.version,
+                    payloadJson = CrmPayloads.customer(CrmMappings.toDomain(updated)),
+                    createdAtEpochMs = timestamp,
+                    attemptCount = 0,
+                    lastError = null,
+                ),
+            )
+        }
+        return CrmMappings.toDomain(updated)
+    }
+
     suspend fun addBusinessAsCustomer(business: VerifiedBusiness, ownerUserId: String? = null): CrmCustomer {
         val existing = database.customerDao().findByBusinessSourceId(business.id)
         if (existing != null) return CrmMappings.toDomain(existing)
@@ -372,6 +417,16 @@ private object CrmMappings {
         createdAtEpochMs = entity.createdAtEpochMs,
         version = entity.version,
         syncState = SyncState.valueOf(entity.syncState),
+    )
+
+    fun toDomain(entity: CrmStageTransitionEntity) = CrmStageTransition(
+        id = entity.id,
+        customerId = entity.customerId,
+        from = entity.fromStage?.let(CrmStage::valueOf),
+        to = CrmStage.valueOf(entity.toStage),
+        changedAtEpochMs = entity.changedAtEpochMs,
+        changedByUserId = entity.changedByUserId,
+        clientVersion = entity.clientVersion,
     )
 
     fun toDomain(entity: SyncOperationEntity) = SyncOperation(
