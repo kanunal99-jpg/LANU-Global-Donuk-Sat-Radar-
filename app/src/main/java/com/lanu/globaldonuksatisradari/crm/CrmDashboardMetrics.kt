@@ -17,15 +17,20 @@ data class CrmDashboardMetrics(
     val orderActivities: Int = 0,
     val openNextActions: Int = 0,
     val overdueNextActions: Int = 0,
+    val openOpportunities: Int = 0,
+    val wonOpportunities: Int = 0,
+    val lostOpportunities: Int = 0,
 ) {
     companion object {
         fun from(
             customers: List<CrmCustomer>,
             activities: List<CrmActivity> = emptyList(),
             openNextActions: List<CrmNextAction> = emptyList(),
+            opportunities: List<CrmOpportunity> = emptyList(),
             nowEpochMs: Long = System.currentTimeMillis(),
         ): CrmDashboardMetrics {
             val open = openNextActions.filter { it.completedAtEpochMs == null }
+            val activeOpportunities = opportunities.filter { it.status == CrmOpportunityStatus.OPEN }
             return CrmDashboardMetrics(
                 customers = customers.size,
                 prospects = customers.count { it.stage == CrmStage.PROSPECT },
@@ -43,6 +48,9 @@ data class CrmDashboardMetrics(
                 orderActivities = activities.count { it.type == CrmActivityType.ORDER },
                 openNextActions = open.size,
                 overdueNextActions = open.count { it.dueAtEpochMs <= nowEpochMs },
+                openOpportunities = activeOpportunities.size,
+                wonOpportunities = opportunities.count { it.status == CrmOpportunityStatus.WON },
+                lostOpportunities = opportunities.count { it.status == CrmOpportunityStatus.LOST },
             )
         }
     }
