@@ -85,6 +85,9 @@ class MainActivitySmokeTest {
             .performScrollToNode(hasText("Smoke CRM Kafe"))
         composeRule.onNodeWithText("Smoke CRM Kafe").assertIsDisplayed()
         composeRule.onNodeWithText("CRM detayını aç").performClick()
+        composeRule
+            .onNodeWithTag("main_scroll")
+            .performScrollToNode(hasText("CRM listesine dön"))
         composeRule.onNodeWithText("CRM listesine dön").assertIsDisplayed()
         composeRule.onNodeWithText("Açık takipler").assertIsDisplayed()
         composeRule.onNodeWithText("Aktivite geçmişi").assertIsDisplayed()
