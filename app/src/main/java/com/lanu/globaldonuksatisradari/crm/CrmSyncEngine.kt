@@ -18,6 +18,9 @@ class RoomCrmSyncStateStore(
 
             LocalCrmRepository.ENTITY_ACTIVITY ->
                 database.activityDao().updateSyncState(entityId, state.name)
+
+            LocalCrmRepository.ENTITY_NEXT_ACTION ->
+                database.nextActionDao().updateSyncState(entityId, state.name)
         }
     }
 }
