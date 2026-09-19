@@ -27,7 +27,7 @@ class MainActivitySmokeTest {
     @get:org.junit.Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
 
-    @Test
+    @Test(timeout = 60_000)
     fun launch_showsCoreSalesRadarUi() {
         composeRule.waitForIdle()
         composeRule.onNodeWithText("LANU Global Donuk Satış Radarı").assertIsDisplayed()
@@ -35,13 +35,13 @@ class MainActivitySmokeTest {
         composeRule.onNodeWithText("Gerçek kaynaktan ara").assertIsDisplayed()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun blankSearch_showsValidationMessage() {
         composeRule.onNodeWithText("Gerçek kaynaktan ara").performClick()
         composeRule.onNodeWithText("Arama için bir işletme/HORECA terimi yazın.").assertIsDisplayed()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun launch_schedulesCrmSyncWork() {
         val context = composeRule.activity
         val infos = WorkManager
@@ -53,12 +53,12 @@ class MainActivitySmokeTest {
         assertTrue(infos.first().state.name == "ENQUEUED" || infos.first().state.name == "RUNNING")
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun launch_createsStableActivity() {
         assertNotNull(composeRule.activity)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun persistedCrmCustomer_opensRealDetailWorkflow() = runBlocking {
         val context = composeRule.activity
         val repository = LocalCrmRepository(LanuCrmDatabase.getInstance(context))
