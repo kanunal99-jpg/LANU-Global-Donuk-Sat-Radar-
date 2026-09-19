@@ -131,6 +131,32 @@ interface CrmNextActionDao {
 }
 
 @Dao
+interface CrmOpportunityDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(opportunity: CrmOpportunityEntity)
+
+    @Query("SELECT * FROM crm_opportunity WHERE customerId = :customerId ORDER BY updatedAtEpochMs DESC")
+    fun observeForCustomer(customerId: String): Flow<List<CrmOpportunityEntity>>
+
+    @Query("SELECT * FROM crm_opportunity WHERE id = :id LIMIT 1")
+    suspend fun findById(id: String): CrmOpportunityEntity?
+
+    @Query(
+        "UPDATE crm_opportunity SET status = :status, updatedAtEpochMs = :updatedAtEpochMs, " +
+            "version = version + 1, syncState = :syncState WHERE id = :id",
+    )
+    suspend fun updateStatus(
+        id: String,
+        status: String,
+        updatedAtEpochMs: Long,
+        syncState: String,
+    ): Int
+
+    @Query("UPDATE crm_opportunity SET syncState = :state WHERE id = :id")
+    suspend fun updateSyncState(id: String, state: String): Int
+}
+
+@Dao
 interface CrmStageTransitionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(transition: CrmStageTransitionEntity)
