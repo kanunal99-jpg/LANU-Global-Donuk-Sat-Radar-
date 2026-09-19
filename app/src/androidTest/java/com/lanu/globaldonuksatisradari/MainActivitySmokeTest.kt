@@ -1,7 +1,10 @@
 package com.lanu.globaldonuksatisradari
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
@@ -77,9 +80,10 @@ class MainActivitySmokeTest {
             )
         )
 
-        composeRule.waitUntil(20_000) {
-            composeRule.onAllNodesWithText("Smoke CRM Kafe").fetchSemanticsNodes().isNotEmpty()
-        }
+        composeRule
+            .onNodeWithTag("main_scroll")
+            .performScrollToNode(hasText("Smoke CRM Kafe"))
+        composeRule.onNodeWithText("Smoke CRM Kafe").assertIsDisplayed()
         composeRule.onNodeWithText("CRM detayını aç").performClick()
         composeRule.onNodeWithText("CRM listesine dön").assertIsDisplayed()
         composeRule.onNodeWithText("Açık takipler").assertIsDisplayed()
