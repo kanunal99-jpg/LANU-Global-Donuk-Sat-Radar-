@@ -428,10 +428,12 @@ private fun parseOpportunityAmountMinor(raw: String): Long? {
         trimmed.contains(",") -> trimmed.replace(",", ".")
         else -> trimmed
     }
-    return normalized.toBigDecimalOrNull()
-        ?.setScale(2, RoundingMode.HALF_UP)
-        ?.movePointRight(2)
-        ?.longValueExact()
+    return runCatching {
+        normalized.toBigDecimalOrNull()
+            ?.setScale(2, RoundingMode.HALF_UP)
+            ?.movePointRight(2)
+            ?.longValueExact()
+    }.getOrNull()
 }
 
 private fun formatOpportunityValue(minor: Long, currency: String): String =
