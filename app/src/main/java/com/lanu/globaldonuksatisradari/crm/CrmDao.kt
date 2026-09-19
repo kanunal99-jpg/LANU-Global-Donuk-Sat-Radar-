@@ -142,6 +142,15 @@ interface CrmOpportunityDao {
     suspend fun findById(id: String): CrmOpportunityEntity?
 
     @Query(
+        "SELECT o.* FROM crm_opportunity o " +
+            "INNER JOIN crm_customer c ON c.id = o.customerId " +
+            "WHERE c.city = :city " +
+            "AND (:district IS NULL OR c.district = :district) " +
+            "ORDER BY o.updatedAtEpochMs DESC",
+    )
+    fun observeForRegion(city: String, district: String?): Flow<List<CrmOpportunityEntity>>
+
+    @Query(
         "UPDATE crm_opportunity SET status = :status, updatedAtEpochMs = :updatedAtEpochMs, " +
             "version = version + 1, syncState = :syncState WHERE id = :id",
     )
