@@ -25,6 +25,11 @@ jobs:
         run: gradle lint
       - name: Run unit tests
         run: gradle test
+      - name: Inspect Android test runtime classpath
+        run: |
+          gradle :app:dependencies --configuration debugAndroidTestRuntimeClasspath > /tmp/android-test-runtime.txt
+          grep -E "androidx.test|junit:junit|espresso" /tmp/android-test-runtime.txt | tail -n 120 || true
+
       - name: Build debug APK
         run: gradle assembleDebug
       - name: Enable KVM for Android emulator
