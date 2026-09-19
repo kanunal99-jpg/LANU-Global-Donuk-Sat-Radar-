@@ -19,6 +19,7 @@ class SalesOpportunityTest {
 
         assertTrue(result.conversation.contains("varsayma"))
         assertTrue(result.sourceUrl.startsWith("https://"))
+        assertTrue(result.verifiedClaims.isNotEmpty())
     }
 
     @Test
@@ -27,5 +28,14 @@ class SalesOpportunityTest {
 
         assertTrue(result.focus.contains("sıcak yemek", ignoreCase = true))
         assertTrue(result.discoveryQuestions.isNotEmpty())
+    }
+
+    @Test
+    fun verifiedClaimsAreGlobalDonukSourceBased() {
+        val result = buildSalesOpportunity("Restaurant")
+
+        assertEquals("https://globaldonukgida.com/", result.sourceUrl)
+        assertTrue(result.verifiedClaims.any { it.contains("standart porsiyon", ignoreCase = true) })
+        assertTrue(result.verifiedClaims.any { it.contains("profesyonel mutfak", ignoreCase = true) })
     }
 }
