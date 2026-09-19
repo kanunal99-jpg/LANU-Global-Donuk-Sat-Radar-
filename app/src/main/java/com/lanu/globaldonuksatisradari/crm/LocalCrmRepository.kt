@@ -20,6 +20,14 @@ class LocalCrmRepository(
     fun observeActivities(customerId: String): Flow<List<CrmActivity>> =
         database.activityDao().observeForCustomer(customerId).map { it.map(CrmMappings::toDomain) }
 
+    fun observeActivitiesForRegion(
+        city: String,
+        district: String?,
+    ): Flow<List<CrmActivity>> =
+        database.activityDao()
+            .observeForRegion(city, district)
+            .map { it.map(CrmMappings::toDomain) }
+
     fun observeStageTransitions(customerId: String): Flow<List<CrmStageTransition>> =
         database.stageTransitionDao()
             .observeForCustomer(customerId)
@@ -213,6 +221,23 @@ class LocalCrmRepository(
 
     fun observeOpenNextActions(limit: Int = 100): Flow<List<CrmNextAction>> =
         database.nextActionDao().observeOpen(limit).map { it.map(CrmMappings::toDomain) }
+
+    fun observeOpenNextActionsForRegion(
+        city: String,
+        district: String?,
+    ): Flow<List<CrmNextAction>> =
+        database.nextActionDao()
+            .observeOpenForRegion(city, district)
+            .map { it.map(CrmMappings::toDomain) }
+
+    fun observeDueNextActionsForRegion(
+        city: String,
+        district: String?,
+        nowEpochMs: Long = now(),
+    ): Flow<List<CrmNextAction>> =
+        database.nextActionDao()
+            .observeDueForRegion(city, district, nowEpochMs)
+            .map { it.map(CrmMappings::toDomain) }
 
     fun observeDueNextActions(nowEpochMs: Long = now(), limit: Int = 100): Flow<List<CrmNextAction>> =
         database.nextActionDao().observeDue(nowEpochMs, limit).map { it.map(CrmMappings::toDomain) }
