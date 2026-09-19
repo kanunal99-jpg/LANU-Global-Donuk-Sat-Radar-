@@ -225,6 +225,14 @@ class LocalCrmRepository(
             .observeForCustomer(customerId)
             .map { it.map(CrmMappings::toDomain) }
 
+    fun observeOpportunitiesForRegion(
+        city: String,
+        district: String?,
+    ): Flow<List<CrmOpportunity>> =
+        database.opportunityDao()
+            .observeForRegion(city, district)
+            .map { it.map(CrmMappings::toDomain) }
+
     fun observeOpenNextActions(limit: Int = 100): Flow<List<CrmNextAction>> =
         database.nextActionDao().observeOpen(limit).map { it.map(CrmMappings::toDomain) }
 
