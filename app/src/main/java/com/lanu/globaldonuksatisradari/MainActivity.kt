@@ -86,8 +86,24 @@ fun SalesRadarApp() {
     val selectedCustomerTransitions by localCrmRepository
         .observeStageTransitions(selectedCustomerId.orEmpty())
         .collectAsState(initial = emptyList())
-    val dashboardMetrics = remember(filteredCrmCustomers) {
-        CrmDashboardMetrics.from(filteredCrmCustomers)
+    val regionActivities by localCrmRepository
+        .observeActivitiesForRegion(
+            city = selectedCity.name,
+            district = selectedDistrict.takeUnless { it == "Tümü" },
+        )
+        .collectAsState(initial = emptyList())
+    val regionNextActions by localCrmRepository
+        .observeOpenNextActionsForRegion(
+            city = selectedCity.name,
+            district = selectedDistrict.takeUnless { it == "Tümü" },
+        )
+        .collectAsState(initial = emptyList())
+    val dashboardMetrics = remember(filteredCrmCustomers, regionActivities, regionNextActions) {
+        CrmDashboardMetrics.from(
+            customers = filteredCrmCustomers,
+            activities = regionActivities,
+            openNextActions = regionNextActions,
+        )
     }
 
     MaterialTheme {
