@@ -76,32 +76,86 @@ jobs:
             -no-audio \
             -no-boot-anim \
             -no-snapshot \
+            -no-snapshot-save \
             -gpu swiftshader_indirect \
+            -accel on \
             -camera-back none \
             -camera-front none \
+            -verbose \
             > /tmp/emulator.log 2>&1 &
           EMULATOR_PID="$!"
+
           cleanup() {
             adb emu kill >/dev/null 2>&1 || true
             kill "$EMULATOR_PID" >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 
-          adb start-server
-          timeout 120s adb wait-for-device
+          echo "===== EMULATOR PROCESS CHECK ====="
+          sleep 5
+          if ! kill -0 "$EMULATOR_PID" >/dev/null 2>&1; then
+            cat /tmp/emulator.log || true
+            exit 1
+          fi
 
+          adb kill-server >/dev/null 2>&1 || true
+          adb start-server
+
+          echo "===== ADB DEVICE WAIT ====="
+          ADB_READY=1
+          set +e
+          timeout 120s bash -c '
+            for _ in $(seq 1 120); do
+              if adb devices | grep -Eq "^emulator-[0-9]+[[:space:]]+device$"; then
+                exit 0
+              fi
+              sleep 1
+            done
+            exit 124
+          '
+          ADB_READY="$?"
+          set -e
+
+          if [ "$ADB_READY" -ne 0 ]; then
+            echo "===== ADB STARTUP DIAGNOSTICS ====="
+            adb devices -l || true
+            echo "===== /dev/kvm ====="
+            ls -l /dev/kvm || true
+            echo "===== EMULATOR ACCELERATION ====="
+            emulator -accel-check || true
+            echo "===== AVD LIST ====="
+            avdmanager list avd || true
+            echo "===== EMULATOR LOG ====="
+            tail -n 1200 /tmp/emulator.log || true
+            exit "$ADB_READY"
+          fi
+
+          SERIAL="$(adb devices | awk '/^emulator-[0-9]+[[:space:]]+device$/{print $1; exit}')"
+          test -n "$SERIAL"
+          echo "Using emulator: $SERIAL"
+
+          echo "===== ANDROID BOOT WAIT ====="
           boot_completed=""
           for _ in $(seq 1 180); do
-            boot_completed="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+            boot_completed="$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
             [ "$boot_completed" = "1" ] && break
             sleep 2
           done
-          test "$boot_completed" = "1"
 
-          adb shell settings put global window_animation_scale 0
-          adb shell settings put global transition_animation_scale 0
-          adb shell settings put global animator_duration_scale 0
-          adb shell input keyevent 82 || true
+          if [ "$boot_completed" != "1" ]; then
+            echo "===== BOOT DIAGNOSTICS ====="
+            adb devices -l || true
+            adb -s "$SERIAL" shell getprop ro.build.version.release || true
+            adb -s "$SERIAL" shell getprop ro.build.version.sdk || true
+            adb -s "$SERIAL" logcat -d -v threadtime | tail -n 1200 || true
+            tail -n 1200 /tmp/emulator.log || true
+            exit 1
+          fi
+
+          adb -s "$SERIAL" shell settings put global window_animation_scale 0
+          adb -s "$SERIAL" shell settings put global transition_animation_scale 0
+          adb -s "$SERIAL" shell settings put global animator_duration_scale 0
+          adb -s "$SERIAL" shell input keyevent 82 || true
 
           set +e
           timeout 300s gradle connectedDebugAndroidTest --no-daemon --stacktrace
@@ -111,12 +165,12 @@ jobs:
           if [ "$TEST_EXIT" -ne 0 ]; then
             echo "===== ADB/JUNIT DIAGNOSTICS ====="
             adb devices -l || true
-            adb -s emulator-5554 shell getprop ro.build.version.release || true
-            adb -s emulator-5554 shell getprop ro.build.version.sdk || true
-            adb -s emulator-5554 logcat -d -v threadtime | \
+            adb -s "$SERIAL" shell getprop ro.build.version.release || true
+            adb -s "$SERIAL" shell getprop ro.build.version.sdk || true
+            adb -s "$SERIAL" logcat -d -v threadtime | \
               grep -E "AndroidJUnit4|AndroidJUnitRunner|initializationError|NoClassDefFoundError|ClassNotFoundException|NoSuchMethodError|IncompatibleClassChangeError|VerifyError|StackOverflowError|FATAL EXCEPTION|AssertionError|TimeoutException" | tail -n 800 || true
             echo "===== EMULATOR LOG ====="
-            tail -n 400 /tmp/emulator.log || true
+            tail -n 800 /tmp/emulator.log || true
             exit "$TEST_EXIT"
           fi
 
