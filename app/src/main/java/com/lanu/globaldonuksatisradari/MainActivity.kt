@@ -139,320 +139,323 @@ fun SalesRadarApp() {
 
     MaterialTheme {
         Scaffold(topBar = { TopAppBar(title = { Text("LANU Global Donuk Satış Radarı") }) }) { padding ->
-            LazyColumn(
-                modifier = Modifier
-                    .testTag("main_scroll")
-                    .padding(padding)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item {
-                    Text("Satış Radarı", style = MaterialTheme.typography.headlineSmall)
-                    Text("Gerçek kaynaklı verilerle şehir → ilçe → işletme keşfi")
-                }
-                item {
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Örn. restoran, kafe, fırın") },
-                        singleLine = true,
-                    )
-                }
-                item {
-                    Box {
-                        OutlinedButton(onClick = { cityMenu = true }, modifier = Modifier.fillMaxWidth()) { Text("Şehir: ${selectedCity.name}") }
-                        DropdownMenu(expanded = cityMenu, onDismissRequest = { cityMenu = false }) {
-                            cities.forEach { city ->
-                                DropdownMenuItem(text = { Text(city.name) }, onClick = {
-                                    selectedCity = city
-                                    selectedDistrict = "Tümü"
-                                    cityMenu = false
-                                    results = emptyList()
-                                    selectedBusiness = null
-                                    selectedCustomerId = null
-                                    crmMessage = null
-                                })
+            if (selectedCrmCustomer == null) {
+                LazyColumn(
+                    modifier = Modifier
+                        .testTag("main_scroll")
+                        .padding(padding)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    item {
+                        Text("Satış Radarı", style = MaterialTheme.typography.headlineSmall)
+                        Text("Gerçek kaynaklı verilerle şehir → ilçe → işletme keşfi")
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Örn. restoran, kafe, fırın") },
+                            singleLine = true,
+                        )
+                    }
+                    item {
+                        Box {
+                            OutlinedButton(onClick = { cityMenu = true }, modifier = Modifier.fillMaxWidth()) { Text("Şehir: ${selectedCity.name}") }
+                            DropdownMenu(expanded = cityMenu, onDismissRequest = { cityMenu = false }) {
+                                cities.forEach { city ->
+                                    DropdownMenuItem(text = { Text(city.name) }, onClick = {
+                                        selectedCity = city
+                                        selectedDistrict = "Tümü"
+                                        cityMenu = false
+                                        results = emptyList()
+                                        selectedBusiness = null
+                                        selectedCustomerId = null
+                                        crmMessage = null
+                                    })
+                                }
                             }
                         }
                     }
-                }
-                item {
-                    Box {
-                        OutlinedButton(onClick = { districtMenu = true }, modifier = Modifier.fillMaxWidth()) { Text("İlçe: $selectedDistrict") }
-                        DropdownMenu(expanded = districtMenu, onDismissRequest = { districtMenu = false }) {
-                            (listOf("Tümü") + selectedCity.districts).forEach { district ->
-                                DropdownMenuItem(text = { Text(district) }, onClick = {
-                                    selectedDistrict = district
-                                    districtMenu = false
-                                    results = emptyList()
-                                    selectedBusiness = null
-                                    selectedCustomerId = null
-                                    crmMessage = null
-                                })
+                    item {
+                        Box {
+                            OutlinedButton(onClick = { districtMenu = true }, modifier = Modifier.fillMaxWidth()) { Text("İlçe: $selectedDistrict") }
+                            DropdownMenu(expanded = districtMenu, onDismissRequest = { districtMenu = false }) {
+                                (listOf("Tümü") + selectedCity.districts).forEach { district ->
+                                    DropdownMenuItem(text = { Text(district) }, onClick = {
+                                        selectedDistrict = district
+                                        districtMenu = false
+                                        results = emptyList()
+                                        selectedBusiness = null
+                                        selectedCustomerId = null
+                                        crmMessage = null
+                                    })
+                                }
                             }
                         }
                     }
-                }
-                item {
-                    Button(
-                        onClick = {
-                            error = null
-                            selectedBusiness = null
-                            selectedCustomerId = null
-                            crmMessage = null
-                            if (query.isBlank()) {
-                                results = emptyList()
-                                error = "Arama için bir işletme/HORECA terimi yazın."
-                            } else {
-                                loading = true
-                                scope.launch {
-                                    val outcome = runCatching {
-                                        repository.search(query = query, city = selectedCity.name, district = selectedDistrict.takeUnless { it == "Tümü" })
+                    item {
+                        Button(
+                            onClick = {
+                                error = null
+                                selectedBusiness = null
+                                selectedCustomerId = null
+                                crmMessage = null
+                                if (query.isBlank()) {
+                                    results = emptyList()
+                                    error = "Arama için bir işletme/HORECA terimi yazın."
+                                } else {
+                                    loading = true
+                                    scope.launch {
+                                        val outcome = runCatching {
+                                            repository.search(query = query, city = selectedCity.name, district = selectedDistrict.takeUnless { it == "Tümü" })
+                                        }
+                                        results = outcome.getOrDefault(emptyList())
+                                        outcome.exceptionOrNull()?.let { error = "Kaynak erişim hatası: ${it.message ?: "bilinmeyen hata"}" }
+                                        loading = false
                                     }
-                                    results = outcome.getOrDefault(emptyList())
-                                    outcome.exceptionOrNull()?.let { error = "Kaynak erişim hatası: ${it.message ?: "bilinmeyen hata"}" }
-                                    loading = false
+                                }
+                            },
+                            enabled = !loading,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text(if (loading) "Gerçek kaynak aranıyor…" else "Gerçek kaynaktan ara") }
+                    }
+                    item {
+                        Text("Kaynak: OpenStreetMap Nominatim • Kullanıcı tetiklemeli arama • Eksiksiz İstanbul işletme listesi değildir.", style = MaterialTheme.typography.bodySmall)
+                        Text("© OpenStreetMap contributors", style = MaterialTheme.typography.bodySmall)
+                    }
+                    error?.let { message -> item { Card(modifier = Modifier.fillMaxWidth()) { Text(message, modifier = Modifier.padding(16.dp)) } } }
+                    crmMessage?.let { message -> item { Card(modifier = Modifier.fillMaxWidth()) { Text(message, modifier = Modifier.padding(16.dp)) } } }
+                    selectedBusiness?.let { business -> item { BusinessDetailCard(business = business, onClose = { selectedBusiness = null }) } }
+                    item {
+                        SalesDashboard(
+                            selectedCity = selectedCity.name,
+                            selectedDistrict = selectedDistrict,
+                            availableDistricts = selectedCity.districts,
+                            metrics = dashboardMetrics,
+                            onDistrictSelected = {
+                                selectedDistrict = it
+                                selectedBusiness = null
+                                selectedCustomerId = null
+                            },
+                        )
+                    }
+                    item {
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("Senkronizasyon durumu", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    if (pendingSyncCount == 0) {
+                                        "Bekleyen yerel değişiklik yok."
+                                    } else {
+                                        "$pendingSyncCount değişiklik yerelde güvenle bekliyor."
+                                    },
+                                )
+                                Text(
+                                    "Backend yapılandırılana kadar kayıtlar yalnızca cihazda tutulur; uygulama bunları senkronlandı olarak işaretlemez.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text("Yerel CRM", style = MaterialTheme.typography.titleMedium)
+                                Text("${filteredCrmCustomers.size} kayıt bu filtrede kalıcı olarak saklanıyor.")
+                                Text(
+                                    "Arama sonuçları otomatik müşteriye dönüşmez; kaydetme kullanıcı eylemidir.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
+                    }
+                    items(
+                        items = filteredCrmCustomers.take(25),
+                        key = { it.id },
+                    ) { customer ->
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(customer.businessName, style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "${customer.city} • ${customer.district}" +
+                                        (customer.neighborhood?.let { " • ${it}" } ?: ""),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Text("Aşama: " + customer.stage.name, style = MaterialTheme.typography.bodySmall)
+                                OutlinedButton(
+                                    onClick = { selectedCustomerId = customer.id },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text("CRM detayını aç")
+                                }
+                            }
+                        }
+                    }
+                    item {
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text("Bulunan gerçek kayıtlar", style = MaterialTheme.typography.titleMedium)
+                                Text("${results.size} kayıt")
+                                if (results.isNotEmpty()) Text("Raporu açmak için bir işletme kaydına dokunun.", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                    if (results.isNotEmpty()) {
+                        item {
+                            Text("Harita", style = MaterialTheme.typography.titleMedium)
+                            Text("Harita yalnızca bu kullanıcı aramasından dönen gerçek koordinatları gösterir; toplu şehir taraması yapmaz.", style = MaterialTheme.typography.bodySmall)
+                        }
+                        item { BusinessMapPreview(businesses = results) }
+                        item { Text("© OpenStreetMap contributors · ODbL", style = MaterialTheme.typography.bodySmall) }
+                    }
+                    items(results, key = { it.id }) { business ->
+                        BusinessResultCard(
+                            business = business,
+                            onClick = { selectedBusiness = business },
+                            onSaveToCrm = {
+                                scope.launch {
+                                    runCatching { localCrmRepository.addBusinessAsCustomer(business) }
+                                        .onSuccess { customer -> crmMessage = "CRM: ${customer.businessName} kaydı kalıcı yerel CRM'e alındı / zaten kayıtlı." }
+                                        .onFailure { throwable -> crmMessage = "CRM kaydı yapılamadı: ${throwable.message ?: "bilinmeyen hata"}" }
+                                }
+                            },
+                        )
+                    }
+                    item {
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text("Veri sınırı", style = MaterialTheme.typography.titleMedium)
+                                Text("OSM kaydı bulunan işletmeler gösterilir. Çalışan sayısı, satış potansiyeli ve benzeri alanlar kaynakta yoksa uygulama bunları uydurmaz.")
+                            }
+                        }
+                    }
+                }
+            } else {
+                selectedCrmCustomer?.let { customer ->
+                    CrmCustomerDetailScreen(
+                        customer = customer,
+                        activities = selectedCustomerActivities,
+                        nextActions = selectedCustomerNextActions,
+                        transitions = selectedCustomerTransitions,
+                        opportunities = selectedCustomerOpportunities,
+                        onBack = { selectedCustomerId = null },
+                        onStageChange = { target, note ->
+                            scope.launch {
+                                runCatching {
+                                    localCrmRepository.transitionStage(
+                                        customerId = customer.id,
+                                        to = target,
+                                        changedByUserId = null,
+                                        note = note,
+                                    )
+                                }.onSuccess {
+                                    crmMessage = "Aşama güncellendi: " + customer.businessName + " → " + target.name
+                                }.onFailure {
+                                    crmMessage = "Aşama değiştirilemedi: " + (it.message ?: "bilinmeyen hata")
                                 }
                             }
                         },
-                        enabled = !loading,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(if (loading) "Gerçek kaynak aranıyor…" else "Gerçek kaynaktan ara") }
-                }
-                item {
-                    Text("Kaynak: OpenStreetMap Nominatim • Kullanıcı tetiklemeli arama • Eksiksiz İstanbul işletme listesi değildir.", style = MaterialTheme.typography.bodySmall)
-                    Text("© OpenStreetMap contributors", style = MaterialTheme.typography.bodySmall)
-                }
-                error?.let { message -> item { Card(modifier = Modifier.fillMaxWidth()) { Text(message, modifier = Modifier.padding(16.dp)) } } }
-                crmMessage?.let { message -> item { Card(modifier = Modifier.fillMaxWidth()) { Text(message, modifier = Modifier.padding(16.dp)) } } }
-                selectedBusiness?.let { business -> item { BusinessDetailCard(business = business, onClose = { selectedBusiness = null }) } }
-                item {
-                    SalesDashboard(
-                        selectedCity = selectedCity.name,
-                        selectedDistrict = selectedDistrict,
-                        availableDistricts = selectedCity.districts,
-                        metrics = dashboardMetrics,
-                        onDistrictSelected = {
-                            selectedDistrict = it
-                            selectedBusiness = null
-                            selectedCustomerId = null
-                        },
-                    )
-                }
-                item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("Senkronizasyon durumu", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                if (pendingSyncCount == 0) {
-                                    "Bekleyen yerel değişiklik yok."
-                                } else {
-                                    "$pendingSyncCount değişiklik yerelde güvenle bekliyor."
-                                },
-                            )
-                            Text(
-                                "Backend yapılandırılana kadar kayıtlar yalnızca cihazda tutulur; uygulama bunları senkronlandı olarak işaretlemez.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                    }
-                }
-                item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Text("Yerel CRM", style = MaterialTheme.typography.titleMedium)
-                            Text("${filteredCrmCustomers.size} kayıt bu filtrede kalıcı olarak saklanıyor.")
-                            Text(
-                                "Arama sonuçları otomatik müşteriye dönüşmez; kaydetme kullanıcı eylemidir.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                    }
-                }
-                items(
-                    items = filteredCrmCustomers.take(25),
-                    key = { it.id },
-                ) { customer ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Text(customer.businessName, style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "${customer.city} • ${customer.district}" +
-                                    (customer.neighborhood?.let { " • ${it}" } ?: ""),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Text("Aşama: " + customer.stage.name, style = MaterialTheme.typography.bodySmall)
-                            OutlinedButton(
-                                onClick = { selectedCustomerId = customer.id },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("CRM detayını aç")
-                            }
-                        }
-                    }
-                }
-                item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text("Bulunan gerçek kayıtlar", style = MaterialTheme.typography.titleMedium)
-                            Text("${results.size} kayıt")
-                            if (results.isNotEmpty()) Text("Raporu açmak için bir işletme kaydına dokunun.", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-                if (results.isNotEmpty()) {
-                    item {
-                        Text("Harita", style = MaterialTheme.typography.titleMedium)
-                        Text("Harita yalnızca bu kullanıcı aramasından dönen gerçek koordinatları gösterir; toplu şehir taraması yapmaz.", style = MaterialTheme.typography.bodySmall)
-                    }
-                    item { BusinessMapPreview(businesses = results) }
-                    item { Text("© OpenStreetMap contributors · ODbL", style = MaterialTheme.typography.bodySmall) }
-                }
-                items(results, key = { it.id }) { business ->
-                    BusinessResultCard(
-                        business = business,
-                        onClick = { selectedBusiness = business },
-                        onSaveToCrm = {
+                        onRecordActivity = { type, note ->
                             scope.launch {
-                                runCatching { localCrmRepository.addBusinessAsCustomer(business) }
-                                    .onSuccess { customer -> crmMessage = "CRM: ${customer.businessName} kaydı kalıcı yerel CRM'e alındı / zaten kayıtlı." }
-                                    .onFailure { throwable -> crmMessage = "CRM kaydı yapılamadı: ${throwable.message ?: "bilinmeyen hata"}" }
+                                runCatching {
+                                    localCrmRepository.recordActivity(
+                                        customerId = customer.id,
+                                        type = type,
+                                        note = note,
+                                    )
+                                }.onSuccess {
+                                    crmMessage = "Aktivite kaydedildi."
+                                }.onFailure {
+                                    crmMessage = "Aktivite kaydedilemedi: " + (it.message ?: "bilinmeyen hata")
+                                }
                             }
                         },
+                        onCreateNextAction = { type, dueAt, note ->
+                            scope.launch {
+                                runCatching {
+                                    localCrmRepository.createNextAction(
+                                        customerId = customer.id,
+                                        type = type,
+                                        dueAtEpochMs = dueAt,
+                                        note = note,
+                                    )
+                                }.onSuccess {
+                                    crmMessage = "Takip planlandı."
+                                }.onFailure {
+                                    crmMessage = "Takip planlanamadı: " + (it.message ?: "bilinmeyen hata")
+                                }
+                            }
+                        },
+                        onCompleteNextAction = { actionId ->
+                            scope.launch {
+                                runCatching {
+                                    localCrmRepository.completeNextAction(actionId)
+                                }.onSuccess {
+                                    crmMessage = "Takip tamamlandı ve aktivite geçmişine işlendi."
+                                }.onFailure {
+                                    crmMessage = "Takip tamamlanamadı: " + (it.message ?: "bilinmeyen hata")
+                                }
+                            }
+                        },
+                        onCreateOpportunity = { title, notes, estimatedValueMinor, currency ->
+                            scope.launch {
+                                runCatching {
+                                    localCrmRepository.createOpportunity(
+                                        customerId = customer.id,
+                                        title = title,
+                                        notes = notes,
+                                        estimatedValueMinor = estimatedValueMinor,
+                                        currency = currency,
+                                        valueOrigin = if (estimatedValueMinor == null) {
+                                            com.lanu.globaldonuksatisradari.crm.CrmValueOrigin.UNKNOWN
+                                        } else {
+                                            com.lanu.globaldonuksatisradari.crm.CrmValueOrigin.USER_ENTERED
+                                        },
+                                    )
+                                }.onSuccess {
+                                    crmMessage = "Satış fırsatı kaydedildi."
+                                }.onFailure {
+                                    crmMessage = "Satış fırsatı kaydedilemedi: " + (it.message ?: "bilinmeyen hata")
+                                }
+                            }
+                        },
+                        onTransitionOpportunity = { opportunityId, status ->
+                            scope.launch {
+                                runCatching {
+                                    localCrmRepository.transitionOpportunity(
+                                        opportunityId = opportunityId,
+                                        status = status,
+                                    )
+                                }.onSuccess {
+                                    crmMessage = "Fırsat durumu güncellendi."
+                                }.onFailure {
+                                    crmMessage = "Fırsat durumu güncellenemedi: " + (it.message ?: "bilinmeyen hata")
+                                }
+                            }
+                        },
+                        onSaveNotes = { notes ->
+                            scope.launch {
+                                runCatching {
+                                    localCrmRepository.updateCustomerNotes(customer.id, notes)
+                                }.onSuccess {
+                                    crmMessage = "Müşteri notu kaydedildi."
+                                }.onFailure {
+                                    crmMessage = "Müşteri notu kaydedilemedi: " + (it.message ?: "bilinmeyen hata")
+                                }
+                            }
+                        },
+                        message = crmMessage,
                     )
-                }
-                item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text("Veri sınırı", style = MaterialTheme.typography.titleMedium)
-                            Text("OSM kaydı bulunan işletmeler gösterilir. Çalışan sayısı, satış potansiyeli ve benzeri alanlar kaynakta yoksa uygulama bunları uydurmaz.")
-                        }
-                    }
-                }
-            }
-            selectedCrmCustomer?.let { customer ->
-                CrmCustomerDetailScreen(
-                    customer = customer,
-                    activities = selectedCustomerActivities,
-                    nextActions = selectedCustomerNextActions,
-                    transitions = selectedCustomerTransitions,
-                    opportunities = selectedCustomerOpportunities,
-                    onBack = { selectedCustomerId = null },
-                    onStageChange = { target, note ->
-                        scope.launch {
-                            runCatching {
-                                localCrmRepository.transitionStage(
-                                    customerId = customer.id,
-                                    to = target,
-                                    changedByUserId = null,
-                                    note = note,
-                                )
-                            }.onSuccess {
-                                crmMessage = "Aşama güncellendi: " + customer.businessName + " → " + target.name
-                            }.onFailure {
-                                crmMessage = "Aşama değiştirilemedi: " + (it.message ?: "bilinmeyen hata")
-                            }
-                        }
-                    },
-                    onRecordActivity = { type, note ->
-                        scope.launch {
-                            runCatching {
-                                localCrmRepository.recordActivity(
-                                    customerId = customer.id,
-                                    type = type,
-                                    note = note,
-                                )
-                            }.onSuccess {
-                                crmMessage = "Aktivite kaydedildi."
-                            }.onFailure {
-                                crmMessage = "Aktivite kaydedilemedi: " + (it.message ?: "bilinmeyen hata")
-                            }
-                        }
-                    },
-                    onCreateNextAction = { type, dueAt, note ->
-                        scope.launch {
-                            runCatching {
-                                localCrmRepository.createNextAction(
-                                    customerId = customer.id,
-                                    type = type,
-                                    dueAtEpochMs = dueAt,
-                                    note = note,
-                                )
-                            }.onSuccess {
-                                crmMessage = "Takip planlandı."
-                            }.onFailure {
-                                crmMessage = "Takip planlanamadı: " + (it.message ?: "bilinmeyen hata")
-                            }
-                        }
-                    },
-                    onCompleteNextAction = { actionId ->
-                        scope.launch {
-                            runCatching {
-                                localCrmRepository.completeNextAction(actionId)
-                            }.onSuccess {
-                                crmMessage = "Takip tamamlandı ve aktivite geçmişine işlendi."
-                            }.onFailure {
-                                crmMessage = "Takip tamamlanamadı: " + (it.message ?: "bilinmeyen hata")
-                            }
-                        }
-                    },
-                    onCreateOpportunity = { title, notes, estimatedValueMinor, currency ->
-                        scope.launch {
-                            runCatching {
-                                localCrmRepository.createOpportunity(
-                                    customerId = customer.id,
-                                    title = title,
-                                    notes = notes,
-                                    estimatedValueMinor = estimatedValueMinor,
-                                    currency = currency,
-                                    valueOrigin = if (estimatedValueMinor == null) {
-                                        com.lanu.globaldonuksatisradari.crm.CrmValueOrigin.UNKNOWN
-                                    } else {
-                                        com.lanu.globaldonuksatisradari.crm.CrmValueOrigin.USER_ENTERED
-                                    },
-                                )
-                            }.onSuccess {
-                                crmMessage = "Satış fırsatı kaydedildi."
-                            }.onFailure {
-                                crmMessage = "Satış fırsatı kaydedilemedi: " + (it.message ?: "bilinmeyen hata")
-                            }
-                        }
-                    },
-                    onTransitionOpportunity = { opportunityId, status ->
-                        scope.launch {
-                            runCatching {
-                                localCrmRepository.transitionOpportunity(
-                                    opportunityId = opportunityId,
-                                    status = status,
-                                )
-                            }.onSuccess {
-                                crmMessage = "Fırsat durumu güncellendi."
-                            }.onFailure {
-                                crmMessage = "Fırsat durumu güncellenemedi: " + (it.message ?: "bilinmeyen hata")
-                            }
-                        }
-                    },
-                    onSaveNotes = { notes ->
-                        scope.launch {
-                            runCatching {
-                                localCrmRepository.updateCustomerNotes(customer.id, notes)
-                            }.onSuccess {
-                                crmMessage = "Müşteri notu kaydedildi."
-                            }.onFailure {
-                                crmMessage = "Müşteri notu kaydedilemedi: " + (it.message ?: "bilinmeyen hata")
-                            }
-                        }
-                    },
-                    message = crmMessage,
-                )
 
+                }
             }
         }
     }
