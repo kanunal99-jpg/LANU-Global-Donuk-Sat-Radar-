@@ -2,7 +2,7 @@ name: Android CI
 
 concurrency:
   group: android-ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 on:
   push:
@@ -32,8 +32,25 @@ jobs:
         run: timeout 240s gradle test --no-daemon --stacktrace
       - name: Inspect Android test runtime classpath
         run: |
+          set -euo pipefail
           timeout 90s gradle :app:dependencies --configuration debugAndroidTestRuntimeClasspath --no-daemon > /tmp/android-test-runtime.txt
           grep -E "androidx.test|junit:junit|espresso" /tmp/android-test-runtime.txt | tail -n 160 || true
+
+      - name: Inspect Android test dependency resolution
+        run: |
+          set -euo pipefail
+          for dependency in \
+            "androidx.test:runner" \
+            "androidx.test.ext:junit" \
+            "androidx.test:core" \
+            "androidx.test:monitor" \
+            "junit:junit"; do
+            echo "===== dependencyInsight: $dependency ====="
+            timeout 60s gradle :app:dependencyInsight \
+              --dependency "$dependency" \
+              --configuration debugAndroidTestRuntimeClasspath \
+              --no-daemon || exit $?
+          done
 
       - name: Build debug APK
         run: timeout 240s gradle assembleDebug --no-daemon --stacktrace
@@ -186,20 +203,26 @@ jobs:
 
       - name: Prepare release filenames
         run: |
+          set -euo pipefail
           cp app/build/outputs/apk/debug/app-debug.apk Lanu-Global-Donuk-Satis-Radari-latest.apk
           sha256sum Lanu-Global-Donuk-Satis-Radari-latest.apk > Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256
+          printf 'commit=%s\nworkflow=%s\nrun_id=%s\n' "$GITHUB_SHA" "$GITHUB_WORKFLOW" "$GITHUB_RUN_ID" > Lanu-Global-Donuk-Satis-Radari-latest.build-info.txt
+          test -s Lanu-Global-Donuk-Satis-Radari-latest.apk
+          test -s Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: lanu-global-donuk-satis-radari-debug
           path: |
             Lanu-Global-Donuk-Satis-Radari-latest.apk
             Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256
+            Lanu-Global-Donuk-Satis-Radari-latest.build-info.txt
       - name: Publish latest successful APK
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
           APK_PATH: Lanu-Global-Donuk-Satis-Radari-latest.apk
           SHA_PATH: Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256
+          BUILD_INFO_PATH: Lanu-Global-Donuk-Satis-Radari-latest.build-info.txt
         run: |
           set -euo pipefail
           gh release view latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
@@ -215,7 +238,7 @@ jobs:
             --notes "Automatically published from the latest successful main CI build. Commit: $GITHUB_SHA" \
             --target "$GITHUB_SHA"
 
-          for asset in app-debug.apk app-debug.apk.sha256 "$APK_PATH" "$SHA_PATH"; do
+          for asset in app-debug.apk app-debug.apk.sha256 "$APK_PATH" "$SHA_PATH" "$BUILD_INFO_PATH"; do
             gh release delete-asset latest "$asset" \
               --repo "$GITHUB_REPOSITORY" --yes >/dev/null 2>&1 || true
           done
@@ -224,4 +247,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --clobber \
             "$APK_PATH" \
-            "$SHA_PATH"
+            "$SHA_PATH" \
+            "$BUILD_INFO_PATH"
