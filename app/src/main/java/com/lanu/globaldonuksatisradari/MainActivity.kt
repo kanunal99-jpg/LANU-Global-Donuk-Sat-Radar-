@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import com.lanu.globaldonuksatisradari.crm.CrmActivityType
 import com.lanu.globaldonuksatisradari.crm.CrmDashboardMetrics
 import com.lanu.globaldonuksatisradari.crm.CrmNextActionType
+import com.lanu.globaldonuksatisradari.crm.CrmOpportunityStatus
 import com.lanu.globaldonuksatisradari.crm.CrmStage
 import com.lanu.globaldonuksatisradari.crm.CrmSyncScheduler
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
@@ -91,9 +92,13 @@ fun SalesRadarApp() {
     val selectedCustomerTransitionsFlow = remember(selectedCustomerKey) {
         localCrmRepository.observeStageTransitions(selectedCustomerKey)
     }
+    val selectedCustomerOpportunitiesFlow = remember(selectedCustomerKey) {
+        localCrmRepository.observeOpportunities(selectedCustomerKey)
+    }
     val selectedCustomerActivities by selectedCustomerActivitiesFlow.collectAsState(initial = emptyList())
     val selectedCustomerNextActions by selectedCustomerNextActionsFlow.collectAsState(initial = emptyList())
     val selectedCustomerTransitions by selectedCustomerTransitionsFlow.collectAsState(initial = emptyList())
+    val selectedCustomerOpportunities by selectedCustomerOpportunitiesFlow.collectAsState(initial = emptyList())
 
     val regionKey = "${selectedCity.name}|${selectedDistrict}"
     val regionDistrict = selectedDistrict.takeUnless { it == "Tümü" }
@@ -260,6 +265,7 @@ fun SalesRadarApp() {
                                     activities = selectedCustomerActivities,
                                     nextActions = selectedCustomerNextActions,
                                     transitions = selectedCustomerTransitions,
+                                    opportunities = selectedCustomerOpportunities,
                                     onBack = { selectedCustomerId = null },
                                     onStageChange = { target, note ->
                                         scope.launch {
