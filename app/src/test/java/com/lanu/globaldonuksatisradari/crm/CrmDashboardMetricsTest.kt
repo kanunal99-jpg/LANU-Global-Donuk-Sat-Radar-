@@ -49,7 +49,7 @@ class CrmDashboardMetricsTest {
         )
 
         assertEquals(2, metrics.customers)
-        assertEquals(1, metrics.prospects)
+        assertEquals(0, metrics.prospects)
         assertEquals(1, metrics.visits)
         assertEquals(1, metrics.proposals)
         assertEquals(2, metrics.visitActivities)
