@@ -13,6 +13,7 @@ import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.data.DataSourceDescriptor
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import androidx.work.WorkManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -85,7 +86,9 @@ class MainActivitySmokeTest {
         )
 
         composeRule.waitUntil(timeoutMillis = 15_000) {
-            composeRule.onAllNodesWithText("Smoke CRM Kafe").fetchSemanticsNodes().isNotEmpty()
+            runBlocking {
+                repository.observeCustomers("İstanbul").first().any { it.businessName == "Smoke CRM Kafe" }
+            }
         }
         composeRule
             .onNodeWithTag("main_scroll")
