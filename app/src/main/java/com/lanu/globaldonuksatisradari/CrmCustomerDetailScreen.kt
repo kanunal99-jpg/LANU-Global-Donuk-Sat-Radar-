@@ -27,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lanu.globaldonuksatisradari.crm.CrmActivity
+import com.lanu.globaldonuksatisradari.crm.CrmOpportunity
+import com.lanu.globaldonuksatisradari.crm.CrmOpportunityStatus
 import com.lanu.globaldonuksatisradari.crm.CrmActivityType
 import com.lanu.globaldonuksatisradari.crm.CrmCustomer
 import com.lanu.globaldonuksatisradari.crm.CrmNextAction
@@ -34,6 +36,8 @@ import com.lanu.globaldonuksatisradari.crm.CrmNextActionType
 import com.lanu.globaldonuksatisradari.crm.CrmStage
 import com.lanu.globaldonuksatisradari.crm.CrmStageRules
 import com.lanu.globaldonuksatisradari.crm.CrmStageTransition
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -45,11 +49,14 @@ fun CrmCustomerDetailScreen(
     activities: List<CrmActivity>,
     nextActions: List<CrmNextAction>,
     transitions: List<CrmStageTransition>,
+    opportunities: List<CrmOpportunity>,
     onBack: () -> Unit,
     onStageChange: (CrmStage, String?) -> Unit,
     onRecordActivity: (CrmActivityType, String?) -> Unit,
     onCreateNextAction: (CrmNextActionType, Long, String?) -> Unit,
     onCompleteNextAction: (String) -> Unit,
+    onCreateOpportunity: (String, String?, Long?, String?) -> Unit,
+    onTransitionOpportunity: (String, CrmOpportunityStatus) -> Unit,
     onSaveNotes: (String?) -> Unit,
     message: String? = null,
 ) {
@@ -62,6 +69,11 @@ fun CrmCustomerDetailScreen(
     var actionNote by remember { mutableStateOf("") }
     var notes by remember(customer.id, customer.notes) { mutableStateOf(customer.notes.orEmpty()) }
     var dueAt by remember(customer.id) { mutableStateOf(defaultTomorrowNine()) }
+    var opportunityTitle by remember { mutableStateOf("") }
+    var opportunityNotes by remember { mutableStateOf("") }
+    var opportunityAmount by remember { mutableStateOf("") }
+    var opportunityCurrency by remember { mutableStateOf("TRY") }
+    var opportunityMenuId by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
 
     Column(
