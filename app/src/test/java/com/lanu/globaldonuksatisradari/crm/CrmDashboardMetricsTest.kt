@@ -40,11 +40,17 @@ class CrmDashboardMetricsTest {
             action("n1", 900L),
             action("n2", 2_000L),
         )
+        val opportunities = listOf(
+            opportunity("o1", CrmOpportunityStatus.OPEN),
+            opportunity("o2", CrmOpportunityStatus.WON),
+            opportunity("o3", CrmOpportunityStatus.LOST),
+        )
 
         val metrics = CrmDashboardMetrics.from(
             customers = customers,
             activities = activities,
             openNextActions = actions,
+            opportunities = opportunities,
             nowEpochMs = 1_000L,
         )
 
@@ -53,6 +59,9 @@ class CrmDashboardMetricsTest {
         assertEquals(1, metrics.visits)
         assertEquals(1, metrics.proposals)
         assertEquals(2, metrics.visitActivities)
+        assertEquals(1, metrics.openOpportunities)
+        assertEquals(1, metrics.wonOpportunities)
+        assertEquals(1, metrics.lostOpportunities)
         assertEquals(1, metrics.callActivities)
         assertEquals(2, metrics.openNextActions)
         assertEquals(1, metrics.overdueNextActions)
@@ -64,6 +73,15 @@ class CrmDashboardMetricsTest {
         type = type,
         occurredAtEpochMs = 100L,
         createdAtEpochMs = 100L,
+    )
+
+    private fun opportunity(id: String, status: CrmOpportunityStatus) = CrmOpportunity(
+        id = id,
+        customerId = "c1",
+        title = "Fırsat " + id,
+        status = status,
+        createdAtEpochMs = 100L,
+        updatedAtEpochMs = 100L,
     )
 
     private fun action(id: String, dueAtEpochMs: Long) = CrmNextAction(
