@@ -220,6 +220,11 @@ class LocalCrmRepository(
     fun observeNextActions(customerId: String): Flow<List<CrmNextAction>> =
         database.nextActionDao().observeForCustomer(customerId).map { it.map(CrmMappings::toDomain) }
 
+    fun observeOpportunities(customerId: String): Flow<List<CrmOpportunity>> =
+        database.opportunityDao()
+            .observeForCustomer(customerId)
+            .map { it.map(CrmMappings::toDomain) }
+
     fun observeOpenNextActions(limit: Int = 100): Flow<List<CrmNextAction>> =
         database.nextActionDao().observeOpen(limit).map { it.map(CrmMappings::toDomain) }
 
@@ -242,6 +247,97 @@ class LocalCrmRepository(
 
     fun observeDueNextActions(nowEpochMs: Long = now(), limit: Int = 100): Flow<List<CrmNextAction>> =
         database.nextActionDao().observeDue(nowEpochMs, limit).map { it.map(CrmMappings::toDomain) }
+
+    suspend fun createOpportunity(
+        customerId: String,
+        title: String,
+        notes: String? = null,
+        estimatedValueMinor: Long? = null,
+        currency: String? = null,
+        valueOrigin: CrmValueOrigin = CrmValueOrigin.USER_ENTERED,
+        createdByUserId: String? = null,
+    ): CrmOpportunity {
+        require(database.customerDao().findById(customerId) != null) {
+            "Fırsat için CRM müşterisi bulunamadı: $customerId"
+        }
+        val normalizedTitle = title.trim()
+        require(normalizedTitle.isNotEmpty()) { "Fırsat başlığı boş olamaz." }
+        require(estimatedValueMinor == null || estimatedValueMinor >= 0L) {
+            "Fırsat değeri negatif olamaz."
+        }
+        val normalizedCurrency = currency?.trim()?.uppercase()?.takeIf { it.isNotEmpty() }
+        require(normalizedCurrency == null || normalizedCurrency.length == 3) {
+            "Para birimi ISO 4217 biçiminde 3 harf olmalıdır."
+        }
+
+        val timestamp = now()
+        val opportunity = CrmOpportunity(
+            id = idGenerator(),
+            customerId = customerId,
+            title = normalizedTitle,
+            notes = notes?.trim()?.takeIf { it.isNotEmpty() },
+            estimatedValueMinor = estimatedValueMinor,
+            currency = normalizedCurrency,
+            valueOrigin = if (estimatedValueMinor == null) CrmValueOrigin.UNKNOWN else valueOrigin,
+            createdAtEpochMs = timestamp,
+            updatedAtEpochMs = timestamp,
+            syncState = SyncState.PENDING_UPLOAD,
+        )
+
+        database.withTransaction {
+            database.opportunityDao().upsert(CrmMappings.toEntity(opportunity))
+            database.syncOperationDao().insert(
+                SyncOperationEntity(
+                    id = idGenerator(),
+                    entityType = ENTITY_OPPORTUNITY,
+                    entityId = opportunity.id,
+                    operation = OP_CREATE,
+                    payloadVersion = opportunity.version,
+                    payloadJson = CrmPayloads.opportunity(opportunity),
+                    createdAtEpochMs = timestamp,
+                    attemptCount = 0,
+                    lastError = null,
+                ),
+            )
+        }
+        return opportunity
+    }
+
+    suspend fun transitionOpportunity(
+        opportunityId: String,
+        status: CrmOpportunityStatus,
+    ): CrmOpportunity {
+        val current = database.opportunityDao().findById(opportunityId)
+            ?: error("Satış fırsatı bulunamadı: $opportunityId")
+        val timestamp = now()
+        database.withTransaction {
+            check(
+                database.opportunityDao().updateStatus(
+                    id = opportunityId,
+                    status = status.name,
+                    updatedAtEpochMs = timestamp,
+                    syncState = SyncState.PENDING_UPLOAD.name,
+                ) == 1,
+            ) { "Satış fırsatı güncellenemedi: $opportunityId" }
+            val latest = database.opportunityDao().findById(opportunityId)
+                ?: error("Güncel satış fırsatı okunamadı: $opportunityId")
+            val updated = CrmMappings.toDomain(latest)
+            database.syncOperationDao().insert(
+                SyncOperationEntity(
+                    id = idGenerator(),
+                    entityType = ENTITY_OPPORTUNITY,
+                    entityId = updated.id,
+                    operation = OP_UPDATE,
+                    payloadVersion = updated.version,
+                    payloadJson = CrmPayloads.opportunity(updated),
+                    createdAtEpochMs = timestamp,
+                    attemptCount = 0,
+                    lastError = null,
+                ),
+            )
+            return@withTransaction updated
+        }
+    }
 
     suspend fun createNextAction(
         customerId: String,
@@ -358,6 +454,7 @@ class LocalCrmRepository(
         const val ENTITY_CUSTOMER = "customer"
         const val ENTITY_ACTIVITY = "activity"
         const val ENTITY_NEXT_ACTION = "next_action"
+        const val ENTITY_OPPORTUNITY = "opportunity"
         const val OP_CREATE = "create"
         const val OP_UPDATE = "update"
     }
@@ -390,6 +487,36 @@ private object CrmMappings {
         stage = CrmStage.valueOf(entity.stage),
         ownerUserId = entity.ownerUserId,
         notes = entity.notes,
+        createdAtEpochMs = entity.createdAtEpochMs,
+        updatedAtEpochMs = entity.updatedAtEpochMs,
+        version = entity.version,
+        syncState = SyncState.valueOf(entity.syncState),
+    )
+
+    fun toEntity(model: CrmOpportunity) = CrmOpportunityEntity(
+        id = model.id,
+        customerId = model.customerId,
+        title = model.title,
+        status = model.status.name,
+        notes = model.notes,
+        estimatedValueMinor = model.estimatedValueMinor,
+        currency = model.currency,
+        valueOrigin = model.valueOrigin.name,
+        createdAtEpochMs = model.createdAtEpochMs,
+        updatedAtEpochMs = model.updatedAtEpochMs,
+        version = model.version,
+        syncState = model.syncState.name,
+    )
+
+    fun toDomain(entity: CrmOpportunityEntity) = CrmOpportunity(
+        id = entity.id,
+        customerId = entity.customerId,
+        title = entity.title,
+        status = CrmOpportunityStatus.valueOf(entity.status),
+        notes = entity.notes,
+        estimatedValueMinor = entity.estimatedValueMinor,
+        currency = entity.currency,
+        valueOrigin = CrmValueOrigin.valueOf(entity.valueOrigin),
         createdAtEpochMs = entity.createdAtEpochMs,
         updatedAtEpochMs = entity.updatedAtEpochMs,
         version = entity.version,
@@ -507,6 +634,20 @@ private object CrmPayloads {
         put("completedAtEpochMs", action.completedAtEpochMs)
         put("completedByUserId", action.completedByUserId)
         put("version", action.version)
+    }.toString()
+
+    fun opportunity(opportunity: CrmOpportunity): String = JSONObject().apply {
+        put("id", opportunity.id)
+        put("customerId", opportunity.customerId)
+        put("title", opportunity.title)
+        put("status", opportunity.status.name)
+        put("notes", opportunity.notes)
+        put("estimatedValueMinor", opportunity.estimatedValueMinor)
+        put("currency", opportunity.currency)
+        put("valueOrigin", opportunity.valueOrigin.name)
+        put("createdAtEpochMs", opportunity.createdAtEpochMs)
+        put("updatedAtEpochMs", opportunity.updatedAtEpochMs)
+        put("version", opportunity.version)
     }.toString()
 
     fun activity(activity: CrmActivity): String = JSONObject().apply {
