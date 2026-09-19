@@ -72,6 +72,29 @@ data class CrmNextActionEntity(
 )
 
 @Entity(
+    tableName = "crm_opportunity",
+    indices = [
+        Index(value = ["customerId", "updatedAtEpochMs"]),
+        Index(value = ["status"]),
+        Index(value = ["syncState"]),
+    ],
+)
+data class CrmOpportunityEntity(
+    @PrimaryKey val id: String,
+    val customerId: String,
+    val title: String,
+    val status: String,
+    val notes: String?,
+    val estimatedValueMinor: Long?,
+    val currency: String?,
+    val valueOrigin: String,
+    val createdAtEpochMs: Long,
+    val updatedAtEpochMs: Long,
+    val version: Long,
+    val syncState: String,
+)
+
+@Entity(
     tableName = "crm_stage_transition",
     indices = [
         Index(value = ["customerId", "changedAtEpochMs"]),
