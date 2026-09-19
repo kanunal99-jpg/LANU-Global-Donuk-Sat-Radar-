@@ -7,7 +7,6 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onAllNodesWithText
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.data.DataSourceDescriptor
@@ -80,10 +79,6 @@ class MainActivitySmokeTest {
             )
         )
 
-        composeRule.waitUntil(timeoutMillis = 10_000) {
-            composeRule.onAllNodesWithText("Smoke CRM Kafe • PROSPECT", useUnmergedTree = true)
-                .fetchSemanticsNodes().isNotEmpty()
-        }
         composeRule
             .onNodeWithTag("main_scroll")
             .performScrollToNode(hasText("Smoke CRM Kafe • PROSPECT"))
