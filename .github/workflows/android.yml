@@ -54,18 +54,7 @@ jobs:
           emulator-boot-timeout: 900
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
-          script: |
-            if gradle connectedDebugAndroidTest --stacktrace; then
-              exit 0
-            else
-              echo "===== ADB TEST DIAGNOSTICS ====="
-              adb devices -l || true
-              adb -s emulator-5554 shell getprop ro.build.version.release || true
-              adb -s emulator-5554 shell getprop ro.build.version.sdk || true
-              adb -s emulator-5554 shell pm list packages | grep -E 'lanu|androidx.test' || true
-              adb -s emulator-5554 logcat -d -v threadtime | tail -n 4000 || true
-              exit 1
-            fi
+          script: gradle connectedDebugAndroidTest --stacktrace
       - name: Prepare release filenames
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk Lanu-Global-Donuk-Satis-Radari-latest.apk
