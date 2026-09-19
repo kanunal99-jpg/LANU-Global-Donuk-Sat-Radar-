@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.lanu.globaldonuksatisradari.crm.CrmActivityType
 import com.lanu.globaldonuksatisradari.crm.CrmDashboardMetrics
@@ -122,6 +123,7 @@ fun SalesRadarApp() {
         Scaffold(topBar = { TopAppBar(title = { Text("LANU Global Donuk Satış Radarı") }) }) { padding ->
             LazyColumn(
                 modifier = Modifier
+                    .testTag("main_scroll")
                     .padding(padding)
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
