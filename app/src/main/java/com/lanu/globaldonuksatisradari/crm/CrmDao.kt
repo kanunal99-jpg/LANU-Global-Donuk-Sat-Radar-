@@ -25,6 +25,18 @@ interface CrmCustomerDao {
 
     @Query("UPDATE crm_customer SET syncState = :state WHERE id = :id")
     suspend fun updateSyncState(id: String, state: String)
+
+    @Query(
+        "UPDATE crm_customer SET notes = :notes, updatedAtEpochMs = :updatedAtEpochMs, " +
+            "version = :version, syncState = :state WHERE id = :id",
+    )
+    suspend fun updateNotes(
+        id: String,
+        notes: String?,
+        updatedAtEpochMs: Long,
+        version: Long,
+        state: String,
+    ): Int
 }
 
 @Dao
