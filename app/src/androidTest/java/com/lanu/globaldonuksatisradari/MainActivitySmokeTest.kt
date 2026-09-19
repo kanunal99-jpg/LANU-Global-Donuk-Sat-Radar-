@@ -84,6 +84,9 @@ class MainActivitySmokeTest {
             )
         )
 
+        composeRule.waitUntil(timeoutMillis = 15_000) {
+            composeRule.onAllNodesWithText("Smoke CRM Kafe").fetchSemanticsNodes().isNotEmpty()
+        }
         composeRule
             .onNodeWithTag("main_scroll")
             .performScrollToNode(hasText("Smoke CRM Kafe"))
