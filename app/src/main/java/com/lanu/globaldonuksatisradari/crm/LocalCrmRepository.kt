@@ -73,9 +73,12 @@ class LocalCrmRepository(
         return CrmMappings.toDomain(updated)
     }
 
-    suspend fun addBusinessAsCustomer(business: VerifiedBusiness, ownerUserId: String? = null): CrmCustomer {
+    suspend fun addBusinessAsCustomer(
+        business: VerifiedBusiness,
+        ownerUserId: String? = null,
+    ): CrmCustomer = database.withTransaction {
         val existing = database.customerDao().findByBusinessSourceId(business.id)
-        if (existing != null) return CrmMappings.toDomain(existing)
+        if (existing != null) return@withTransaction CrmMappings.toDomain(existing)
 
         val timestamp = now()
         val customer = CrmCustomer(
@@ -93,34 +96,32 @@ class LocalCrmRepository(
             syncState = SyncState.PENDING_UPLOAD,
         )
 
-        database.withTransaction {
-            database.customerDao().upsert(CrmMappings.toEntity(customer))
-            database.stageTransitionDao().insert(
-                CrmStageTransitionEntity(
-                    id = idGenerator(),
-                    customerId = customer.id,
-                    fromStage = null,
-                    toStage = CrmStage.PROSPECT.name,
-                    changedAtEpochMs = timestamp,
-                    changedByUserId = ownerUserId,
-                    clientVersion = customer.version,
-                ),
-            )
-            database.syncOperationDao().insert(
-                SyncOperationEntity(
-                    id = idGenerator(),
-                    entityType = ENTITY_CUSTOMER,
-                    entityId = customer.id,
-                    operation = OP_CREATE,
-                    payloadVersion = customer.version,
-                    payloadJson = CrmPayloads.customer(customer),
-                    createdAtEpochMs = timestamp,
-                    attemptCount = 0,
-                    lastError = null,
-                ),
-            )
-        }
-        return customer
+        database.customerDao().upsert(CrmMappings.toEntity(customer))
+        database.stageTransitionDao().insert(
+            CrmStageTransitionEntity(
+                id = idGenerator(),
+                customerId = customer.id,
+                fromStage = null,
+                toStage = CrmStage.PROSPECT.name,
+                changedAtEpochMs = timestamp,
+                changedByUserId = ownerUserId,
+                clientVersion = customer.version,
+            ),
+        )
+        database.syncOperationDao().insert(
+            SyncOperationEntity(
+                id = idGenerator(),
+                entityType = ENTITY_CUSTOMER,
+                entityId = customer.id,
+                operation = OP_CREATE,
+                payloadVersion = customer.version,
+                payloadJson = CrmPayloads.customer(customer),
+                createdAtEpochMs = timestamp,
+                attemptCount = 0,
+                lastError = null,
+            ),
+        )
+        customer
     }
 
     suspend fun transitionStage(
