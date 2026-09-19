@@ -114,13 +114,26 @@ fun SalesRadarApp() {
             district = regionDistrict,
         )
     }
+    val regionOpportunitiesFlow = remember(regionKey) {
+        localCrmRepository.observeOpportunitiesForRegion(
+            city = selectedCity.name,
+            district = regionDistrict,
+        )
+    }
     val regionActivities by regionActivitiesFlow.collectAsState(initial = emptyList())
     val regionNextActions by regionNextActionsFlow.collectAsState(initial = emptyList())
-    val dashboardMetrics = remember(filteredCrmCustomers, regionActivities, regionNextActions) {
+    val regionOpportunities by regionOpportunitiesFlow.collectAsState(initial = emptyList())
+    val dashboardMetrics = remember(
+        filteredCrmCustomers,
+        regionActivities,
+        regionNextActions,
+        regionOpportunities,
+    ) {
         CrmDashboardMetrics.from(
             customers = filteredCrmCustomers,
             activities = regionActivities,
             openNextActions = regionNextActions,
+            opportunities = regionOpportunities,
         )
     }
 
