@@ -69,6 +69,9 @@ interface CrmNextActionDao {
     @Query("SELECT * FROM crm_next_action WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): CrmNextActionEntity?
 
+    @Query("UPDATE crm_next_action SET syncState = :state WHERE id = :id")
+    suspend fun updateSyncState(id: String, state: String): Int
+
     @Query(
         "UPDATE crm_next_action SET completedAtEpochMs = :completedAtEpochMs, " +
             "completedByUserId = :completedByUserId, version = version + 1, syncState = :syncState " +
