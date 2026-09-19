@@ -64,11 +64,21 @@ jobs:
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT}}"
           export PATH="$SDK_ROOT/platform-tools:$SDK_ROOT/emulator:$SDK_ROOT/cmdline-tools/latest/bin:$PATH"
           export ANDROID_HOME="$SDK_ROOT"
+          export ANDROID_SDK_HOME="$HOME/.android"
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+
           echo "no" | avdmanager create avd \
             --name ci-api35 \
             --package "system-images;android-35;google_apis;x86_64" \
             --device "pixel_2" \
             --force
+
+          echo "===== AVD CREATED ====="
+          avdmanager list avd || true
+          emulator -list-avds || true
+          test -f "$ANDROID_AVD_HOME/ci-api35.ini"
+          test -f "$ANDROID_AVD_HOME/ci-api35.avd/config.ini"
 
           rm -f /tmp/emulator.log
           emulator -avd ci-api35 \
