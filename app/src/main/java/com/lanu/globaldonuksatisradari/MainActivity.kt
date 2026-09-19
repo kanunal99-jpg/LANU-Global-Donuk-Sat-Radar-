@@ -77,27 +77,36 @@ fun SalesRadarApp() {
         crmCustomers.filter { selectedDistrict == "Tümü" || it.district == selectedDistrict }
     }
     val selectedCrmCustomer = selectedCustomerId?.let { id -> crmCustomers.firstOrNull { it.id == id } }
-    val selectedCustomerActivities by localCrmRepository
-        .observeActivities(selectedCustomerId.orEmpty())
-        .collectAsState(initial = emptyList())
-    val selectedCustomerNextActions by localCrmRepository
-        .observeNextActions(selectedCustomerId.orEmpty())
-        .collectAsState(initial = emptyList())
-    val selectedCustomerTransitions by localCrmRepository
-        .observeStageTransitions(selectedCustomerId.orEmpty())
-        .collectAsState(initial = emptyList())
-    val regionActivities by localCrmRepository
-        .observeActivitiesForRegion(
+    val selectedCustomerKey = selectedCustomerId.orEmpty()
+    val selectedCustomerActivitiesFlow = remember(selectedCustomerKey) {
+        localCrmRepository.observeActivities(selectedCustomerKey)
+    }
+    val selectedCustomerNextActionsFlow = remember(selectedCustomerKey) {
+        localCrmRepository.observeNextActions(selectedCustomerKey)
+    }
+    val selectedCustomerTransitionsFlow = remember(selectedCustomerKey) {
+        localCrmRepository.observeStageTransitions(selectedCustomerKey)
+    }
+    val selectedCustomerActivities by selectedCustomerActivitiesFlow.collectAsState(initial = emptyList())
+    val selectedCustomerNextActions by selectedCustomerNextActionsFlow.collectAsState(initial = emptyList())
+    val selectedCustomerTransitions by selectedCustomerTransitionsFlow.collectAsState(initial = emptyList())
+
+    val regionKey = "${selectedCity.name}|${selectedDistrict}"
+    val regionDistrict = selectedDistrict.takeUnless { it == "Tümü" }
+    val regionActivitiesFlow = remember(regionKey) {
+        localCrmRepository.observeActivitiesForRegion(
             city = selectedCity.name,
-            district = selectedDistrict.takeUnless { it == "Tümü" },
+            district = regionDistrict,
         )
-        .collectAsState(initial = emptyList())
-    val regionNextActions by localCrmRepository
-        .observeOpenNextActionsForRegion(
+    }
+    val regionNextActionsFlow = remember(regionKey) {
+        localCrmRepository.observeOpenNextActionsForRegion(
             city = selectedCity.name,
-            district = selectedDistrict.takeUnless { it == "Tümü" },
+            district = regionDistrict,
         )
-        .collectAsState(initial = emptyList())
+    }
+    val regionActivities by regionActivitiesFlow.collectAsState(initial = emptyList())
+    val regionNextActions by regionNextActionsFlow.collectAsState(initial = emptyList())
     val dashboardMetrics = remember(filteredCrmCustomers, regionActivities, regionNextActions) {
         CrmDashboardMetrics.from(
             customers = filteredCrmCustomers,
