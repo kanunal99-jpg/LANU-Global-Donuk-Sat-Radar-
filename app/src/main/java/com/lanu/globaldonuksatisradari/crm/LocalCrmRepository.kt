@@ -347,6 +347,9 @@ class LocalCrmRepository(
         return CrmMappings.toDomain(database.nextActionDao().findById(actionId)!!)
     }
 
+    fun observePendingSyncCount(): Flow<Int> =
+        database.syncOperationDao().observePendingCount()
+
     suspend fun pendingSync(limit: Int = 100): List<SyncOperation> =
         database.syncOperationDao().pending(limit).map(CrmMappings::toDomain)
 
