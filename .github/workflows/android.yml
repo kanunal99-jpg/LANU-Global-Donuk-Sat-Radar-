@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   build:
-    timeout-minutes: 15
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,22 +27,22 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Run lint
-        run: gradle lint
+        run: timeout 180s gradle lint --no-daemon --stacktrace
       - name: Run unit tests
-        run: gradle test
+        run: timeout 240s gradle test --no-daemon --stacktrace
       - name: Inspect Android test runtime classpath
         run: |
-          gradle :app:dependencies --configuration debugAndroidTestRuntimeClasspath > /tmp/android-test-runtime.txt
+          timeout 180s gradle :app:dependencies --configuration debugAndroidTestRuntimeClasspath --no-daemon > /tmp/android-test-runtime.txt
           grep -E "androidx.test|junit:junit|espresso" /tmp/android-test-runtime.txt | tail -n 120 || true
           echo "===== JUnit dependency insight ====="
-          gradle :app:dependencyInsight --dependency junit --configuration debugAndroidTestRuntimeClasspath || true
+          timeout 180s gradle :app:dependencyInsight --dependency junit --configuration debugAndroidTestRuntimeClasspath --no-daemon || true
           echo "===== AndroidX Test runner dependency insight ====="
-          gradle :app:dependencyInsight --dependency androidx.test:runner --configuration debugAndroidTestRuntimeClasspath || true
+          timeout 180s gradle :app:dependencyInsight --dependency androidx.test:runner --configuration debugAndroidTestRuntimeClasspath --no-daemon || true
           echo "===== AndroidX Test ext-junit dependency insight ====="
-          gradle :app:dependencyInsight --dependency androidx.test.ext:junit --configuration debugAndroidTestRuntimeClasspath || true
+          timeout 180s gradle :app:dependencyInsight --dependency androidx.test.ext:junit --configuration debugAndroidTestRuntimeClasspath --no-daemon || true
 
       - name: Build debug APK
-        run: gradle assembleDebug
+        run: timeout 240s gradle assembleDebug --no-daemon --stacktrace
       - name: Enable KVM for Android emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
