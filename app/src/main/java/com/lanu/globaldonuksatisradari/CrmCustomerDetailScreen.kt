@@ -135,6 +135,110 @@ fun CrmCustomerDetailScreen(
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Satış fırsatı", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Ticari değer girilmezse sistem satış potansiyeli üretmez. Girilen değer kullanıcı verisidir.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                OutlinedTextField(
+                    value = opportunityTitle,
+                    onValueChange = { opportunityTitle = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Fırsat başlığı") },
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = opportunityNotes,
+                    onValueChange = { opportunityNotes = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    label = { Text("Not (opsiyonel)") },
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = opportunityAmount,
+                        onValueChange = { opportunityAmount = it },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Tutar (opsiyonel)") },
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = opportunityCurrency,
+                        onValueChange = { opportunityCurrency = it.uppercase().take(3) },
+                        modifier = Modifier.width(92.dp),
+                        label = { Text("Para") },
+                        singleLine = true,
+                    )
+                }
+                Button(
+                    onClick = {
+                        onCreateOpportunity(
+                            opportunityTitle,
+                            opportunityNotes.takeIf { it.isNotBlank() },
+                            parseOpportunityAmountMinor(opportunityAmount),
+                            opportunityCurrency.takeIf { it.isNotBlank() },
+                        )
+                        opportunityTitle = ""
+                        opportunityNotes = ""
+                        opportunityAmount = ""
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Fırsatı kaydet")
+                }
+
+                if (opportunities.isEmpty()) {
+                    Text("Henüz fırsat kaydı yok.", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    opportunities.forEach { opportunity ->
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(opportunity.title, style = MaterialTheme.typography.titleMedium)
+                                Text("Durum: " + opportunityStatusLabel(opportunity.status))
+                                if (opportunity.estimatedValueMinor != null) {
+                                    Text(
+                                        "Kullanıcı girilen değer: " +
+                                            formatOpportunityValue(
+                                                opportunity.estimatedValueMinor,
+                                                opportunity.currency ?: "TRY",
+                                            ),
+                                    )
+                                } else {
+                                    Text("Ticari değer: girilmedi")
+                                }
+                                opportunity.notes?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                                OutlinedButton(
+                                    onClick = { opportunityMenuId = opportunity.id },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text("Fırsat durumunu değiştir")
+                                }
+                                DropdownMenu(
+                                    expanded = opportunityMenuId == opportunity.id,
+                                    onDismissRequest = { opportunityMenuId = null },
+                                ) {
+                                    CrmOpportunityStatus.values().forEach { status ->
+                                        DropdownMenuItem(
+                                            text = { Text(opportunityStatusLabel(status)) },
+                                            onClick = {
+                                                opportunityMenuId = null
+                                                onTransitionOpportunity(opportunity.id, status)
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Aktivite kaydet", style = MaterialTheme.typography.titleMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { activityMenu = true }) {
@@ -313,6 +417,29 @@ fun CrmCustomerDetailScreen(
             }
         }
     }
+}
+
+private fun parseOpportunityAmountMinor(raw: String): Long? {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return null
+    val normalized = when {
+        trimmed.contains(",") && trimmed.contains(".") -> trimmed.replace(".", "").replace(",", ".")
+        trimmed.contains(",") -> trimmed.replace(",", ".")
+        else -> trimmed
+    }
+    return normalized.toBigDecimalOrNull()
+        ?.setScale(2, RoundingMode.HALF_UP)
+        ?.movePointRight(2)
+        ?.longValueExact()
+}
+
+private fun formatOpportunityValue(minor: Long, currency: String): String =
+    BigDecimal.valueOf(minor, 2).setScale(2, RoundingMode.HALF_UP).toPlainString() + " " + currency
+
+private fun opportunityStatusLabel(status: CrmOpportunityStatus): String = when (status) {
+    CrmOpportunityStatus.OPEN -> "Açık"
+    CrmOpportunityStatus.WON -> "Kazanıldı"
+    CrmOpportunityStatus.LOST -> "Kayıp"
 }
 
 private fun defaultTomorrowNine(): Long =
