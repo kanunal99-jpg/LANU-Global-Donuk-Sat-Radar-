@@ -7,7 +7,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.data.DataSourceDescriptor
@@ -21,7 +21,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
-@RunWith(AndroidJUnit4::class)
+@RunWith(org.junit.runners.JUnit4::class)
 class MainActivitySmokeTest {
 
     @get:org.junit.Rule
