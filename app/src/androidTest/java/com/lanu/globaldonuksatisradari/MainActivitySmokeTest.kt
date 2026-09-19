@@ -79,6 +79,9 @@ class MainActivitySmokeTest {
         )
 
         composeRule.waitForIdle()
+        composeRule
+            .onNodeWithTag("main_scroll")
+            .performScrollToNode(hasText("Smoke CRM Kafe • PROSPECT"))
         composeRule.onNodeWithText("Smoke CRM Kafe • PROSPECT").assertIsDisplayed().performClick()
         composeRule.onNodeWithText("CRM listesine dön").assertIsDisplayed()
         composeRule.onNodeWithText("Açık takipler").assertIsDisplayed()
