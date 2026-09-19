@@ -1,5 +1,6 @@
 package com.lanu.globaldonuksatisradari.crm
 
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -161,6 +162,10 @@ class CrmSyncEngineTest {
                 .filter { it.state == SyncOperationState.PENDING.name }
                 .sortedBy { it.createdAtEpochMs }
                 .take(limit)
+
+        override fun observePendingCount() = flowOf(
+            allOperations.count { it.state == SyncOperationState.PENDING.name },
+        )
 
         override suspend fun updateAttemptAndState(
             id: String,
