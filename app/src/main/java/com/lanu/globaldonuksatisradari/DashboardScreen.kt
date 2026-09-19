@@ -42,6 +42,9 @@ fun SalesDashboard(
             DashboardCard("Teklif aşaması", metrics.proposals.toString(), "Pipeline")
             DashboardCard("Açık takip", metrics.openNextActions.toString(), "Next Action")
             DashboardCard("Geciken takip", metrics.overdueNextActions.toString(), "Next Action")
+            DashboardCard("Açık fırsat", metrics.openOpportunities.toString(), "CRM Fırsatı")
+            DashboardCard("Kazanılan fırsat", metrics.wonOpportunities.toString(), "CRM Fırsatı")
+            DashboardCard("Kayıp fırsat", metrics.lostOpportunities.toString(), "CRM Fırsatı")
         }
 
         Card(modifier = Modifier.fillMaxWidth()) {
@@ -78,6 +81,9 @@ fun SalesDashboard(
                 Text("Numune: ${metrics.sampleActivities}")
                 Text("Teklif: ${metrics.proposalActivities}")
                 Text("Sipariş: ${metrics.orderActivities}")
+                Text("Açık fırsat: " + metrics.openOpportunities)
+                Text("Kazanılan fırsat: " + metrics.wonOpportunities)
+                Text("Kayıp fırsat: " + metrics.lostOpportunities)
                 Text(
                     "Faaliyet sayıları yalnızca kalıcı CRM aktivite kayıtlarından hesaplanır.",
                     style = MaterialTheme.typography.bodySmall,
