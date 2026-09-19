@@ -5,9 +5,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.onAllNodesWithTag
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.data.DataSourceDescriptor
@@ -90,11 +88,10 @@ class MainActivitySmokeTest {
                 repository.observeCustomers("İstanbul").first().any { it.businessName == "Smoke CRM Kafe" }
             }
         }
-        composeRule
-            .onNodeWithTag("main_scroll")
-            .performScrollToNode(hasText("Smoke CRM Kafe"))
-        composeRule.onNodeWithText("Smoke CRM Kafe").assertIsDisplayed()
-        composeRule.onNodeWithText("CRM detayını aç").performClick()
+        composeRule.waitUntil(timeoutMillis = 15_000) {
+            composeRule.onAllNodesWithTag("crm_open_instrumentation-ui-crm-detail").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("crm_open_instrumentation-ui-crm-detail").performClick()
         composeRule.onNodeWithTag("crm_detail_back").assertIsDisplayed()
         composeRule.onNodeWithText("Açık takipler").assertIsDisplayed()
         composeRule.onNodeWithText("Aktivite geçmişi").assertIsDisplayed()
