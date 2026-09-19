@@ -233,14 +233,41 @@ class LocalCrmRepository(
             check(updated == 1) { "Takip aksiyonu tamamlanamadı: $actionId" }
             val latest = database.nextActionDao().findById(actionId)
                 ?: error("Tamamlanan takip aksiyonu okunamadı: $actionId")
+            val completedAction = CrmMappings.toDomain(latest)
             database.syncOperationDao().insert(
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_NEXT_ACTION,
                     entityId = actionId,
                     operation = OP_UPDATE,
-                    payloadVersion = latest.version,
-                    payloadJson = CrmPayloads.nextAction(CrmMappings.toDomain(latest)),
+                    payloadVersion = completedAction.version,
+                    payloadJson = CrmPayloads.nextAction(completedAction),
+                    createdAtEpochMs = timestamp,
+                    attemptCount = 0,
+                    lastError = null,
+                ),
+            )
+
+            val activity = CrmActivity(
+                id = idGenerator(),
+                customerId = completedAction.customerId,
+                type = completedAction.type.toActivityType(),
+                occurredAtEpochMs = timestamp,
+                note = completedAction.note,
+                createdByUserId = completedByUserId,
+                createdAtEpochMs = timestamp,
+                version = 1L,
+                syncState = SyncState.PENDING_UPLOAD,
+            )
+            database.activityDao().upsert(CrmMappings.toEntity(activity))
+            database.syncOperationDao().insert(
+                SyncOperationEntity(
+                    id = idGenerator(),
+                    entityType = ENTITY_ACTIVITY,
+                    entityId = activity.id,
+                    operation = OP_CREATE,
+                    payloadVersion = activity.version,
+                    payloadJson = CrmPayloads.activity(activity),
                     createdAtEpochMs = timestamp,
                     attemptCount = 0,
                     lastError = null,
@@ -357,6 +384,16 @@ private object CrmMappings {
         attemptCount = entity.attemptCount,
         lastError = entity.lastError,
     )
+}
+
+private fun CrmNextActionType.toActivityType(): CrmActivityType = when (this) {
+    CrmNextActionType.CALL -> CrmActivityType.CALL
+    CrmNextActionType.VISIT -> CrmActivityType.VISIT
+    CrmNextActionType.MEETING -> CrmActivityType.MEETING
+    CrmNextActionType.SAMPLE_FOLLOW_UP -> CrmActivityType.SAMPLE
+    CrmNextActionType.PROPOSAL_FOLLOW_UP -> CrmActivityType.PROPOSAL
+    CrmNextActionType.ORDER_FOLLOW_UP -> CrmActivityType.ORDER
+    CrmNextActionType.NOTE -> CrmActivityType.NOTE
 }
 
 private object CrmPayloads {
