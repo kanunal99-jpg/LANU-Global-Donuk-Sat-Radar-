@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   build:
-    timeout-minutes: 15
+    timeout-minutes: 25
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,21 +43,82 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      - name: Install Android emulator system image
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT}}"
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          AVDMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/avdmanager"
+          test -x "$SDKMANAGER"
+          test -x "$AVDMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "system-images;android-35;google_apis;x86_64"
+
       - name: Android emulator smoke tests
-        timeout-minutes: 8
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          target: google_apis
-          arch: x86_64
-          profile: pixel_2
-          ram-size: 2G
-          disk-size: 8G
-          force-avd-creation: true
-          emulator-boot-timeout: 600
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          disable-animations: true
-          script: timeout 300s gradle connectedDebugAndroidTest --no-daemon --stacktrace || (echo "===== ADB/JUNIT DIAGNOSTICS ====="; adb devices -l || true; adb -s emulator-5554 shell getprop ro.build.version.release || true; adb -s emulator-5554 shell getprop ro.build.version.sdk || true; adb -s emulator-5554 logcat -d -v threadtime | grep -E "AndroidJUnit4|AndroidJUnitRunner|initializationError|NoClassDefFoundError|ClassNotFoundException|NoSuchMethodError|IncompatibleClassChangeError|VerifyError|StackOverflowError|FATAL EXCEPTION" | tail -n 500 || true; exit 1)
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT}}"
+          export PATH="$SDK_ROOT/platform-tools:$SDK_ROOT/emulator:$SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+          export ANDROID_HOME="$SDK_ROOT"
+          echo "no" | avdmanager create avd \
+            --name ci-api35 \
+            --package "system-images;android-35;google_apis;x86_64" \
+            --device "pixel_2" \
+            --force
+
+          rm -f /tmp/emulator.log
+          emulator -avd ci-api35 \
+            -no-window \
+            -no-audio \
+            -no-boot-anim \
+            -no-snapshot \
+            -gpu swiftshader_indirect \
+            -camera-back none \
+            -camera-front none \
+            > /tmp/emulator.log 2>&1 &
+          EMULATOR_PID="$!"
+          cleanup() {
+            adb emu kill >/dev/null 2>&1 || true
+            kill "$EMULATOR_PID" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          adb start-server
+          timeout 120s adb wait-for-device
+
+          boot_completed=""
+          for _ in $(seq 1 180); do
+            boot_completed="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+            [ "$boot_completed" = "1" ] && break
+            sleep 2
+          done
+          test "$boot_completed" = "1"
+
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+          adb shell input keyevent 82 || true
+
+          set +e
+          timeout 300s gradle connectedDebugAndroidTest --no-daemon --stacktrace
+          TEST_EXIT="$?"
+          set -e
+
+          if [ "$TEST_EXIT" -ne 0 ]; then
+            echo "===== ADB/JUNIT DIAGNOSTICS ====="
+            adb devices -l || true
+            adb -s emulator-5554 shell getprop ro.build.version.release || true
+            adb -s emulator-5554 shell getprop ro.build.version.sdk || true
+            adb -s emulator-5554 logcat -d -v threadtime | \
+              grep -E "AndroidJUnit4|AndroidJUnitRunner|initializationError|NoClassDefFoundError|ClassNotFoundException|NoSuchMethodError|IncompatibleClassChangeError|VerifyError|StackOverflowError|FATAL EXCEPTION|AssertionError|TimeoutException" | tail -n 800 || true
+            echo "===== EMULATOR LOG ====="
+            tail -n 400 /tmp/emulator.log || true
+            exit "$TEST_EXIT"
+          fi
 
       - name: Prepare release filenames
         run: |
