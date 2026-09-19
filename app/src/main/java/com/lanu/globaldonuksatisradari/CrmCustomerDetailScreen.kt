@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.lanu.globaldonuksatisradari.crm.CrmActivity
 import com.lanu.globaldonuksatisradari.crm.CrmOpportunity
@@ -81,6 +82,7 @@ fun CrmCustomerDetailScreen(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 0.dp, max = 900.dp)
+            .testTag("crm_detail_scroll")
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
