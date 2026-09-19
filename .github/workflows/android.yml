@@ -33,6 +33,12 @@ jobs:
         run: |
           gradle :app:dependencies --configuration debugAndroidTestRuntimeClasspath > /tmp/android-test-runtime.txt
           grep -E "androidx.test|junit:junit|espresso" /tmp/android-test-runtime.txt | tail -n 120 || true
+          echo "===== JUnit dependency insight ====="
+          gradle :app:dependencyInsight --dependency junit --configuration debugAndroidTestRuntimeClasspath || true
+          echo "===== AndroidX Test runner dependency insight ====="
+          gradle :app:dependencyInsight --dependency androidx.test:runner --configuration debugAndroidTestRuntimeClasspath || true
+          echo "===== AndroidX Test ext-junit dependency insight ====="
+          gradle :app:dependencyInsight --dependency androidx.test.ext:junit --configuration debugAndroidTestRuntimeClasspath || true
 
       - name: Build debug APK
         run: gradle assembleDebug
@@ -54,7 +60,7 @@ jobs:
           emulator-boot-timeout: 900
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
-          script: gradle connectedDebugAndroidTest --stacktrace
+          script: gradle connectedDebugAndroidTest --stacktrace || (echo "===== ADB JUNIT DIAGNOSTICS ====="; adb -s emulator-5554 shell logcat -d -v threadtime | grep -E "AndroidJUnit4|AndroidJUnitRunner|initializationError|NoClassDefFoundError|ClassNotFoundException|NoSuchMethodError|IncompatibleClassChangeError|VerifyError|StackOverflowError" | tail -n 400 || true; exit 1)
       - name: Prepare release filenames
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk Lanu-Global-Donuk-Satis-Radari-latest.apk
