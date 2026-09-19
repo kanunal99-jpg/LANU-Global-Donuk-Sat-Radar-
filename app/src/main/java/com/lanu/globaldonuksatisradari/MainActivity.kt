@@ -73,6 +73,9 @@ fun SalesRadarApp() {
     val crmCustomers by localCrmRepository
         .observeCustomers(selectedCity.name)
         .collectAsState(initial = emptyList())
+    val pendingSyncCount by localCrmRepository
+        .observePendingSyncCount()
+        .collectAsState(initial = 0)
     val filteredCrmCustomers = remember(crmCustomers, selectedDistrict) {
         crmCustomers.filter { selectedDistrict == "Tümü" || it.district == selectedDistrict }
     }
@@ -213,6 +216,24 @@ fun SalesRadarApp() {
                             selectedBusiness = null
                         },
                     )
+                }
+                item {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Senkronizasyon durumu", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                if (pendingSyncCount == 0) {
+                                    "Bekleyen yerel değişiklik yok."
+                                } else {
+                                    "$pendingSyncCount değişiklik yerelde güvenle bekliyor."
+                                },
+                            )
+                            Text(
+                                "Backend yapılandırılana kadar kayıtlar yalnızca cihazda tutulur; uygulama bunları senkronlandı olarak işaretlemez.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
                 }
                 item {
                     Card(modifier = Modifier.fillMaxWidth()) {
