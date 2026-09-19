@@ -298,124 +298,6 @@ fun SalesRadarApp() {
                         }
                     }
                 }
-                selectedCrmCustomer?.let { customer ->
-                    item(key = "crm-detail-" + customer.id) {
-                        CrmCustomerDetailScreen(
-                            customer = customer,
-                            activities = selectedCustomerActivities,
-                            nextActions = selectedCustomerNextActions,
-                            transitions = selectedCustomerTransitions,
-                            opportunities = selectedCustomerOpportunities,
-                            onBack = { selectedCustomerId = null },
-                            onStageChange = { target, note ->
-                                scope.launch {
-                                    runCatching {
-                                        localCrmRepository.transitionStage(
-                                            customerId = customer.id,
-                                            to = target,
-                                            changedByUserId = null,
-                                            note = note,
-                                        )
-                                    }.onSuccess {
-                                        crmMessage = "Aşama güncellendi: " + customer.businessName + " → " + target.name
-                                    }.onFailure {
-                                        crmMessage = "Aşama değiştirilemedi: " + (it.message ?: "bilinmeyen hata")
-                                    }
-                                }
-                            },
-                            onRecordActivity = { type, note ->
-                                scope.launch {
-                                    runCatching {
-                                        localCrmRepository.recordActivity(
-                                            customerId = customer.id,
-                                            type = type,
-                                            note = note,
-                                        )
-                                    }.onSuccess {
-                                        crmMessage = "Aktivite kaydedildi."
-                                    }.onFailure {
-                                        crmMessage = "Aktivite kaydedilemedi: " + (it.message ?: "bilinmeyen hata")
-                                    }
-                                }
-                            },
-                            onCreateNextAction = { type, dueAt, note ->
-                                scope.launch {
-                                    runCatching {
-                                        localCrmRepository.createNextAction(
-                                            customerId = customer.id,
-                                            type = type,
-                                            dueAtEpochMs = dueAt,
-                                            note = note,
-                                        )
-                                    }.onSuccess {
-                                        crmMessage = "Takip planlandı."
-                                    }.onFailure {
-                                        crmMessage = "Takip planlanamadı: " + (it.message ?: "bilinmeyen hata")
-                                    }
-                                }
-                            },
-                            onCompleteNextAction = { actionId ->
-                                scope.launch {
-                                    runCatching {
-                                        localCrmRepository.completeNextAction(actionId)
-                                    }.onSuccess {
-                                        crmMessage = "Takip tamamlandı ve aktivite geçmişine işlendi."
-                                    }.onFailure {
-                                        crmMessage = "Takip tamamlanamadı: " + (it.message ?: "bilinmeyen hata")
-                                    }
-                                }
-                            },
-                            onCreateOpportunity = { title, notes, estimatedValueMinor, currency ->
-                                scope.launch {
-                                    runCatching {
-                                        localCrmRepository.createOpportunity(
-                                            customerId = customer.id,
-                                            title = title,
-                                            notes = notes,
-                                            estimatedValueMinor = estimatedValueMinor,
-                                            currency = currency,
-                                            valueOrigin = if (estimatedValueMinor == null) {
-                                                com.lanu.globaldonuksatisradari.crm.CrmValueOrigin.UNKNOWN
-                                            } else {
-                                                com.lanu.globaldonuksatisradari.crm.CrmValueOrigin.USER_ENTERED
-                                            },
-                                        )
-                                    }.onSuccess {
-                                        crmMessage = "Satış fırsatı kaydedildi."
-                                    }.onFailure {
-                                        crmMessage = "Satış fırsatı kaydedilemedi: " + (it.message ?: "bilinmeyen hata")
-                                    }
-                                }
-                            },
-                            onTransitionOpportunity = { opportunityId, status ->
-                                scope.launch {
-                                    runCatching {
-                                        localCrmRepository.transitionOpportunity(
-                                            opportunityId = opportunityId,
-                                            status = status,
-                                        )
-                                    }.onSuccess {
-                                        crmMessage = "Fırsat durumu güncellendi."
-                                    }.onFailure {
-                                        crmMessage = "Fırsat durumu güncellenemedi: " + (it.message ?: "bilinmeyen hata")
-                                    }
-                                }
-                            },
-                            onSaveNotes = { notes ->
-                                scope.launch {
-                                    runCatching {
-                                        localCrmRepository.updateCustomerNotes(customer.id, notes)
-                                    }.onSuccess {
-                                        crmMessage = "Müşteri notu kaydedildi."
-                                    }.onFailure {
-                                        crmMessage = "Müşteri notu kaydedilemedi: " + (it.message ?: "bilinmeyen hata")
-                                    }
-                                }
-                            },
-                            message = crmMessage,
-                        )
-                    }
-                }
                 item {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp)) {
@@ -454,6 +336,123 @@ fun SalesRadarApp() {
                         }
                     }
                 }
+            }
+            selectedCrmCustomer?.let { customer ->
+                CrmCustomerDetailScreen(
+                    customer = customer,
+                    activities = selectedCustomerActivities,
+                    nextActions = selectedCustomerNextActions,
+                    transitions = selectedCustomerTransitions,
+                    opportunities = selectedCustomerOpportunities,
+                    onBack = { selectedCustomerId = null },
+                    onStageChange = { target, note ->
+                        scope.launch {
+                            runCatching {
+                                localCrmRepository.transitionStage(
+                                    customerId = customer.id,
+                                    to = target,
+                                    changedByUserId = null,
+                                    note = note,
+                                )
+                            }.onSuccess {
+                                crmMessage = "Aşama güncellendi: " + customer.businessName + " → " + target.name
+                            }.onFailure {
+                                crmMessage = "Aşama değiştirilemedi: " + (it.message ?: "bilinmeyen hata")
+                            }
+                        }
+                    },
+                    onRecordActivity = { type, note ->
+                        scope.launch {
+                            runCatching {
+                                localCrmRepository.recordActivity(
+                                    customerId = customer.id,
+                                    type = type,
+                                    note = note,
+                                )
+                            }.onSuccess {
+                                crmMessage = "Aktivite kaydedildi."
+                            }.onFailure {
+                                crmMessage = "Aktivite kaydedilemedi: " + (it.message ?: "bilinmeyen hata")
+                            }
+                        }
+                    },
+                    onCreateNextAction = { type, dueAt, note ->
+                        scope.launch {
+                            runCatching {
+                                localCrmRepository.createNextAction(
+                                    customerId = customer.id,
+                                    type = type,
+                                    dueAtEpochMs = dueAt,
+                                    note = note,
+                                )
+                            }.onSuccess {
+                                crmMessage = "Takip planlandı."
+                            }.onFailure {
+                                crmMessage = "Takip planlanamadı: " + (it.message ?: "bilinmeyen hata")
+                            }
+                        }
+                    },
+                    onCompleteNextAction = { actionId ->
+                        scope.launch {
+                            runCatching {
+                                localCrmRepository.completeNextAction(actionId)
+                            }.onSuccess {
+                                crmMessage = "Takip tamamlandı ve aktivite geçmişine işlendi."
+                            }.onFailure {
+                                crmMessage = "Takip tamamlanamadı: " + (it.message ?: "bilinmeyen hata")
+                            }
+                        }
+                    },
+                    onCreateOpportunity = { title, notes, estimatedValueMinor, currency ->
+                        scope.launch {
+                            runCatching {
+                                localCrmRepository.createOpportunity(
+                                    customerId = customer.id,
+                                    title = title,
+                                    notes = notes,
+                                    estimatedValueMinor = estimatedValueMinor,
+                                    currency = currency,
+                                    valueOrigin = if (estimatedValueMinor == null) {
+                                        com.lanu.globaldonuksatisradari.crm.CrmValueOrigin.UNKNOWN
+                                    } else {
+                                        com.lanu.globaldonuksatisradari.crm.CrmValueOrigin.USER_ENTERED
+                                    },
+                                )
+                            }.onSuccess {
+                                crmMessage = "Satış fırsatı kaydedildi."
+                            }.onFailure {
+                                crmMessage = "Satış fırsatı kaydedilemedi: " + (it.message ?: "bilinmeyen hata")
+                            }
+                        }
+                    },
+                    onTransitionOpportunity = { opportunityId, status ->
+                        scope.launch {
+                            runCatching {
+                                localCrmRepository.transitionOpportunity(
+                                    opportunityId = opportunityId,
+                                    status = status,
+                                )
+                            }.onSuccess {
+                                crmMessage = "Fırsat durumu güncellendi."
+                            }.onFailure {
+                                crmMessage = "Fırsat durumu güncellenemedi: " + (it.message ?: "bilinmeyen hata")
+                            }
+                        }
+                    },
+                    onSaveNotes = { notes ->
+                        scope.launch {
+                            runCatching {
+                                localCrmRepository.updateCustomerNotes(customer.id, notes)
+                            }.onSuccess {
+                                crmMessage = "Müşteri notu kaydedildi."
+                            }.onFailure {
+                                crmMessage = "Müşteri notu kaydedilemedi: " + (it.message ?: "bilinmeyen hata")
+                            }
+                        }
+                    },
+                    message = crmMessage,
+                )
+
             }
         }
     }
