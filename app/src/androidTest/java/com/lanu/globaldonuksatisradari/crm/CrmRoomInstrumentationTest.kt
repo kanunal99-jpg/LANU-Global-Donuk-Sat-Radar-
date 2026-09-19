@@ -2,7 +2,7 @@ package com.lanu.globaldonuksatisradari.crm
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
 import com.lanu.globaldonuksatisradari.data.DataSourceDescriptor
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import com.lanu.globaldonuksatisradari.data.VerifiedBusinessValidator
@@ -13,7 +13,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
-@RunWith(AndroidJUnit4::class)
+@RunWith(org.junit.runners.JUnit4::class)
 class CrmRoomInstrumentationTest {
 
     @Test
