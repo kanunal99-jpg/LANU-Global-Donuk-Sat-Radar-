@@ -85,6 +85,15 @@ fun BusinessDetailCard(
                 ) { Text("Haritada / navigasyonda aç") }
             }
 
+            Text("Global Donuk — doğrulanmış değer önerisi", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Kaynak: " + opportunity.sourceUrl,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            opportunity.verifiedClaims.forEach { claim ->
+                Text("• " + claim)
+            }
+
             Text("Ticari değerlendirme", style = MaterialTheme.typography.titleMedium)
             Text(opportunity.focus)
             Text("Çalışan sayısı: Kaynakta yok — saha/işletme doğrulaması gerekli.")
