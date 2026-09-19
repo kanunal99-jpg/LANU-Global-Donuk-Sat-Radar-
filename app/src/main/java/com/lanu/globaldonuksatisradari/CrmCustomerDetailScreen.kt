@@ -86,7 +86,12 @@ fun CrmCustomerDetailScreen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = onBack,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("crm_detail_back"),
+        ) {
             Text("← CRM listesine dön")
         }
 
