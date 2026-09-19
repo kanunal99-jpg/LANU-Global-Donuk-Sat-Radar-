@@ -5,6 +5,11 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
+import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
+import com.lanu.globaldonuksatisradari.data.DataSourceDescriptor
+import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
+import kotlinx.coroutines.runBlocking
 import androidx.work.WorkManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -48,5 +53,35 @@ class MainActivitySmokeTest {
     @Test
     fun launch_createsStableActivity() {
         assertNotNull(composeRule.activity)
+    }
+
+    @Test
+    fun persistedCrmCustomer_opensRealDetailWorkflow() = runBlocking {
+        val context = composeRule.activity
+        val repository = LocalCrmRepository(LanuCrmDatabase.getInstance(context))
+        repository.addBusinessAsCustomer(
+            VerifiedBusiness(
+                id = "instrumentation-ui-crm-detail",
+                name = "Smoke CRM Kafe",
+                city = "İstanbul",
+                district = "Kadıköy",
+                neighborhood = "Caferağa",
+                source = DataSourceDescriptor(
+                    id = "osm-nominatim",
+                    name = "OpenStreetMap Nominatim",
+                    publisher = "OpenStreetMap",
+                    licenseOrTerms = "ODbL",
+                    sourceUrl = "https://nominatim.openstreetmap.org/",
+                    lastVerifiedAtEpochMs = 1L,
+                ),
+                verifiedAtEpochMs = 1L,
+            )
+        )
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Smoke CRM Kafe • PROSPECT").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("CRM listesine dön").assertIsDisplayed()
+        composeRule.onNodeWithText("Açık takipler").assertIsDisplayed()
+        composeRule.onNodeWithText("Aktivite geçmişi").assertIsDisplayed()
     }
 }
