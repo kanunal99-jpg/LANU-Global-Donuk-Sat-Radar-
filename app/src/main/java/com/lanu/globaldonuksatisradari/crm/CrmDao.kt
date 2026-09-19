@@ -147,6 +147,9 @@ interface SyncOperationDao {
     @Query("SELECT * FROM crm_sync_operation WHERE state = 'PENDING' ORDER BY createdAtEpochMs ASC LIMIT :limit")
     suspend fun pending(limit: Int): List<SyncOperationEntity>
 
+    @Query("SELECT COUNT(*) FROM crm_sync_operation WHERE state = 'PENDING'")
+    fun observePendingCount(): kotlinx.coroutines.flow.Flow<Int>
+
     @Query(
         "UPDATE crm_sync_operation " +
             "SET attemptCount = :attemptCount, lastError = :lastError, state = :state " +
