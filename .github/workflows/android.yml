@@ -55,7 +55,6 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
           script: |
-            set -o pipefail
             if gradle connectedDebugAndroidTest --stacktrace; then
               exit 0
             else
