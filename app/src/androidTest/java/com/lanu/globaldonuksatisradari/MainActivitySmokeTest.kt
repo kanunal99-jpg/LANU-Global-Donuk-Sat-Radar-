@@ -85,7 +85,9 @@ class MainActivitySmokeTest {
             )
 
             composeRule.waitUntil(timeoutMillis = 15_000) {
-                repository.observeCustomers("İstanbul").first().any { it.businessName == "Smoke CRM Kafe" }
+                runBlocking {
+                    repository.observeCustomers("İstanbul").first().any { it.businessName == "Smoke CRM Kafe" }
+                }
             }
         }
 
