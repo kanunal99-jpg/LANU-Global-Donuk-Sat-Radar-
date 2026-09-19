@@ -52,6 +52,14 @@ interface CrmActivityDao {
 
     @Query("UPDATE crm_activity SET syncState = :state WHERE id = :id")
     suspend fun updateSyncState(id: String, state: String)
+
+    @Query(
+        "SELECT a.* FROM crm_activity a " +
+            "INNER JOIN crm_customer c ON c.id = a.customerId " +
+            "WHERE c.city = :city AND (:district IS NULL OR c.district = :district) " +
+            "ORDER BY a.occurredAtEpochMs DESC",
+    )
+    fun observeForRegion(city: String, district: String?): Flow<List<CrmActivityEntity>>
 }
 
 @Dao
@@ -69,6 +77,31 @@ interface CrmNextActionDao {
             "LIMIT :limit",
     )
     fun observeOpen(limit: Int): Flow<List<CrmNextActionEntity>>
+
+    @Query(
+        "SELECT a.* FROM crm_next_action a " +
+            "INNER JOIN crm_customer c ON c.id = a.customerId " +
+            "WHERE a.completedAtEpochMs IS NULL " +
+            "AND c.city = :city " +
+            "AND (:district IS NULL OR c.district = :district) " +
+            "ORDER BY a.dueAtEpochMs ASC",
+    )
+    fun observeOpenForRegion(city: String, district: String?): Flow<List<CrmNextActionEntity>>
+
+    @Query(
+        "SELECT a.* FROM crm_next_action a " +
+            "INNER JOIN crm_customer c ON c.id = a.customerId " +
+            "WHERE a.completedAtEpochMs IS NULL " +
+            "AND a.dueAtEpochMs <= :nowEpochMs " +
+            "AND c.city = :city " +
+            "AND (:district IS NULL OR c.district = :district) " +
+            "ORDER BY a.dueAtEpochMs ASC",
+    )
+    fun observeDueForRegion(
+        city: String,
+        district: String?,
+        nowEpochMs: Long,
+    ): Flow<List<CrmNextActionEntity>>
 
     @Query(
         "SELECT * FROM crm_next_action " +
