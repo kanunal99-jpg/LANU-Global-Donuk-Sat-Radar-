@@ -251,6 +251,7 @@ fun SalesRadarApp() {
                                             }
                                             OutlinedButton(
                                                 onClick = { selectedCustomerId = customer.id },
+                                                modifier = Modifier.testTag("crm_open_" + customer.id),
                                             ) {
                                                 Text("CRM detayını aç")
                                             }
