@@ -321,7 +321,43 @@ fun SalesRadarApp() {
                                             }.onSuccess {
                                                 crmMessage = "Takip tamamlandı ve aktivite geçmişine işlendi."
                                             }.onFailure {
-                                                crmMessage = "Takip tamamlanamadı: ${it.message ?: "bilinmeyen hata"}"
+                                                crmMessage = "Takip tamamlanamadı: " + (it.message ?: "bilinmeyen hata")
+                                            }
+                                        }
+                                    },
+                                    onCreateOpportunity = { title, notes, estimatedValueMinor, currency ->
+                                        scope.launch {
+                                            runCatching {
+                                                localCrmRepository.createOpportunity(
+                                                    customerId = customer.id,
+                                                    title = title,
+                                                    notes = notes,
+                                                    estimatedValueMinor = estimatedValueMinor,
+                                                    currency = currency,
+                                                    valueOrigin = if (estimatedValueMinor == null) {
+                                                        com.lanu.globaldonuksatisradari.crm.CrmValueOrigin.UNKNOWN
+                                                    } else {
+                                                        com.lanu.globaldonuksatisradari.crm.CrmValueOrigin.USER_ENTERED
+                                                    },
+                                                )
+                                            }.onSuccess {
+                                                crmMessage = "Satış fırsatı kaydedildi."
+                                            }.onFailure {
+                                                crmMessage = "Satış fırsatı kaydedilemedi: " + (it.message ?: "bilinmeyen hata")
+                                            }
+                                        }
+                                    },
+                                    onTransitionOpportunity = { opportunityId, status ->
+                                        scope.launch {
+                                            runCatching {
+                                                localCrmRepository.transitionOpportunity(
+                                                    opportunityId = opportunityId,
+                                                    status = status,
+                                                )
+                                            }.onSuccess {
+                                                crmMessage = "Fırsat durumu güncellendi."
+                                            }.onFailure {
+                                                crmMessage = "Fırsat durumu güncellenemedi: " + (it.message ?: "bilinmeyen hata")
                                             }
                                         }
                                     },
