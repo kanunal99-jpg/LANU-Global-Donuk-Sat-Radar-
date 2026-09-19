@@ -169,6 +169,7 @@ fun SalesRadarApp() {
                                     districtMenu = false
                                     results = emptyList()
                                     selectedBusiness = null
+                                    selectedCustomerId = null
                                     crmMessage = null
                                 })
                             }
@@ -180,6 +181,7 @@ fun SalesRadarApp() {
                         onClick = {
                             error = null
                             selectedBusiness = null
+                            selectedCustomerId = null
                             crmMessage = null
                             if (query.isBlank()) {
                                 results = emptyList()
@@ -216,6 +218,7 @@ fun SalesRadarApp() {
                         onDistrictSelected = {
                             selectedDistrict = it
                             selectedBusiness = null
+                            selectedCustomerId = null
                         },
                     )
                 }
