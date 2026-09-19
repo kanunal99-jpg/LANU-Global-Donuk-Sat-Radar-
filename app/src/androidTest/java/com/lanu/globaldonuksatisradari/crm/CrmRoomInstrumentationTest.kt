@@ -93,6 +93,28 @@ class CrmRoomInstrumentationTest {
             assertEquals(LocalCrmRepository.OP_CREATE, pending.single().operation)
             assertEquals(1, transitions.size)
             assertEquals(CrmStage.PROSPECT.name, transitions.single().toStage)
+
+            val opportunity = repository.createOpportunity(
+                customerId = customer.id,
+                title = "Bahar menü fırsatı",
+                notes = "Müşteri kendi tahminini paylaştı.",
+                estimatedValueMinor = 250_000L,
+                currency = "TRY",
+                valueOrigin = CrmValueOrigin.USER_ENTERED,
+                createdByUserId = "instrumentation-test",
+            )
+            val opportunities = repository.observeOpportunities(customer.id).first()
+            assertEquals(1, opportunities.size)
+            assertEquals("Bahar menü fırsatı", opportunities.single().title)
+            assertEquals(250_000L, opportunities.single().estimatedValueMinor)
+            assertEquals("TRY", opportunities.single().currency)
+            assertEquals(CrmValueOrigin.USER_ENTERED, opportunities.single().valueOrigin)
+            assertEquals(CrmOpportunityStatus.OPEN, opportunities.single().status)
+            assertEquals(SyncState.PENDING_UPLOAD, opportunities.single().syncState)
+
+            val won = repository.transitionOpportunity(opportunity.id, CrmOpportunityStatus.WON)
+            assertEquals(CrmOpportunityStatus.WON, won.status)
+            assertEquals(6, repository.pendingSync().size)
         } finally {
             database.close()
         }
