@@ -37,10 +37,11 @@ fun SalesDashboard(
         ) {
             DashboardCard("Müşteriler", metrics.customers.toString(), "Yerel CRM")
             DashboardCard("Potansiyeller", metrics.prospects.toString(), "Prospect")
-            DashboardCard("Ziyaretler", metrics.visits.toString(), "Aşama")
-            DashboardCard("Teklifler", metrics.proposals.toString(), "Aşama")
-            DashboardCard("Siparişler", metrics.orders.toString(), "Aşama")
-            DashboardCard("Satış", "—", "Tutar verisi tutulmuyor")
+            DashboardCard("Gerçek ziyaret", metrics.visitActivities.toString(), "Aktivite")
+            DashboardCard("Arama", metrics.callActivities.toString(), "Aktivite")
+            DashboardCard("Teklif aşaması", metrics.proposals.toString(), "Pipeline")
+            DashboardCard("Açık takip", metrics.openNextActions.toString(), "Next Action")
+            DashboardCard("Geciken takip", metrics.overdueNextActions.toString(), "Next Action")
         }
 
         Card(modifier = Modifier.fillMaxWidth()) {
@@ -65,6 +66,22 @@ fun SalesDashboard(
                         )
                     }
                 }
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Gerçekleşen faaliyetler", style = MaterialTheme.typography.titleMedium)
+                Text("Ziyaret: ${metrics.visitActivities}")
+                Text("Arama: ${metrics.callActivities}")
+                Text("Görüşme: ${metrics.meetingActivities}")
+                Text("Numune: ${metrics.sampleActivities}")
+                Text("Teklif: ${metrics.proposalActivities}")
+                Text("Sipariş: ${metrics.orderActivities}")
+                Text(
+                    "Faaliyet sayıları yalnızca kalıcı CRM aktivite kayıtlarından hesaplanır.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
 
