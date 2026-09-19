@@ -78,9 +78,9 @@ class MainActivitySmokeTest {
         )
 
         composeRule.waitUntil(20_000) {
-            composeRule.onAllNodesWithText("Smoke CRM Kafe • PROSPECT").fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithText("Smoke CRM Kafe").fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText("Smoke CRM Kafe • PROSPECT").performClick()
+        composeRule.onNodeWithText("CRM detayını aç").performClick()
         composeRule.onNodeWithText("CRM listesine dön").assertIsDisplayed()
         composeRule.onNodeWithText("Açık takipler").assertIsDisplayed()
         composeRule.onNodeWithText("Aktivite geçmişi").assertIsDisplayed()
