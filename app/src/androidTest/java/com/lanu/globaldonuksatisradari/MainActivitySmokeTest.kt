@@ -6,7 +6,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performScrollToNode
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
@@ -84,21 +83,17 @@ class MainActivitySmokeTest {
                 )
             )
 
-            composeRule.waitUntil(timeoutMillis = 15_000) {
-                runBlocking {
-                    repository.observeCustomers("İstanbul").first().any { it.businessName == "Smoke CRM Kafe" }
-                }
-            }
+            assertTrue(
+                "Seeded CRM customer must persist in Room",
+                repository.observeCustomers("İstanbul").first().any { it.businessName == "Smoke CRM Kafe" },
+            )
         }
 
-        composeRule.waitUntil(timeoutMillis = 15_000) {
-            composeRule.onNodeWithTag("main_scroll").performScrollToNode(
-                hasTestTag("crm_open_instrumentation-ui-crm-detail"),
-            )
-            composeRule.onAllNodesWithTag("crm_open_instrumentation-ui-crm-detail")
-                .fetchSemanticsNodes()
-                .isNotEmpty()
-        }
+        composeRule.activityRule.scenario.recreate()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("main_scroll").performScrollToNode(
+            hasTestTag("crm_open_instrumentation-ui-crm-detail"),
+        )
         composeRule.onNodeWithTag("crm_open_instrumentation-ui-crm-detail").performClick()
         composeRule.onNodeWithTag("crm_detail_back").assertIsDisplayed()
         composeRule.onNodeWithText("Açık takipler").assertIsDisplayed()
