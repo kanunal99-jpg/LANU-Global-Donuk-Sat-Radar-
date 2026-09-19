@@ -318,7 +318,7 @@ class LocalCrmRepository(
         val current = database.opportunityDao().findById(opportunityId)
             ?: error("Satış fırsatı bulunamadı: $opportunityId")
         val timestamp = now()
-        database.withTransaction {
+        return database.withTransaction {
             check(
                 database.opportunityDao().updateStatus(
                     id = opportunityId,
