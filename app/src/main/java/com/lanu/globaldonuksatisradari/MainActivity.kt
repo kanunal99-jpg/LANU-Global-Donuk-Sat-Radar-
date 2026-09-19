@@ -225,6 +225,42 @@ fun SalesRadarApp() {
                         Text("Kaynak: OpenStreetMap Nominatim • Kullanıcı tetiklemeli arama • Eksiksiz İstanbul işletme listesi değildir.", style = MaterialTheme.typography.bodySmall)
                         Text("© OpenStreetMap contributors", style = MaterialTheme.typography.bodySmall)
                     }
+                    item {
+                        if (filteredCrmCustomers.isNotEmpty()) {
+                            Card(modifier = Modifier.fillMaxWidth()) {
+                                Column(
+                                    Modifier.padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Text("CRM hızlı erişim", style = MaterialTheme.typography.titleMedium)
+                                    Text(
+                                        "Son kayıtlar doğrudan buradan açılabilir.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                    filteredCrmCustomers.take(5).forEach { customer ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                        ) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text(customer.businessName)
+                                                Text(
+                                                    customer.stage.name,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                )
+                                            }
+                                            OutlinedButton(
+                                                onClick = { selectedCustomerId = customer.id },
+                                            ) {
+                                                Text("CRM detayını aç")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     error?.let { message -> item { Card(modifier = Modifier.fillMaxWidth()) { Text(message, modifier = Modifier.padding(16.dp)) } } }
                     crmMessage?.let { message -> item { Card(modifier = Modifier.fillMaxWidth()) { Text(message, modifier = Modifier.padding(16.dp)) } } }
                     selectedBusiness?.let { business -> item { BusinessDetailCard(business = business, onClose = { selectedBusiness = null }) } }
