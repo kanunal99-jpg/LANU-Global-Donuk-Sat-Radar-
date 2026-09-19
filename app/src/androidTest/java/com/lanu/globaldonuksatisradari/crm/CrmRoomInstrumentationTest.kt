@@ -56,6 +56,13 @@ class CrmRoomInstrumentationTest {
                 business = business,
                 ownerUserId = "instrumentation-test",
             )
+            val duplicate = repository.addBusinessAsCustomer(
+                business = business,
+                ownerUserId = "instrumentation-test",
+            )
+            assertEquals(customer.id, duplicate.id)
+            assertEquals(1, repository.pendingSync().size)
+
             val observed = repository.observeCustomers("İstanbul").first()
             val pending = repository.pendingSync()
             val transitions = database.stageTransitionDao().observeForCustomer(customer.id).first()
