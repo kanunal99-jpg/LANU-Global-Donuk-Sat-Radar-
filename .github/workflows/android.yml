@@ -32,14 +32,8 @@ jobs:
         run: timeout 240s gradle test --no-daemon --stacktrace
       - name: Inspect Android test runtime classpath
         run: |
-          timeout 180s gradle :app:dependencies --configuration debugAndroidTestRuntimeClasspath --no-daemon > /tmp/android-test-runtime.txt
-          grep -E "androidx.test|junit:junit|espresso" /tmp/android-test-runtime.txt | tail -n 120 || true
-          echo "===== JUnit dependency insight ====="
-          timeout 180s gradle :app:dependencyInsight --dependency junit --configuration debugAndroidTestRuntimeClasspath --no-daemon || true
-          echo "===== AndroidX Test runner dependency insight ====="
-          timeout 180s gradle :app:dependencyInsight --dependency androidx.test:runner --configuration debugAndroidTestRuntimeClasspath --no-daemon || true
-          echo "===== AndroidX Test ext-junit dependency insight ====="
-          timeout 180s gradle :app:dependencyInsight --dependency androidx.test.ext:junit --configuration debugAndroidTestRuntimeClasspath --no-daemon || true
+          timeout 90s gradle :app:dependencies --configuration debugAndroidTestRuntimeClasspath --no-daemon > /tmp/android-test-runtime.txt
+          grep -E "androidx.test|junit:junit|espresso" /tmp/android-test-runtime.txt | tail -n 160 || true
 
       - name: Build debug APK
         run: timeout 240s gradle assembleDebug --no-daemon --stacktrace
