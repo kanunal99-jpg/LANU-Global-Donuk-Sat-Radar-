@@ -56,7 +56,8 @@ class MainActivitySmokeTest {
     }
 
     @Test(timeout = 60_000)
-    fun persistedCrmCustomer_opensRealDetailWorkflow() = runBlocking {
+    fun persistedCrmCustomer_opensRealDetailWorkflow() {
+        runBlocking {
         val context = composeRule.activity
         val repository = LocalCrmRepository(LanuCrmDatabase.getInstance(context))
         repository.addBusinessAsCustomer(
@@ -86,5 +87,6 @@ class MainActivitySmokeTest {
         composeRule.onNodeWithText("CRM listesine dön").assertIsDisplayed()
         composeRule.onNodeWithText("Açık takipler").assertIsDisplayed()
         composeRule.onNodeWithText("Aktivite geçmişi").assertIsDisplayed()
+        }
     }
 }
