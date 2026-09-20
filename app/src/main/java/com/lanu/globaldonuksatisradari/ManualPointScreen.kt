@@ -60,7 +60,6 @@ fun ManualPointScreen(
                 Modifier.weight(1f),
                 label = { Text("Y / Enlem") },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             )
         }
         Button(
