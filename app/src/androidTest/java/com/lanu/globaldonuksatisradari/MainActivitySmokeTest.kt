@@ -48,12 +48,12 @@ class MainActivitySmokeTest {
     fun launch_showsCoreSalesRadarUi() {
         waitForText("LANU Global Donuk Satış Radarı").assertIsDisplayed()
         waitForText("Satış Radarı").assertExists()
-        waitForText("Gerçek kaynaktan ara").assertExists()
+        waitForTag("real_search_button").assertIsDisplayed()
     }
 
     @Test(timeout = 60_000)
     fun blankSearch_showsValidationMessage() {
-        waitForText("Gerçek kaynaktan ara").performClick()
+        waitForTag("real_search_button").performClick()
         waitForText("Arama için bir işletme/HORECA terimi yazın").assertExists()
     }
 
