@@ -10,6 +10,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performScrollTo
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.data.DataSourceDescriptor
@@ -96,14 +97,12 @@ class MainActivitySmokeTest {
 
         composeRule.waitUntil(15_000) {
             runCatching {
-                composeRule.onNodeWithTag("main_scroll").performScrollToNode(
-                    hasText("Smoke CRM Kafe"),
-                )
-                composeRule.onNodeWithText("Smoke CRM Kafe").assertIsDisplayed()
+                composeRule.onNodeWithText("Smoke CRM Kafe").assertExists()
                 true
             }.getOrDefault(false)
         }
-
+        composeRule.onNodeWithText("Smoke CRM Kafe").performScrollTo()
+        composeRule.onNodeWithText("Smoke CRM Kafe").assertIsDisplayed()
         composeRule.onNodeWithTag("crm_open_instrumentation-ui-crm-detail").assertIsDisplayed()
         composeRule.onNodeWithTag("crm_open_instrumentation-ui-crm-detail").performClick()
         composeRule.onNodeWithTag("crm_detail_back").assertIsDisplayed()
