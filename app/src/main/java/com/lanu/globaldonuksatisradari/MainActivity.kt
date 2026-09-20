@@ -45,20 +45,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         auth = SupabaseAuthClient(this)
         CrmSyncScheduler.schedule(this)
-        setContent {
-            val session by auth.session.collectAsState()
-            if (session == null) {
-                SupabaseAuthScreen(auth)
-            } else {
-                SalesRadarApp()
-            }
-        }
+        setContent { SalesRadarApp(auth) }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SalesRadarApp() {
+fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var selectedCity by remember { mutableStateOf(cities.first()) }
     var cityMenu by remember { mutableStateOf(false) }
     var districtMenu by remember { mutableStateOf(false) }
@@ -160,6 +153,9 @@ fun SalesRadarApp() {
                     item {
                         Text("Satış Radarı", style = MaterialTheme.typography.headlineSmall)
                         Text("Gerçek kaynaklı verilerle şehir → ilçe → işletme keşfi")
+                    }
+                    auth?.let { cloudAuth ->
+                        item { SupabaseSessionCard(cloudAuth) }
                     }
                     item {
                         OutlinedTextField(
