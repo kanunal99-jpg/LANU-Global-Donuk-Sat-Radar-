@@ -193,13 +193,13 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 if (selectedCrmCustomer != null) selectedCustomerId = null else goBack()
                             },
                             enabled = selectedCrmCustomer != null || backStack.isNotEmpty(),
-                        ) { Text("‹") }
+                        ) { Text("Geri") }
                     },
                     actions = {
                         IconButton(
                             onClick = { goForward() },
                             enabled = forwardStack.isNotEmpty(),
-                        ) { Text("›") }
+                        ) { Text("İleri") }
                     },
                 )
             },
