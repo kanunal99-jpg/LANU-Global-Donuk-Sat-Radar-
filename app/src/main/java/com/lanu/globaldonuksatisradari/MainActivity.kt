@@ -340,6 +340,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                     }
                     item {
                         Button(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("real_search_button"),
                             onClick = {
                                 error = null
                                 selectedBusiness = null
@@ -361,7 +364,6 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 }
                             },
                             enabled = !loading,
-                            modifier = Modifier.fillMaxWidth(),
                         ) { Text(if (loading) "Gerçek kaynak aranıyor…" else "Gerçek kaynaktan ara") }
                     }
                     item {
