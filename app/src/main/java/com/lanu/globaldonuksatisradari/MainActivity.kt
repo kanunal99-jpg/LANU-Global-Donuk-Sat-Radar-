@@ -22,6 +22,7 @@ import com.lanu.globaldonuksatisradari.crm.CrmSyncScheduler
 import com.lanu.globaldonuksatisradari.crm.SupabaseAuthClient
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
+import com.lanu.globaldonuksatisradari.crm.ProductCatalogRepository
 import com.lanu.globaldonuksatisradari.data.BusinessRepositoryFactory
 import com.lanu.globaldonuksatisradari.data.NominatimBusinessSource
 import com.lanu.globaldonuksatisradari.data.NominatimBusinessSourceAdapter
@@ -31,7 +32,7 @@ import kotlinx.coroutines.launch
 
 data class City(val name: String, val districts: List<String>)
 
-enum class AppSection { RADAR, MANUAL_POINT, ROUTINE }
+enum class AppSection { RADAR, MANUAL_POINT, ROUTINE, PRODUCT_CATALOG }
 
 private val cities = listOf(
     City("İstanbul", listOf("Kadıköy", "Beşiktaş", "Şişli", "Bakırköy", "Ataşehir")),
@@ -102,9 +103,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
             NominatimBusinessSourceAdapter(),
         )
     }
-    val localCrmRepository = remember(context) {
-        LocalCrmRepository(LanuCrmDatabase.getInstance(context))
-    }
+    val database = remember(context) { LanuCrmDatabase.getInstance(context) }
+    val localCrmRepository = remember(database) { LocalCrmRepository(database) }
+    val productCatalogRepository = remember(database) { ProductCatalogRepository(database) }
     val crmCustomers by localCrmRepository
         .observeCustomers(selectedCity.name)
         .collectAsState(initial = emptyList())
@@ -183,6 +184,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 selectedCrmCustomer != null -> "CRM Müşteri Detayı"
                                 section == AppSection.MANUAL_POINT -> "Manuel Nokta"
                                 section == AppSection.ROUTINE -> "Rutin Planlama"
+                                section == AppSection.PRODUCT_CATALOG -> "Ürün Kataloğu"
                                 else -> "LANU Global Donuk Satış Radarı"
                             },
                         )
@@ -223,6 +225,12 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         icon = { Text("⇄") },
                         label = { Text("Rutin") },
                     )
+                    NavigationBarItem(
+                        selected = section == AppSection.PRODUCT_CATALOG && selectedCrmCustomer == null,
+                        onClick = { selectedCustomerId = null; navigateTo(AppSection.PRODUCT_CATALOG) },
+                        icon = { Text("₺") },
+                        label = { Text("Ürünler") },
+                    )
                 }
             },
         ) { padding ->
@@ -245,6 +253,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             }
                             OutlinedButton(onClick = { navigateTo(AppSection.ROUTINE) }, modifier = Modifier.weight(1f)) {
                                 Text("Rutin oluştur")
+                            }
+                            OutlinedButton(onClick = { navigateTo(AppSection.PRODUCT_CATALOG) }, modifier = Modifier.fillMaxWidth()) {
+                                Text("Ürün kataloğu")
                             }
                         }
                     }
@@ -516,6 +527,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             selectedCity = selectedCity.name,
                             selectedDistrict = selectedDistrict,
                         )
+                    }
+                    AppSection.PRODUCT_CATALOG -> {
+                        ProductCatalogScreen(repository = productCatalogRepository)
                     }
                 }
             } else {
