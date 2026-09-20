@@ -88,6 +88,9 @@ class LocalCrmRepository(
             city = business.city,
             district = business.district,
             neighborhood = business.neighborhood,
+            address = business.address,
+            latitude = business.latitude,
+            longitude = business.longitude,
             stage = CrmStage.PROSPECT,
             ownerUserId = ownerUserId,
             createdAtEpochMs = timestamp,
@@ -96,6 +99,72 @@ class LocalCrmRepository(
             syncState = SyncState.PENDING_UPLOAD,
         )
 
+        database.customerDao().upsert(CrmMappings.toEntity(customer))
+        database.stageTransitionDao().insert(
+            CrmStageTransitionEntity(
+                id = idGenerator(),
+                customerId = customer.id,
+                fromStage = null,
+                toStage = CrmStage.PROSPECT.name,
+                changedAtEpochMs = timestamp,
+                changedByUserId = ownerUserId,
+                clientVersion = customer.version,
+            ),
+        )
+        database.syncOperationDao().insert(
+            SyncOperationEntity(
+                id = idGenerator(),
+                entityType = ENTITY_CUSTOMER,
+                entityId = customer.id,
+                operation = OP_CREATE,
+                payloadVersion = customer.version,
+                payloadJson = CrmPayloads.customer(customer),
+                createdAtEpochMs = timestamp,
+                attemptCount = 0,
+                lastError = null,
+            ),
+        )
+        customer
+    }
+
+
+    suspend fun addManualCustomerPoint(
+        businessName: String,
+        address: String,
+        city: String,
+        district: String,
+        neighborhood: String?,
+        latitude: Double,
+        longitude: Double,
+        ownerUserId: String? = null,
+    ): CrmCustomer = database.withTransaction {
+        require(businessName.trim().isNotEmpty()) { "Nokta adı boş olamaz." }
+        require(address.trim().isNotEmpty()) { "Adres boş olamaz." }
+        require(city.trim().isNotEmpty()) { "İl boş olamaz." }
+        require(district.trim().isNotEmpty()) { "İlçe boş olamaz." }
+        require(latitude in -90.0..90.0) { "Enlem (Y) geçersiz." }
+        require(longitude in -180.0..180.0) { "Boylam (X) geçersiz." }
+
+        val timestamp = now()
+        val id = idGenerator()
+        val sourceId = "manual:$id"
+        val customer = CrmCustomer(
+            id = id,
+            businessSourceId = sourceId,
+            businessName = businessName.trim(),
+            city = city.trim(),
+            district = district.trim(),
+            neighborhood = neighborhood?.trim()?.takeIf { it.isNotEmpty() },
+            address = address.trim(),
+            latitude = latitude,
+            longitude = longitude,
+            stage = CrmStage.PROSPECT,
+            ownerUserId = ownerUserId,
+            createdAtEpochMs = timestamp,
+            updatedAtEpochMs = timestamp,
+            version = 1L,
+            syncState = SyncState.PENDING_UPLOAD,
+        )
         database.customerDao().upsert(CrmMappings.toEntity(customer))
         database.stageTransitionDao().insert(
             CrmStageTransitionEntity(
@@ -476,6 +545,9 @@ private object CrmMappings {
         city = model.city,
         district = model.district,
         neighborhood = model.neighborhood,
+        address = model.address,
+        latitude = model.latitude,
+        longitude = model.longitude,
         stage = model.stage.name,
         ownerUserId = model.ownerUserId,
         notes = model.notes,
@@ -492,6 +564,9 @@ private object CrmMappings {
         city = entity.city,
         district = entity.district,
         neighborhood = entity.neighborhood,
+        address = entity.address,
+        latitude = entity.latitude,
+        longitude = entity.longitude,
         stage = CrmStage.valueOf(entity.stage),
         ownerUserId = entity.ownerUserId,
         notes = entity.notes,
@@ -623,6 +698,9 @@ private object CrmPayloads {
         put("city", customer.city)
         put("district", customer.district)
         put("neighborhood", customer.neighborhood)
+        put("address", customer.address)
+        customer.latitude?.let { put("latitude", it) } ?: put("latitude", JSONObject.NULL)
+        customer.longitude?.let { put("longitude", it) } ?: put("longitude", JSONObject.NULL)
         put("stage", customer.stage.name)
         put("ownerUserId", customer.ownerUserId)
         put("notes", customer.notes)
