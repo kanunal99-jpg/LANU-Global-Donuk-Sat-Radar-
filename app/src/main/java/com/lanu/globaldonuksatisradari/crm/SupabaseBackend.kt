@@ -6,6 +6,8 @@ import androidx.room.withTransaction
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -92,7 +94,7 @@ class SupabaseAuthClient(context: Context) {
     suspend fun signUp(email: String, password: String): Result<Unit> =
         authenticate("/auth/v1/signup", email, password)
 
-    private suspend fun authenticate(path: String, email: String, password: String): Result<Unit> = runCatching {
+    private suspend fun authenticate(path: String, email: String, password: String): Result<Unit> = withContext(Dispatchers.IO) { runCatching {
         require(email.contains("@")) { "Geçerli bir e-posta adresi girin." }
         require(password.length >= 8) { "Şifre en az 8 karakter olmalıdır." }
         val response = request(
@@ -112,9 +114,9 @@ class SupabaseAuthClient(context: Context) {
             )
         }
         saveSession(SupabaseSession(access, refresh, userId))
-    }
+    } }
 
-    suspend fun refresh(): Result<Unit> = runCatching {
+    suspend fun refresh(): Result<Unit> = withContext(Dispatchers.IO) { runCatching {
         val current = _session.value ?: error("Aktif oturum yok.")
         val response = request(
             "POST", "/auth/v1/token?grant_type=refresh_token",
@@ -129,9 +131,9 @@ class SupabaseAuthClient(context: Context) {
                 response.optJSONObject("user")?.optString("id").orEmpty().ifBlank { current.userId },
             ),
         )
-    }
+    } }
 
-    suspend fun ensureSession(): SupabaseSession? {
+    suspend fun ensureSession(): SupabaseSession? = withContext(Dispatchers.IO) {
         val current = _session.value ?: return null
         return runCatching {
             request("GET", "/auth/v1/user", accessToken = current.accessToken)
