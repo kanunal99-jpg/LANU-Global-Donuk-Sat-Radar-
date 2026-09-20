@@ -238,7 +238,15 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                 ) {
                     item {
                         Text("Satış Radarı", style = MaterialTheme.typography.headlineSmall)
-                        Text("Gerçek kaynaklı verilerle şehir → ilçe → işletme keşfi")
+                        Text("Gerçek kaynaklı verilerle şehir → ilçe → mahalle → işletme keşfi")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(onClick = { navigateTo(AppSection.MANUAL_POINT) }, modifier = Modifier.weight(1f)) {
+                                Text("Manuel nokta")
+                            }
+                            OutlinedButton(onClick = { navigateTo(AppSection.ROUTINE) }, modifier = Modifier.weight(1f)) {
+                                Text("Rutin oluştur")
+                            }
+                        }
                     }
                     item {
                         OutlinedTextField(
@@ -405,7 +413,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     },
                                 )
                                 Text(
-                                    "Backend yapılandırılana kadar kayıtlar yalnızca cihazda tutulur; uygulama bunları senkronlandı olarak işaretlemez.",
+                                    "İnternet veya oturum yoksa kayıtlar cihazda bekler; bağlantı sağlanınca WorkManager güvenli senkronizasyonu dener.",
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }
