@@ -39,8 +39,10 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun blankSearch_showsValidationMessage() {
-        composeRule.onNodeWithTag("main_scroll").performScrollToNode(hasText("Gerçek kaynaktan ara"))
+        val mainScroll = composeRule.onNodeWithTag("main_scroll")
+        mainScroll.performScrollToNode(hasText("Gerçek kaynaktan ara"))
         composeRule.onNodeWithText("Gerçek kaynaktan ara").performClick()
+        mainScroll.performScrollToNode(hasText("Arama için bir işletme/HORECA terimi yazın."))
         composeRule.onNodeWithText("Arama için bir işletme/HORECA terimi yazın.").assertIsDisplayed()
     }
 
