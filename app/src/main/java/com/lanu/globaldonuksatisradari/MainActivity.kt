@@ -164,9 +164,6 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         Text("Satış Radarı", style = MaterialTheme.typography.headlineSmall)
                         Text("Gerçek kaynaklı verilerle şehir → ilçe → işletme keşfi")
                     }
-                    auth?.let { cloudAuth ->
-                        item { SupabaseSessionCard(cloudAuth) }
-                    }
                     item {
                         OutlinedTextField(
                             value = query,
@@ -415,6 +412,10 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 Text("OSM kaydı bulunan işletmeler gösterilir. Çalışan sayısı, satış potansiyeli ve benzeri alanlar kaynakta yoksa uygulama bunları uydurmaz.")
                             }
                         }
+                    }
+
+                    auth?.let { cloudAuth ->
+                        item { SupabaseSessionCard(cloudAuth) }
                     }
                 }
             } else {
