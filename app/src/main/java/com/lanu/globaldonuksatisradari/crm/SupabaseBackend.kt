@@ -399,7 +399,6 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
     private fun customerRow(p: JSONObject, userId: String) = JSONObject().apply {
         put("id", p.getString("id"))
         put("owner_user_id", userId)
-        put("business_id", JSONObject.NULL)
         put("stage", p.getString("stage"))
         put("source", "osm")
         put("source_id", p.getString("businessSourceId"))
