@@ -67,7 +67,7 @@
 - [x] Navigasyon intent'i.
 - [ ] Gerçek cihazda rapor + navigasyon akışı.
 - [x] Android instrumentation ile uygulama açılışı ve temel arama doğrulaması.
-- [ ] Gerçek Global Donuk ürün kataloğu ile ürün eşleştirme.
+- [ ] Gerçek Global Donuk ürün kataloğu ile ürün eşleştirme; public SKU/gramaj/fiyat kataloğu bulunmadığı için ürün uydurulmadı.
 
 ## 4. Harita
 
@@ -88,8 +88,10 @@
 - [x] Offline-first yerel kayıt: önce cihaz veritabanı, sonra senkronizasyon kuyruğu.
 - [x] Aşama geçiş geçmişinin kalıcı tutulması.
 - [x] Conflict çözümleyici ve sürüm alanları.
-- [ ] Bulut senkronizasyonu.
-- [ ] Gerçek conflict çözümü için çok cihazlı backend testi.
+- [x] Supabase Auth + RLS korumalı CRM push/pull adapter kodlandı ve WorkManager'a bağlandı.
+- [ ] Gerçek kullanıcı hesabıyla uçtan uca bulut senkronizasyon saha testi.
+- [x] Sürüm tabanlı müşteri/next-action/opportunity merge kuralları kodlandı.
+- [ ] Gerçek conflict çözümü için iki gerçek cihaz + aynı kullanıcı backend testi.
 
 ## 6. Satış hunisi
 
@@ -106,7 +108,8 @@
 - [x] İlk KPI/funnel/filtre ekranı.
 - [x] Dashboard müşteri sayısını gerçek yerel CRM kayıtlarından okuyor.
 - [ ] Gerçek backend veri pipeline'ı.
-- [ ] İlçe → mahalle → işletme drill-down.
+- [x] İlçe → mevcut arama sonuçlarından mahalle drill-down filtresi.
+- [ ] Kalıcı kapsamlı mahalle veri kümesi ve backend drill-down.
 - [ ] Gerçek ziyaret/arama/teklif/sipariş metrikleri.
 - [ ] Gün/hafta/ay karşılaştırması.
 - [ ] Hedef/gerçekleşen.
@@ -129,7 +132,7 @@
 ## 9. Global Donuk ürün kataloğu
 
 - [x] HORECA kullanım senaryosu araştırıldı.
-- [ ] Güncel ürün/SKU/gramaj kataloğu doğrulanacak.
+- [ ] Gerçek Global Donuk ürün kataloğu doğrulanacak; yetkili SKU/gramaj/koli kaynağı bekleniyor.
 - [ ] Kaynak ve kullanım şartı doğrulanacak.
 - [ ] Ürün eşleştirme gerçek katalog geldikten sonra bağlanacak.
 - [x] Uydurma ürün/SKU/fiyat/gramaj kullanılmıyor.
