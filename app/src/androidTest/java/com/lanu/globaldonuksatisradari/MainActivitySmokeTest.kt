@@ -123,14 +123,29 @@ class MainActivitySmokeTest {
         composeRule.onNodeWithText("Manuel nokta").performClick()
         composeRule.onNodeWithText("Manuel Nokta Kaydı").assertIsDisplayed()
 
-        composeRule.onNodeWithText("Geri").performClick()
+        composeRule.onNodeWithText("← Geri").performClick()
         composeRule.onNodeWithText("Satış Radarı").assertIsDisplayed()
 
-        composeRule.onNodeWithText("İleri").performClick()
+        composeRule.onNodeWithText("İleri →").performClick()
         composeRule.onNodeWithText("Manuel Nokta Kaydı").assertIsDisplayed()
 
         composeRule.onNodeWithText("Rutin").performClick()
         composeRule.onNodeWithText("Yakınlık Bazlı Rutin").assertIsDisplayed()
     }
 
+}
+
+
+    @Test(timeout = 60_000)
+    fun productCatalog_canOpenAndAddManualPrice() {
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Ürün kataloğu").performClick()
+        composeRule.onNodeWithText("Ürün Kataloğu").assertIsDisplayed()
+        composeRule.onNodeWithTag("product_add_button").performClick()
+        composeRule.onNodeWithTag("product_name_input").performTextInput("Smoke Donuk Ürün")
+        composeRule.onNodeWithTag("product_price_input").performTextInput("125,50")
+        composeRule.onNodeWithTag("product_save_button").performClick()
+        composeRule.onNodeWithText("Smoke Donuk Ürün").assertIsDisplayed()
+        composeRule.onNodeWithText("125,50 TRY").assertIsDisplayed()
+    }
 }

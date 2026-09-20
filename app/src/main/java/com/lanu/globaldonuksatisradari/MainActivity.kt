@@ -2,6 +2,7 @@ package com.lanu.globaldonuksatisradari
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -31,7 +32,7 @@ import kotlinx.coroutines.launch
 
 data class City(val name: String, val districts: List<String>)
 
-enum class AppSection { RADAR, MANUAL_POINT, ROUTINE }
+enum class AppSection { RADAR, PRODUCT_CATALOG, MANUAL_POINT, ROUTINE }
 
 private val cities = listOf(
     City("İstanbul", listOf("Kadıköy", "Beşiktaş", "Şişli", "Bakırköy", "Ataşehir")),
@@ -81,6 +82,14 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         section = next
     }
 
+    BackHandler(enabled = selectedCustomerId != null || backStack.isNotEmpty()) {
+        if (selectedCustomerId != null) {
+            selectedCustomerId = null
+        } else {
+            goBack()
+        }
+    }
+
     var cityMenu by remember { mutableStateOf(false) }
     var districtMenu by remember { mutableStateOf(false) }
     var neighborhoodMenu by remember { mutableStateOf(false) }
@@ -104,6 +113,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     }
     val localCrmRepository = remember(context) {
         LocalCrmRepository(LanuCrmDatabase.getInstance(context))
+    }
+    val productCatalogRepository = remember(context) {
+        ProductCatalogRepository(context)
     }
     val crmCustomers by localCrmRepository
         .observeCustomers(selectedCity.name)
@@ -173,33 +185,24 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         )
     }
 
-    MaterialTheme {
+    LanuGlobalTheme {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = {
-                        Text(
-                            when {
-                                selectedCrmCustomer != null -> "CRM Müşteri Detayı"
-                                section == AppSection.MANUAL_POINT -> "Manuel Nokta"
-                                section == AppSection.ROUTINE -> "Rutin Planlama"
-                                else -> "LANU Global Donuk Satış Radarı"
-                            },
-                        )
-                    },
+                    title = { LanuBrandLockup(compact = true) },
                     navigationIcon = {
-                        IconButton(
+                        TextButton(
                             onClick = {
                                 if (selectedCrmCustomer != null) selectedCustomerId = null else goBack()
                             },
                             enabled = selectedCrmCustomer != null || backStack.isNotEmpty(),
-                        ) { Text("Geri") }
+                        ) { Text("← Geri") }
                     },
                     actions = {
-                        IconButton(
+                        TextButton(
                             onClick = { goForward() },
                             enabled = forwardStack.isNotEmpty(),
-                        ) { Text("İleri") }
+                        ) { Text("İleri →") }
                     },
                 )
             },
@@ -212,15 +215,21 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         label = { Text("Radar") },
                     )
                     NavigationBarItem(
+                        selected = section == AppSection.PRODUCT_CATALOG && selectedCrmCustomer == null,
+                        onClick = { selectedCustomerId = null; navigateTo(AppSection.PRODUCT_CATALOG) },
+                        icon = { Text("₺") },
+                        label = { Text("Ürünler") },
+                    )
+                    NavigationBarItem(
                         selected = section == AppSection.MANUAL_POINT && selectedCrmCustomer == null,
                         onClick = { selectedCustomerId = null; navigateTo(AppSection.MANUAL_POINT) },
                         icon = { Text("+") },
-                        label = { Text("Manuel Nokta") },
+                        label = { Text("Nokta") },
                     )
                     NavigationBarItem(
                         selected = section == AppSection.ROUTINE && selectedCrmCustomer == null,
                         onClick = { selectedCustomerId = null; navigateTo(AppSection.ROUTINE) },
-                        icon = { Text("⇄") },
+                        icon = { Text("↗") },
                         label = { Text("Rutin") },
                     )
                 }
@@ -237,6 +246,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     item {
+                        LanuHeroHeader()
+                        Text("LANU Global Donuk Satış Radarı", style = MaterialTheme.typography.titleLarge)
                         Text("Satış Radarı", style = MaterialTheme.typography.headlineSmall)
                         Text("Gerçek kaynaklı verilerle şehir → ilçe → mahalle → işletme keşfi")
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -245,6 +256,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             }
                             OutlinedButton(onClick = { navigateTo(AppSection.ROUTINE) }, modifier = Modifier.weight(1f)) {
                                 Text("Rutin oluştur")
+                            }
+                            OutlinedButton(onClick = { navigateTo(AppSection.PRODUCT_CATALOG) }, modifier = Modifier.weight(1f)) {
+                                Text("Ürün kataloğu")
                             }
                         }
                     }
@@ -502,6 +516,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         item { SupabaseSessionCard(cloudAuth) }
                     }
                 }
+                    }
+                    AppSection.PRODUCT_CATALOG -> {
+                        ProductCatalogScreen(repository = productCatalogRepository)
                     }
                     AppSection.MANUAL_POINT -> {
                         ManualPointScreen(
