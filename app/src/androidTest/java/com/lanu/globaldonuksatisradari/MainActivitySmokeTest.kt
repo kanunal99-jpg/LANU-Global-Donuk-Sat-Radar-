@@ -60,11 +60,19 @@ class MainActivitySmokeTest {
     @Test(timeout = 60_000)
     fun launch_schedulesCrmSyncWork() {
         val context = composeRule.activity
+        composeRule.waitUntil(30_000) {
+            runCatching {
+                WorkManager
+                    .getInstance(context)
+                    .getWorkInfosForUniqueWork("lanu_global_donuk_crm_sync")
+                    .get()
+                    .any { it.state.name == "ENQUEUED" || it.state.name == "RUNNING" }
+            }.getOrDefault(false)
+        }
         val infos = WorkManager
             .getInstance(context)
             .getWorkInfosForUniqueWork("lanu_global_donuk_crm_sync")
             .get()
-
         assertFalse("CRM sync work should be scheduled on Activity launch", infos.isEmpty())
         assertTrue(infos.first().state.name == "ENQUEUED" || infos.first().state.name == "RUNNING")
     }
