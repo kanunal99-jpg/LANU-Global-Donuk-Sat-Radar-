@@ -16,8 +16,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SyncOperationEntity::class,
         CrmNextActionEntity::class,
         CrmOpportunityEntity::class,
+        ProductCatalogEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 @TypeConverters(CrmRoomConverters::class)
@@ -28,6 +29,7 @@ abstract class LanuCrmDatabase : RoomDatabase() {
     abstract fun syncOperationDao(): SyncOperationDao
     abstract fun nextActionDao(): CrmNextActionDao
     abstract fun opportunityDao(): CrmOpportunityDao
+    abstract fun productCatalogDao(): ProductCatalogDao
 
     companion object {
         private val MIGRATION_2_3 = object : Migration(2, 3) {
@@ -102,6 +104,30 @@ abstract class LanuCrmDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS product_catalog (" +
+                        "id TEXT NOT NULL PRIMARY KEY, " +
+                        "name TEXT NOT NULL, " +
+                        "sku TEXT, " +
+                        "category TEXT, " +
+                        "weightGrams INTEGER, " +
+                        "packageQuantity INTEGER, " +
+                        "unit TEXT NOT NULL, " +
+                        "priceMinor INTEGER NOT NULL, " +
+                        "currency TEXT NOT NULL, " +
+                        "notes TEXT, " +
+                        "createdAtEpochMs INTEGER NOT NULL, " +
+                        "updatedAtEpochMs INTEGER NOT NULL" +
+                        ")",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_product_catalog_name ON product_catalog(name)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_product_catalog_sku ON product_catalog(sku)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_product_catalog_updatedAtEpochMs ON product_catalog(updatedAtEpochMs)")
+            }
+        }
+
         private val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE crm_customer ADD COLUMN dataQuality TEXT NOT NULL DEFAULT 'UNKNOWN'")
@@ -121,7 +147,7 @@ abstract class LanuCrmDatabase : RoomDatabase() {
                     LanuCrmDatabase::class.java,
                     "lanu_global_donuk_crm.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     .build()
                     .also { instance = it }
             }
