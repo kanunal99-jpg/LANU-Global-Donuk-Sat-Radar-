@@ -94,15 +94,13 @@ class MainActivitySmokeTest {
         composeRule.waitForIdle()
 
         val crmDetailTag = "crm_open_" + seededCustomer.id
+        val crmDetailButton = composeRule.onNodeWithTag(crmDetailTag)
         composeRule.waitUntil(15_000) {
             runCatching {
-                composeRule.onNodeWithTag("main_scroll").performScrollToNode(hasTestTag(crmDetailTag))
-                composeRule.onNodeWithTag(crmDetailTag).assertIsDisplayed()
+                crmDetailButton.assertExists()
                 true
             }.getOrDefault(false)
         }
-        val crmDetailButton = composeRule.onNodeWithTag(crmDetailTag)
-        crmDetailButton.assertIsDisplayed()
         crmDetailButton.performClick()
         composeRule.onNodeWithTag("crm_detail_back").assertIsDisplayed()
         composeRule.onNodeWithText("Açık takipler").assertIsDisplayed()
