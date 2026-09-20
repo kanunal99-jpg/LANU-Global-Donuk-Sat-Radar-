@@ -37,7 +37,7 @@ data class City(val name: String, val districts: List<String>)
 enum class AppSection { RADAR, PRODUCT_CATALOG, MANUAL_POINT, ROUTINE }
 
 private val cities = listOf(
-    City("İstanbul", listOf("Kadıköy", "Beşiktaş", "Şişli", "Bakırköy", "Ataşehir")),
+    City("İstanbul", IstanbulDistricts.all),
     City("Ankara", listOf("Çankaya", "Keçiören", "Yenimahalle")),
     City("İzmir", listOf("Konak", "Karşıyaka", "Bornova")),
     City("Bursa", listOf("Nilüfer", "Osmangazi")),
@@ -177,6 +177,13 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val regionActivities by regionActivitiesFlow.collectAsState(initial = emptyList())
     val regionNextActions by regionNextActionsFlow.collectAsState(initial = emptyList())
     val regionOpportunities by regionOpportunitiesFlow.collectAsState(initial = emptyList())
+    val visibleResults = remember(results, selectedDistrict, selectedNeighborhood) {
+        results.filter { business ->
+            (selectedDistrict == "Tümü" || business.district.equals(selectedDistrict, ignoreCase = true)) &&
+                (selectedNeighborhood == "Tümü" || business.neighborhood?.equals(selectedNeighborhood, ignoreCase = true) == true)
+        }
+    }
+
     val dashboardMetrics = remember(
         filteredCrmCustomers,
         regionActivities,
@@ -253,9 +260,16 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                 ) {
                     item {
                         LanuHeroHeader()
-                        Text("LANU Global Donuk Satış Radarı", style = MaterialTheme.typography.titleLarge)
-                        Text("Satış Radarı", style = MaterialTheme.typography.headlineSmall)
-                        Text("Gerçek kaynaklı verilerle şehir → ilçe → mahalle → işletme keşfi")
+                        Text("LANU Global Donuk Gıda", style = MaterialTheme.typography.titleLarge)
+                        Text("Satış & CRM Radarı", style = MaterialTheme.typography.headlineSmall)
+                        Text("Şehir → ilçe → mahalle → gerçek işletme keşfi", style = MaterialTheme.typography.bodyMedium)
+                        if (selectedCity.name == "İstanbul") {
+                            Text(
+                                "İstanbul’da 39 ilçe filtresi aktif.",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             OutlinedButton(onClick = { navigateTo(AppSection.MANUAL_POINT) }, modifier = Modifier.weight(1f)) {
                                 Text("Manuel nokta")
@@ -273,7 +287,10 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             value = query,
                             onValueChange = { query = it },
                             modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Örn. restoran, kafe, fırın") },
+                            label = { Text("İşletme / HORECA araması (isteğe bağlı)") },
+                            supportingText = {
+                                Text("Boş bırakırsanız restoran + kafe + fırın + fast food gerçek kaynak taraması yapılır.")
+                            },
                             singleLine = true,
                         )
                     }
@@ -299,18 +316,27 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                     }
                     item {
                         Box {
-                            OutlinedButton(onClick = { districtMenu = true }, modifier = Modifier.fillMaxWidth()) { Text("İlçe: $selectedDistrict") }
-                            DropdownMenu(expanded = districtMenu, onDismissRequest = { districtMenu = false }) {
-                                (listOf("Tümü") + selectedCity.districts).forEach { district ->
-                                    DropdownMenuItem(text = { Text(district) }, onClick = {
-                                        selectedDistrict = district
-                                        selectedNeighborhood = "Tümü"
-                                        districtMenu = false
-                                        results = emptyList()
-                                        selectedBusiness = null
-                                        selectedCustomerId = null
-                                        crmMessage = null
-                                    })
+                            OutlinedButton(
+                                onClick = { districtMenu = true },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("district_filter"),
+                            ) { Text("İlçe: $selectedDistrict") }
+                            DropdownMenu(
+                                expanded = districtMenu,
+                                onDismissRequest = { districtMenu = false },
+                            ) {
+                                LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
+                                    items(listOf("Tümü") + selectedCity.districts) { district ->
+                                        DropdownMenuItem(text = { Text(district) }, onClick = {
+                                            selectedDistrict = district
+                                            selectedNeighborhood = "Tümü"
+                                            districtMenu = false
+                                            selectedBusiness = null
+                                            selectedCustomerId = null
+                                            crmMessage = null
+                                        })
+                                    }
                                 }
                             }
                         }
@@ -339,32 +365,74 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         }
                     }
                     item {
-                        Button(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("real_search_button"),
-                            onClick = {
-                                error = null
-                                selectedBusiness = null
-                                selectedCustomerId = null
-                                crmMessage = null
-                                if (query.isBlank()) {
-                                    results = emptyList()
-                                    error = "Arama için bir işletme/HORECA terimi yazın."
-                                } else {
-                                    loading = true
-                                    scope.launch {
-                                        val outcome = runCatching {
-                                            repository.search(query = query, city = selectedCity.name, district = selectedDistrict.takeUnless { it == "Tümü" })
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text("Gerçek veri filtresi", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    selectedCity.name + " • " + selectedDistrict + " • " + selectedNeighborhood,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                                )
+                                Button(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("real_search_button"),
+                                    onClick = {
+                                        error = null
+                                        selectedBusiness = null
+                                        selectedCustomerId = null
+                                        crmMessage = null
+                                        loading = true
+                                        scope.launch {
+                                            val district = selectedDistrict.takeUnless { it == "Tümü" }
+                                            val terms = if (query.isBlank()) {
+                                                listOf("restaurant", "cafe", "bakery", "fast food")
+                                            } else {
+                                                listOf(query.trim())
+                                            }
+                                            val merged = linkedMapOf<String, VerifiedBusiness>()
+                                            val failures = mutableListOf<String>()
+                                            terms.forEach { term ->
+                                                runCatching {
+                                                    repository.search(
+                                                        query = term,
+                                                        city = selectedCity.name,
+                                                        district = district,
+                                                    )
+                                                }.onSuccess { records ->
+                                                    records.forEach { merged.putIfAbsent(it.id, it) }
+                                                }.onFailure { throwable ->
+                                                    failures += term + ": " + (throwable.message ?: "kaynak hatası")
+                                                }
+                                            }
+                                            results = merged.values.toList()
+                                            if (results.isEmpty()) {
+                                                error = if (failures.isNotEmpty()) {
+                                                    "Gerçek kaynak erişilemedi. " + failures.first()
+                                                } else {
+                                                    "Seçilen filtrelerde gerçek kaynakta kayıt bulunamadı."
+                                                }
+                                            } else if (failures.isNotEmpty()) {
+                                                crmMessage = results.size.toString() + " gerçek kayıt geldi; bazı kategori sorguları başarısız oldu."
+                                            }
+                                            loading = false
                                         }
-                                        results = outcome.getOrDefault(emptyList())
-                                        outcome.exceptionOrNull()?.let { error = "Kaynak erişim hatası: ${it.message ?: "bilinmeyen hata"}" }
-                                        loading = false
-                                    }
+                                    },
+                                    enabled = !loading,
+                                ) {
+                                    Text(
+                                        if (loading) "Gerçek veriler getiriliyor…" else "Seçime göre gerçek verileri getir",
+                                    )
                                 }
-                            },
-                            enabled = !loading,
-                        ) { Text(if (loading) "Gerçek kaynak aranıyor…" else "Gerçek kaynaktan ara") }
+                                Text(
+                                    "Kaynak: OpenStreetMap Nominatim. Sonuçlar gerçek OSM kayıtlarından gelir; Nominatim en iyi eşleşmeleri döndürür, eksiksiz ilçe işletme envanteri değildir.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
                     }
                     item {
                         Text("Kaynak: OpenStreetMap Nominatim • Kullanıcı tetiklemeli arama • Eksiksiz İstanbul işletme listesi değildir.", style = MaterialTheme.typography.bodySmall)
@@ -485,20 +553,20 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         Card(modifier = Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(16.dp)) {
                                 Text("Bulunan gerçek kayıtlar", style = MaterialTheme.typography.titleMedium)
-                                Text("${results.size} kayıt")
-                                if (results.isNotEmpty()) Text("Raporu açmak için bir işletme kaydına dokunun.", style = MaterialTheme.typography.bodySmall)
+                                Text(visibleResults.size.toString() + " kayıt")
+                                if (visibleResults.isNotEmpty()) Text("Raporu açmak için bir işletme kaydına dokunun.", style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
-                    if (results.isNotEmpty()) {
+                    if (visibleResults.isNotEmpty()) {
                         item {
                             Text("Harita", style = MaterialTheme.typography.titleMedium)
                             Text("Harita yalnızca bu kullanıcı aramasından dönen gerçek koordinatları gösterir; toplu şehir taraması yapmaz.", style = MaterialTheme.typography.bodySmall)
                         }
-                        item { BusinessMapPreview(businesses = results) }
+                        item { BusinessMapPreview(businesses = visibleResults) }
                         item { Text("© OpenStreetMap contributors · ODbL", style = MaterialTheme.typography.bodySmall) }
                     }
-                    items(results, key = { it.id }) { business ->
+                    items(visibleResults, key = { it.id }) { business ->
                         BusinessResultCard(
                             business = business,
                             onClick = { selectedBusiness = business },

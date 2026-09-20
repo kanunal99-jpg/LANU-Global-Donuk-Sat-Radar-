@@ -47,7 +47,7 @@ object NominatimQueryBuilder {
             city.trim(),
             "Türkiye",
         ).joinToString(", ")
-        return "$baseUrl?format=jsonv2&addressdetails=1&extratags=1&namedetails=1&limit=20&countrycodes=tr&q=${URLEncoder.encode(location, Charsets.UTF_8.name())}"
+        return "$baseUrl?format=jsonv2&addressdetails=1&extratags=1&namedetails=1&layer=poi&limit=40&countrycodes=tr&q=${URLEncoder.encode(location, Charsets.UTF_8.name())}"
     }
 }
 
@@ -68,7 +68,7 @@ class NominatimBusinessSourceAdapter(
             readTimeout = 20_000
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Accept-Language", "tr")
-            setRequestProperty("User-Agent", "LANU-Global-Donuk-Satis-Radari/0.1 (+https://github.com/kanunal99-jpg/LANU-Global-Donuk-Sat-Radar-)")
+            setRequestProperty("User-Agent", "LANU-Global-Donuk-Satis-Radari/0.2 (+https://github.com/kanunal99-jpg/LANU-Global-Donuk-Sat-Radar-)")
         }
         try {
             if (connection.responseCode !in 200..299) return@withContext emptyList()
