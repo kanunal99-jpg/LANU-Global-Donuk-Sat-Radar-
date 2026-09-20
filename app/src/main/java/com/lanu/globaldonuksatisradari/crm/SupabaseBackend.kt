@@ -91,8 +91,22 @@ class SupabaseAuthClient(context: Context) {
     suspend fun signIn(email: String, password: String): Result<Unit> =
         authenticate("/auth/v1/token?grant_type=password", email, password)
 
-    suspend fun signUp(email: String, password: String): Result<Unit> =
-        authenticate("/auth/v1/signup", email, password)
+    suspend fun signUp(email: String, password: String): Result<Unit> = withContext(Dispatchers.IO) { runCatching {
+        require(email.contains("@")) { "Geçerli bir e-posta adresi girin." }
+        require(password.length >= 8) { "Şifre en az 8 karakter olmalıdır." }
+        val response = request(
+            "POST", "/auth/v1/signup",
+            JSONObject().put("email", email.trim()).put("password", password).toString(),
+        )
+        val session = response.optJSONObject("session")
+        val user = response.optJSONObject("user")
+        val access = session?.optString("access_token").orEmpty()
+        val refresh = session?.optString("refresh_token").orEmpty()
+        val userId = user?.optString("id").orEmpty()
+        if (access.isNotBlank() && refresh.isNotBlank() && userId.isNotBlank()) {
+            saveSession(SupabaseSession(access, refresh, userId))
+        }
+    } }
 
     private suspend fun authenticate(path: String, email: String, password: String): Result<Unit> = withContext(Dispatchers.IO) { runCatching {
         require(email.contains("@")) { "Geçerli bir e-posta adresi girin." }
