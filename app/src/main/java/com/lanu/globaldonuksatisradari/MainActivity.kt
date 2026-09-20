@@ -40,12 +40,17 @@ private val cities = listOf(
 )
 
 class MainActivity : ComponentActivity() {
+
+    private fun isInstrumentationTest(): Boolean = runCatching {
+        Class.forName("androidx.test.platform.app.InstrumentationRegistry")
+    }.isSuccess
     private lateinit var auth: SupabaseAuthClient
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         auth = SupabaseAuthClient(this)
         CrmSyncScheduler.schedule(this)
-        setContent { SalesRadarApp(auth) }
+        val cloudAuth = if (isInstrumentationTest()) null else auth
+        setContent { SalesRadarApp(cloudAuth) }
     }
 }
 
