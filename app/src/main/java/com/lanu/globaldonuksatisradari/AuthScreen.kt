@@ -79,3 +79,76 @@ fun SupabaseAuthScreen(auth: SupabaseAuthClient) {
         message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
     }
 }
+
+
+@Composable
+fun SupabaseSessionCard(auth: SupabaseAuthClient) {
+    val session by auth.session.collectAsState()
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    androidx.compose.material3.Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (session == null) {
+                Text("Bulut CRM senkronizasyonu", style = MaterialTheme.typography.titleMedium)
+                Text("İnternet yokken Room üzerinde çalışmaya devam eder. Giriş yapınca bekleyen kayıtlar güvenli backend'e senkronize edilir.")
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("E-posta") },
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Şifre") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        enabled = !loading,
+                        onClick = {
+                            loading = true
+                            scope.launch {
+                                val result = auth.signIn(email, password)
+                                loading = false
+                                message = result.exceptionOrNull()?.message ?: "Bulut CRM bağlantısı kuruldu."
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) { Text(if (loading) "…" else "Giriş") }
+                    OutlinedButton(
+                        enabled = !loading,
+                        onClick = {
+                            loading = true
+                            scope.launch {
+                                val result = auth.signUp(email, password)
+                                loading = false
+                                message = result.exceptionOrNull()?.message
+                                    ?: "Kayıt tamamlandı; gerekiyorsa e-posta doğrulamasını yapın."
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Kayıt") }
+                }
+            } else {
+                Text("Bulut CRM: bağlı", style = MaterialTheme.typography.titleMedium)
+                Text("Kullanıcı: " + session.userId)
+                OutlinedButton(
+                    onClick = { auth.signOut(); message = "Oturum kapatıldı. Yerel CRM verileri cihazda kalır." },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Çıkış yap") }
+            }
+            message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        }
+    }
+}
