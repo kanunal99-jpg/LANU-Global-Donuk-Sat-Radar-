@@ -100,6 +100,15 @@ fun CrmCustomerDetailScreen(
                 Text(customer.businessName, style = MaterialTheme.typography.headlineSmall)
                 Text("${customer.city} • ${customer.district}${customer.neighborhood?.let { " • ${it}" } ?: ""}")
                 Text("CRM aşaması: ${stageLabel(customer.stage)}")
+                customer.address?.let { Text("Adres: " + it, style = MaterialTheme.typography.bodySmall) }
+                if (customer.latitude != null && customer.longitude != null) {
+                    Text(
+                        "Koordinat: X %.6f • Y %.6f".format(customer.longitude, customer.latitude),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                } else {
+                    Text("Koordinat: kayıtlı değil", style = MaterialTheme.typography.bodySmall)
+                }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { stageMenu = true }) {
