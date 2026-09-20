@@ -19,6 +19,7 @@ import com.lanu.globaldonuksatisradari.crm.CrmNextActionType
 import com.lanu.globaldonuksatisradari.crm.CrmOpportunityStatus
 import com.lanu.globaldonuksatisradari.crm.CrmStage
 import com.lanu.globaldonuksatisradari.crm.CrmSyncScheduler
+import com.lanu.globaldonuksatisradari.crm.SupabaseAuthClient
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.data.BusinessRepositoryFactory
@@ -39,10 +40,19 @@ private val cities = listOf(
 )
 
 class MainActivity : ComponentActivity() {
+    private lateinit var auth: SupabaseAuthClient
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        auth = SupabaseAuthClient(this)
         CrmSyncScheduler.schedule(this)
-        setContent { SalesRadarApp() }
+        setContent {
+            val session by auth.session.collectAsState()
+            if (session == null) {
+                SupabaseAuthScreen(auth)
+            } else {
+                SalesRadarApp()
+            }
+        }
     }
 }
 
