@@ -9,6 +9,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.data.DataSourceDescriptor
@@ -25,6 +26,18 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 @RunWith(AndroidJUnit4::class)
 class MainActivitySmokeTest {
 
+    private fun waitForText(text: String, timeoutMs: Long = 30_000): SemanticsNodeInteraction {
+        val node = composeRule.onNodeWithText(text)
+        composeRule.waitUntil(timeoutMs) { runCatching { node.assertExists(); true }.getOrDefault(false) }
+        return node
+    }
+
+    private fun waitForTag(tag: String, timeoutMs: Long = 30_000): SemanticsNodeInteraction {
+        val node = composeRule.onNodeWithTag(tag)
+        composeRule.waitUntil(timeoutMs) { runCatching { node.assertExists(); true }.getOrDefault(false) }
+        return node
+    }
+
     @JvmField
     @org.junit.Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
@@ -32,15 +45,15 @@ class MainActivitySmokeTest {
     @Test(timeout = 60_000)
     fun launch_showsCoreSalesRadarUi() {
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("LANU Global Donuk Satış Radarı").assertIsDisplayed()
-        composeRule.onNodeWithText("Satış Radarı").assertIsDisplayed()
-        composeRule.onNodeWithText("Gerçek kaynaktan ara").assertIsDisplayed()
+        waitForText("LANU Global Donuk Satış Radarı").assertIsDisplayed()
+        waitForText("Satış Radarı").assertExists()
+        waitForText("Gerçek kaynaktan ara").assertExists()
     }
 
     @Test(timeout = 60_000)
     fun blankSearch_showsValidationMessage() {
-        composeRule.onNodeWithText("Gerçek kaynaktan ara").performClick()
-        composeRule.onNodeWithText("Arama için bir işletme/HORECA terimi yazın.").assertExists()
+        waitForText("Gerçek kaynaktan ara").performClick()
+        waitForText("Arama için bir işletme/HORECA terimi yazın").assertExists()
     }
 
     @Test(timeout = 60_000)
@@ -95,13 +108,7 @@ class MainActivitySmokeTest {
         composeRule.waitForIdle()
 
         val crmDetailTag = "crm_open_" + seededCustomer.id
-        val crmDetailButton = composeRule.onNodeWithTag(crmDetailTag)
-        composeRule.waitUntil(15_000) {
-            runCatching {
-                crmDetailButton.assertExists()
-                true
-            }.getOrDefault(false)
-        }
+        val crmDetailButton = waitForTag(crmDetailTag)
         crmDetailButton.performClick()
         composeRule.onNodeWithTag("crm_detail_back").assertIsDisplayed()
         composeRule.onNodeWithText("Açık takipler").assertExists()
@@ -112,29 +119,29 @@ class MainActivitySmokeTest {
     fun navigationBackForwardAndNewSections_areReachable() {
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithText("Manuel nokta").performClick()
-        composeRule.onNodeWithText("Manuel Nokta Kaydı").assertIsDisplayed()
+        waitForText("Manuel nokta").performClick()
+        waitForText("Manuel Nokta Kaydı").assertIsDisplayed()
 
-        composeRule.onNodeWithText("← Geri").performClick()
-        composeRule.onNodeWithText("Satış Radarı").assertIsDisplayed()
+        waitForText("← Geri").performClick()
+        waitForText("Satış Radarı").assertExists()
 
-        composeRule.onNodeWithText("İleri →").performClick()
-        composeRule.onNodeWithText("Manuel Nokta Kaydı").assertIsDisplayed()
+        waitForText("İleri →").performClick()
+        waitForText("Manuel Nokta Kaydı").assertExists()
 
-        composeRule.onNodeWithText("Rutin").performClick()
-        composeRule.onNodeWithText("Yakınlık Bazlı Rutin").assertIsDisplayed()
+        waitForText("Rutin").performClick()
+        waitForText("Yakınlık Bazlı Rutin").assertIsDisplayed()
     }
 
     @Test(timeout = 60_000)
     fun productCatalog_canOpenAndAddManualPrice() {
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("Ürün kataloğu").performClick()
-        composeRule.onNodeWithText("Ürün Kataloğu").assertIsDisplayed()
-        composeRule.onNodeWithTag("product_add_button").performClick()
-        composeRule.onNodeWithTag("product_name_input").performTextInput("Smoke Donuk Ürün")
-        composeRule.onNodeWithTag("product_price_input").performTextInput("125,50")
-        composeRule.onNodeWithTag("product_save_button").performClick()
-        composeRule.onNodeWithText("Smoke Donuk Ürün").assertIsDisplayed()
-        composeRule.onNodeWithText("125,50 TRY").assertIsDisplayed()
+        waitForText("Ürün kataloğu").performClick()
+        waitForText("Ürün Kataloğu").assertIsDisplayed()
+        waitForTag("product_add_button").performClick()
+        waitForTag("product_name_input").performTextInput("Smoke Donuk Ürün")
+        waitForTag("product_price_input").performTextInput("125,50")
+        waitForTag("product_save_button").performClick()
+        waitForText("Smoke Donuk Ürün").assertExists()
+        waitForText("125,50 TRY").assertExists()
     }
 }
