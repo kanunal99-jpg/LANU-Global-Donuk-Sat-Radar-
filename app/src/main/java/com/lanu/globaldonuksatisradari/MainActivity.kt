@@ -82,14 +82,6 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         section = next
     }
 
-    BackHandler(enabled = selectedCustomerId != null || backStack.isNotEmpty()) {
-        if (selectedCustomerId != null) {
-            selectedCustomerId = null
-        } else {
-            goBack()
-        }
-    }
-
     var cityMenu by remember { mutableStateOf(false) }
     var districtMenu by remember { mutableStateOf(false) }
     var neighborhoodMenu by remember { mutableStateOf(false) }
@@ -99,6 +91,15 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var results by remember { mutableStateOf<List<VerifiedBusiness>>(emptyList()) }
     var selectedBusiness by remember { mutableStateOf<VerifiedBusiness?>(null) }
     var selectedCustomerId by remember { mutableStateOf<String?>(null) }
+
+    BackHandler(enabled = selectedCustomerId != null || backStack.isNotEmpty()) {
+        if (selectedCustomerId != null) {
+            selectedCustomerId = null
+        } else {
+            goBack()
+        }
+    }
+
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var crmMessage by remember { mutableStateOf<String?>(null) }
