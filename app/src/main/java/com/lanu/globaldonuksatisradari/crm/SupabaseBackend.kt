@@ -234,6 +234,14 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                 LocalCrmRepository.ENTITY_OPPORTUNITY -> opportunityRow(payload, session.userId)
                 else -> error("unreachable")
             }
+            val remoteVersion = fetchRemoteVersion(table, payload.optString("id"), operation.entityType, session)
+            if (remoteVersion != null && operation.entityType != LocalCrmRepository.ENTITY_ACTIVITY &&
+                remoteVersion > operation.payloadVersion
+            ) {
+                return RemoteSyncResult.Conflict(
+                    "Uzak kayıt sürümü daha yeni: remote=" + remoteVersion + " local=" + operation.payloadVersion,
+                )
+            }
             auth.rawRequest("POST", "/rest/v1/" + table + "?on_conflict=id", JSONArray().put(row).toString(), session.accessToken)
             RemoteSyncResult.Success
         }.getOrElse { error ->
@@ -247,6 +255,31 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                 else -> RemoteSyncResult.RetryableFailure(error.message ?: "Bilinmeyen ağ hatası")
             }
         }
+    }
+
+    private fun fetchRemoteVersion(
+        table: String,
+        id: String,
+        entityType: String,
+        session: SupabaseSession,
+    ): Long? {
+        if (id.isBlank()) return null
+        val column = when (entityType) {
+            LocalCrmRepository.ENTITY_CUSTOMER -> "sync_version"
+            LocalCrmRepository.ENTITY_NEXT_ACTION,
+            LocalCrmRepository.ENTITY_OPPORTUNITY -> "version"
+            else -> "id"
+        }
+        if (column == "id") return null
+        val text = auth.rawRequest(
+            "GET",
+            "/rest/v1/" + table + "?select=" + column + "&id=eq." + id + "&limit=1",
+            null,
+            session.accessToken,
+        )
+        val array = JSONArray(text)
+        if (array.length() == 0) return null
+        return array.getJSONObject(0).optLong(column, 1L)
     }
 
     override suspend fun pullInto(database: LanuCrmDatabase): RemotePullResult {
