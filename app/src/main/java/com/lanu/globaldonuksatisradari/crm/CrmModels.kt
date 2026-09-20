@@ -53,6 +53,9 @@ data class CrmCustomer(
     val city: String,
     val district: String,
     val neighborhood: String?,
+    val address: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
     val stage: CrmStage = CrmStage.PROSPECT,
     val ownerUserId: String? = null,
     val notes: String? = null,
@@ -121,5 +124,75 @@ object CrmStageRules {
         CrmStage.ORDER -> to in setOf(CrmStage.ACTIVE_CUSTOMER, CrmStage.LOST)
         CrmStage.ACTIVE_CUSTOMER -> to == CrmStage.LOST
         CrmStage.LOST -> to == CrmStage.PROSPECT
+    }
+}
+
+
+data class RouteStop(
+    val customer: CrmCustomer,
+    val order: Int,
+    val distanceFromPreviousKm: Double,
+    val cumulativeDistanceKm: Double,
+)
+
+object CrmRoutePlanner {
+    fun plan(
+        customers: List<CrmCustomer>,
+        startCustomerId: String? = null,
+    ): List<RouteStop> {
+        val candidates = customers.filter { it.latitude != null && it.longitude != null }
+        if (candidates.isEmpty()) return emptyList()
+        val remaining = candidates.toMutableList()
+        val ordered = mutableListOf<CrmCustomer>()
+        var current = startCustomerId?.let { id -> remaining.firstOrNull { it.id == id } }
+            ?: remaining.minWithOrNull(compareBy<CrmCustomer>({ it.latitude }, { it.longitude }, { it.businessName }))
+            ?: return emptyList()
+        ordered += current
+        remaining.remove(current)
+
+        while (remaining.isNotEmpty()) {
+            val next = remaining.minByOrNull { candidate ->
+                distanceKm(
+                    current.latitude!!,
+                    current.longitude!!,
+                    candidate.latitude!!,
+                    candidate.longitude!!,
+                )
+            } ?: break
+            ordered += next
+            remaining.remove(next)
+            current = next
+        }
+
+        var total = 0.0
+        return ordered.mapIndexed { index, customer ->
+            val previous = ordered.getOrNull(index - 1)
+            val segment = if (previous == null) 0.0 else {
+                distanceKm(
+                    previous.latitude!!,
+                    previous.longitude!!,
+                    customer.latitude!!,
+                    customer.longitude!!,
+                )
+            }
+            total += segment
+            RouteStop(
+                customer = customer,
+                order = index + 1,
+                distanceFromPreviousKm = segment,
+                cumulativeDistanceKm = total,
+            )
+        }
+    }
+
+    fun distanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val earthRadiusKm = 6371.0088
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = kotlin.math.sin(dLat / 2) * kotlin.math.sin(dLat / 2) +
+            kotlin.math.cos(Math.toRadians(lat1)) *
+            kotlin.math.cos(Math.toRadians(lat2)) *
+            kotlin.math.sin(dLon / 2) * kotlin.math.sin(dLon / 2)
+        return 2 * earthRadiusKm * kotlin.math.asin(kotlin.math.sqrt(a))
     }
 }
