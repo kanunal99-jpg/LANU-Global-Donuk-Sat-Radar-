@@ -324,6 +324,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                                 address = p.optString("address").takeIf(String::isNotBlank),
                                 latitude = p.optDouble("latitude").takeIf { !p.isNull("latitude") },
                                 longitude = p.optDouble("longitude").takeIf { !p.isNull("longitude") },
+                                dataQuality = runCatching { DataQuality.valueOf(p.optString("data_quality", "UNKNOWN")) }.getOrDefault(DataQuality.UNKNOWN),
                                 stage = p.optString("stage", CrmStage.PROSPECT.name),
                                 ownerUserId = session.userId,
                                 notes = p.optString("notes").takeIf(String::isNotBlank),
@@ -461,6 +462,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
         put("address", p.optString("address").takeIf(String::isNotBlank) ?: JSONObject.NULL)
         put("latitude", if (p.isNull("latitude")) JSONObject.NULL else p.getDouble("latitude"))
         put("longitude", if (p.isNull("longitude")) JSONObject.NULL else p.getDouble("longitude"))
+        put("data_quality", p.optString("dataQuality").ifBlank { "UNKNOWN" })
         put("notes", p.optString("notes").takeIf(String::isNotBlank) ?: JSONObject.NULL)
         put("sync_version", p.optLong("version", 1L))
     }
