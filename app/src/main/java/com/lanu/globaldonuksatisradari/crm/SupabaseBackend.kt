@@ -23,7 +23,7 @@ import javax.crypto.spec.GCMParameterSpec
 
 object SupabaseConfig {
     const val URL = "https://jolfbmwxmsamzqtxassg.supabase.co"
-    const val PUBLISHABLE_KEY = "sb_publishable_8kdSesbgIiI3V8TjmcZA_4FP8hTkM"
+    const val PUBLISHABLE_KEY = "sb_publishable_8kdSesbgIiI3V8TjmcMcZA_4FP8hTkM"
 }
 
 data class SupabaseSession(val accessToken: String, val refreshToken: String, val userId: String)
