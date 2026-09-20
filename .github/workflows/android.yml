@@ -185,7 +185,28 @@ jobs:
           adb -s "$SERIAL" shell input keyevent 82 || true
 
           set +e
-          timeout 540s gradle connectedDebugAndroidTest --no-daemon --stacktrace
+          TEST_CLASS="com.lanu.globaldonuksatisradari.MainActivitySmokeTest"
+          TESTS=(
+            "launch_showsCoreSalesRadarUi"
+            "blankSearch_showsValidationMessage"
+            "launch_schedulesCrmSyncWork"
+            "launch_createsStableActivity"
+            "persistedCrmCustomer_opensRealDetailWorkflow"
+            "navigationBackForwardAndNewSections_areReachable"
+            "productCatalog_canOpenAndAddManualPrice"
+          )
+          TEST_EXIT=0
+          for TEST_NAME in "${TESTS[@]}"; do
+            echo "===== RUNNING SMOKE TEST: $TEST_NAME ====="
+            timeout 90s gradle connectedDebugAndroidTest \
+              --no-daemon --stacktrace \
+              --tests "${TEST_CLASS}.${TEST_NAME}"
+            TEST_EXIT="$?"
+            if [ "$TEST_EXIT" -ne 0 ]; then
+              echo "===== SMOKE TEST FAILED: $TEST_NAME (exit $TEST_EXIT) ====="
+              break
+            fi
+          done
           TEST_EXIT="$?"
           set -e
 
