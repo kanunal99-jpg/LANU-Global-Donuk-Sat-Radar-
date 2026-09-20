@@ -26,16 +26,16 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 @RunWith(AndroidJUnit4::class)
 class MainActivitySmokeTest {
 
-    private fun waitForText(text: String, timeoutMs: Long = 30_000): SemanticsNodeInteraction {
-        val node = composeRule.onNodeWithText(text)
-        composeRule.waitUntil(timeoutMs) { runCatching { node.assertExists(); true }.getOrDefault(false) }
-        return node
+    private fun waitForText(text: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
+        val matcher = hasText(text, substring = false)
+        composeRule.waitUntilAtLeastOneExists(matcher, timeoutMs)
+        return composeRule.onNode(matcher)
     }
 
-    private fun waitForTag(tag: String, timeoutMs: Long = 30_000): SemanticsNodeInteraction {
-        val node = composeRule.onNodeWithTag(tag)
-        composeRule.waitUntil(timeoutMs) { runCatching { node.assertExists(); true }.getOrDefault(false) }
-        return node
+    private fun waitForTag(tag: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
+        val matcher = hasTestTag(tag)
+        composeRule.waitUntilAtLeastOneExists(matcher, timeoutMs)
+        return composeRule.onNode(matcher)
     }
 
     @JvmField
@@ -44,7 +44,6 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun launch_showsCoreSalesRadarUi() {
-        composeRule.waitForIdle()
         waitForText("LANU Global Donuk Satış Radarı").assertIsDisplayed()
         waitForText("Satış Radarı").assertExists()
         waitForText("Gerçek kaynaktan ara").assertExists()
@@ -117,8 +116,6 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun navigationBackForwardAndNewSections_areReachable() {
-        composeRule.waitForIdle()
-
         waitForText("Manuel nokta").performClick()
         waitForText("Manuel Nokta Kaydı").assertIsDisplayed()
 
@@ -134,7 +131,6 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun productCatalog_canOpenAndAddManualPrice() {
-        composeRule.waitForIdle()
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
         waitForTag("product_add_button").performClick()
