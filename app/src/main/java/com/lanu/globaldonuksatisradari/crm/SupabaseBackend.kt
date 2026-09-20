@@ -357,7 +357,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                     val id = p.getString("id")
                     val remoteVersion = p.optLong("version", 1L)
                     val local = database.nextActionDao().findById(id)
-                    if (local == null || remoteVersion >= local.version) {
+                    if (local == null || remoteVersion > local.version || local.syncState == SyncState.SYNCED.name) {
                         database.nextActionDao().upsert(
                             CrmNextActionEntity(
                                 id = id,
@@ -380,7 +380,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                     val id = p.getString("id")
                     val local = database.opportunityDao().findById(id)
                     val remoteVersion = p.optLong("version", 1L)
-                    if (local == null || remoteVersion >= local.version) {
+                    if (local == null || remoteVersion > local.version || local.syncState == SyncState.SYNCED.name) {
                         val amountMinor = p.optString("amount").takeIf(String::isNotBlank)?.let {
                             runCatching { BigDecimal(it).movePointRight(2).longValueExact() }.getOrNull()
                         }
