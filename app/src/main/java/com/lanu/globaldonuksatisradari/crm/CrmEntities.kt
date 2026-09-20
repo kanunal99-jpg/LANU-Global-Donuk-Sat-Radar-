@@ -24,6 +24,7 @@ data class CrmCustomerEntity(
     val address: String?,
     val latitude: Double?,
     val longitude: Double?,
+    val dataQuality: String,
     val stage: String,
     val ownerUserId: String?,
     val notes: String?,
