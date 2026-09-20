@@ -2,6 +2,7 @@ package com.lanu.globaldonuksatisradari
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasTestTag
 import androidx.work.WorkManager
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -38,6 +39,7 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun blankSearch_showsValidationMessage() {
+        composeRule.onNodeWithTag("main_scroll").performScrollToNode(hasText("Gerçek kaynaktan ara"))
         composeRule.onNodeWithText("Gerçek kaynaktan ara").performClick()
         composeRule.onNodeWithText("Arama için bir işletme/HORECA terimi yazın.").assertIsDisplayed()
     }
@@ -94,6 +96,8 @@ class MainActivitySmokeTest {
         composeRule.waitForIdle()
 
         val crmDetailTag = "crm_open_" + seededCustomer.id
+        val mainScroll = composeRule.onNodeWithTag("main_scroll")
+        mainScroll.performScrollToNode(hasTestTag(crmDetailTag))
         val crmDetailButton = composeRule.onNodeWithTag(crmDetailTag)
         composeRule.waitUntil(15_000) {
             runCatching {
@@ -109,4 +113,22 @@ class MainActivitySmokeTest {
         detailScroll.performScrollToNode(hasText("Aktivite geçmişi"))
         composeRule.onNodeWithText("Aktivite geçmişi").assertIsDisplayed()
     }
+
+    @Test(timeout = 60_000)
+    fun navigationBackForwardAndNewSections_areReachable() {
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Manuel nokta").performClick()
+        composeRule.onNodeWithText("Manuel Nokta Kaydı").assertIsDisplayed()
+
+        composeRule.onNodeWithText("Geri").performClick()
+        composeRule.onNodeWithText("Satış Radarı").assertIsDisplayed()
+
+        composeRule.onNodeWithText("İleri").performClick()
+        composeRule.onNodeWithText("Manuel Nokta Kaydı").assertIsDisplayed()
+
+        composeRule.onNodeWithText("Rutin").performClick()
+        composeRule.onNodeWithText("Yakınlık Bazlı Rutin").assertIsDisplayed()
+    }
+
 }
