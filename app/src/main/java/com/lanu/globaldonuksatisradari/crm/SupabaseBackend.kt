@@ -2,6 +2,7 @@ package com.lanu.globaldonuksatisradari.crm
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.room.withTransaction
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -285,7 +286,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                 activities.forEach { p ->
                     val id = p.getString("id")
                     val local = database.activityDao().findById(id)
-                    if (local == null || local.syncState == SyncState.SYNCED.name) {
+                    if (local == null || remoteVersion >= local.version) {
                         database.activityDao().upsert(
                             CrmActivityEntity(
                                 id = id,
@@ -328,7 +329,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                 opportunities.forEach { p ->
                     val id = p.getString("id")
                     val local = database.opportunityDao().findById(id)
-                    val remoteVersion = local?.version?.coerceAtLeast(1L) ?: 1L
+                    val remoteVersion = p.optLong("version", 1L)
                     if (local == null || local.syncState == SyncState.SYNCED.name) {
                         val amountMinor = p.optString("amount").takeIf(String::isNotBlank)?.let {
                             runCatching { BigDecimal(it).movePointRight(2).longValueExact() }.getOrNull()
@@ -445,6 +446,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
         put("note", p.optString("notes").takeIf(String::isNotBlank) ?: JSONObject.NULL)
         put("created_at", epochToIso(p.getLong("createdAtEpochMs")))
         put("updated_at", epochToIso(p.getLong("updatedAtEpochMs")))
+        put("version", p.optLong("version", 1L))
     }
 
     private fun epochToIso(epochMs: Long): String = java.time.Instant.ofEpochMilli(epochMs).toString()
