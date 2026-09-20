@@ -133,9 +133,6 @@ class MainActivitySmokeTest {
         composeRule.onNodeWithText("Yakınlık Bazlı Rutin").assertIsDisplayed()
     }
 
-}
-
-
     @Test(timeout = 60_000)
     fun productCatalog_canOpenAndAddManualPrice() {
         composeRule.waitForIdle()
