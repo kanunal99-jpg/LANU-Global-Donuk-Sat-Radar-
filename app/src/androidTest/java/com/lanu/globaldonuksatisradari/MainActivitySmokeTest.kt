@@ -2,6 +2,7 @@ package com.lanu.globaldonuksatisradari
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -13,7 +14,6 @@ import com.lanu.globaldonuksatisradari.data.DataSourceDescriptor
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
-import androidx.work.WorkManager
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -91,6 +91,13 @@ class MainActivitySmokeTest {
 
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
+
+        composeRule.waitUntil(10_000) {
+            composeRule.onAllNodesWithTag("crm_open_instrumentation-ui-crm-detail")
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+
         composeRule.onNodeWithTag("main_scroll").performScrollToNode(
             hasTestTag("crm_open_instrumentation-ui-crm-detail"),
         )
