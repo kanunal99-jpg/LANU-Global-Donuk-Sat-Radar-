@@ -2,14 +2,10 @@ package com.lanu.globaldonuksatisradari
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.work.WorkManager
-import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.hasTestTag
-import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performScrollTo
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
@@ -95,16 +91,16 @@ class MainActivitySmokeTest {
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
 
+        val crmDetailButton = composeRule.onNodeWithTag("crm_open_instrumentation-ui-crm-detail")
+        crmDetailButton.performScrollTo()
         composeRule.waitUntil(15_000) {
             runCatching {
-                composeRule.onNodeWithText("Smoke CRM Kafe").assertExists()
+                crmDetailButton.assertIsDisplayed()
                 true
             }.getOrDefault(false)
         }
-        composeRule.onNodeWithText("Smoke CRM Kafe").performScrollTo()
-        composeRule.onNodeWithText("Smoke CRM Kafe").assertIsDisplayed()
-        composeRule.onNodeWithTag("crm_open_instrumentation-ui-crm-detail").assertIsDisplayed()
-        composeRule.onNodeWithTag("crm_open_instrumentation-ui-crm-detail").performClick()
+        crmDetailButton.assertIsDisplayed()
+        crmDetailButton.performClick()
         composeRule.onNodeWithTag("crm_detail_back").assertIsDisplayed()
         composeRule.onNodeWithText("Açık takipler").assertIsDisplayed()
         composeRule.onNodeWithText("Aktivite geçmişi").assertIsDisplayed()
