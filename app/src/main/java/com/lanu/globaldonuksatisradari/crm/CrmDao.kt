@@ -44,6 +44,9 @@ interface CrmActivityDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(activity: CrmActivityEntity)
 
+    @Query("SELECT * FROM crm_activity WHERE id = :id LIMIT 1")
+    suspend fun findById(id: String): CrmActivityEntity?
+
     @Query("SELECT * FROM crm_activity WHERE customerId = :customerId ORDER BY occurredAtEpochMs DESC")
     suspend fun findForCustomer(customerId: String): List<CrmActivityEntity>
 
