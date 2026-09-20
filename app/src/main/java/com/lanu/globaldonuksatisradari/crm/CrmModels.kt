@@ -1,6 +1,13 @@
 package com.lanu.globaldonuksatisradari.crm
 
 /** CRM pipeline is explicit so dashboard values can be derived from persisted state later. */
+enum class DataQuality {
+    OBSERVED,
+    ESTIMATED,
+    USER_ENTERED,
+    UNKNOWN,
+}
+
 enum class CrmStage {
     PROSPECT,
     VISIT,
@@ -56,6 +63,7 @@ data class CrmCustomer(
     val address: String? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val dataQuality: DataQuality = DataQuality.UNKNOWN,
     val stage: CrmStage = CrmStage.PROSPECT,
     val ownerUserId: String? = null,
     val notes: String? = null,
