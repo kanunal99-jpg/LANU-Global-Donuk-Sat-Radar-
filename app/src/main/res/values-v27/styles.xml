@@ -1,5 +1,5 @@
 <resources>
-    <style name="Theme.LanuGlobal">
+    <style name="Theme.LanuGlobal" parent="@android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>
