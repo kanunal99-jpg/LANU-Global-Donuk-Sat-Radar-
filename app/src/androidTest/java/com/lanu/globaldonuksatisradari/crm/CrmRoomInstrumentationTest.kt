@@ -88,6 +88,7 @@ class CrmRoomInstrumentationTest {
             assertEquals(4, repository.pendingSync().size)
 
             assertEquals("Smoke Test Kafe", observed.single().businessName)
+            assertEquals(DataQuality.OBSERVED, observed.single().dataQuality)
             assertEquals(SyncState.PENDING_UPLOAD, observed.single().syncState)
             assertEquals(customer.id, pending.single().entityId)
             assertEquals(LocalCrmRepository.OP_CREATE, pending.single().operation)
