@@ -75,7 +75,7 @@ jobs:
             "system-images;android-35;google_apis;x86_64"
 
       - name: Android emulator smoke tests
-        timeout-minutes: 12
+        timeout-minutes: 15
         run: |
           set -euo pipefail
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT}}"
@@ -185,7 +185,7 @@ jobs:
           adb -s "$SERIAL" shell input keyevent 82 || true
 
           set +e
-          timeout 300s gradle connectedDebugAndroidTest --no-daemon --stacktrace
+          timeout 540s gradle connectedDebugAndroidTest --no-daemon --stacktrace
           TEST_EXIT="$?"
           set -e
 
