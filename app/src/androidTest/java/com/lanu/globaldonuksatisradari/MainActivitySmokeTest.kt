@@ -94,14 +94,14 @@ class MainActivitySmokeTest {
         composeRule.waitForIdle()
 
         composeRule.waitUntil(10_000) {
-            composeRule.onAllNodesWithTag("crm_open_instrumentation-ui-crm-detail")
-                .fetchSemanticsNodes()
-                .isNotEmpty()
+            runCatching {
+                composeRule.onNodeWithTag("main_scroll").performScrollToNode(
+                    hasTestTag("crm_open_instrumentation-ui-crm-detail"),
+                )
+                true
+            }.getOrDefault(false)
         }
 
-        composeRule.onNodeWithTag("main_scroll").performScrollToNode(
-            hasTestTag("crm_open_instrumentation-ui-crm-detail"),
-        )
         composeRule.onNodeWithTag("crm_open_instrumentation-ui-crm-detail").performClick()
         composeRule.onNodeWithTag("crm_detail_back").assertIsDisplayed()
         composeRule.onNodeWithText("Açık takipler").assertIsDisplayed()
