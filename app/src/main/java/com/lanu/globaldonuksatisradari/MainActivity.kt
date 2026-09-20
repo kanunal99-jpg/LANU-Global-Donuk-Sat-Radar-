@@ -56,6 +56,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var cityMenu by remember { mutableStateOf(false) }
     var districtMenu by remember { mutableStateOf(false) }
     var selectedDistrict by remember { mutableStateOf("Tümü") }
+    var selectedNeighborhood by remember { mutableStateOf("Tümü") }
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<VerifiedBusiness>>(emptyList()) }
     var selectedBusiness by remember { mutableStateOf<VerifiedBusiness?>(null) }
@@ -81,8 +82,11 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val pendingSyncCount by localCrmRepository
         .observePendingSyncCount()
         .collectAsState(initial = 0)
-    val filteredCrmCustomers = remember(crmCustomers, selectedDistrict) {
-        crmCustomers.filter { selectedDistrict == "Tümü" || it.district == selectedDistrict }
+    val filteredCrmCustomers = remember(crmCustomers, selectedDistrict, selectedNeighborhood) {
+        crmCustomers.filter {
+            (selectedDistrict == "Tümü" || it.district == selectedDistrict) &&
+                (selectedNeighborhood == "Tümü" || it.neighborhood == selectedNeighborhood)
+        }
     }
     val selectedCrmCustomer = selectedCustomerId?.let { id -> crmCustomers.firstOrNull { it.id == id } }
     val selectedCustomerKey = selectedCustomerId.orEmpty()
@@ -174,8 +178,10 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     DropdownMenuItem(text = { Text(city.name) }, onClick = {
                                         selectedCity = city
                                         selectedDistrict = "Tümü"
+                                        selectedNeighborhood = "Tümü"
                                         cityMenu = false
                                         results = emptyList()
+                                        selectedNeighborhood = "Tümü"
                                         selectedBusiness = null
                                         selectedCustomerId = null
                                         crmMessage = null
@@ -191,12 +197,36 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 (listOf("Tümü") + selectedCity.districts).forEach { district ->
                                     DropdownMenuItem(text = { Text(district) }, onClick = {
                                         selectedDistrict = district
+                                        selectedNeighborhood = "Tümü"
                                         districtMenu = false
                                         results = emptyList()
                                         selectedBusiness = null
                                         selectedCustomerId = null
                                         crmMessage = null
                                     })
+                                }
+                            }
+                        }
+                    }
+                    item {
+                        val neighborhoods = listOf("Tümü") + results.mapNotNull { it.neighborhood }.distinct().sorted()
+                        Box {
+                            OutlinedButton(
+                                onClick = { if (neighborhoods.size > 1) districtMenu = true },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("Mahalle: $selectedNeighborhood") }
+                            DropdownMenu(
+                                expanded = districtMenu && neighborhoods.size > 1,
+                                onDismissRequest = { districtMenu = false },
+                            ) {
+                                neighborhoods.forEach { neighborhood ->
+                                    DropdownMenuItem(
+                                        text = { Text(neighborhood) },
+                                        onClick = {
+                                            selectedNeighborhood = neighborhood
+                                            districtMenu = false
+                                        },
+                                    )
                                 }
                             }
                         }
