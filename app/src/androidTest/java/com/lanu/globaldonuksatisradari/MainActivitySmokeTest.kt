@@ -1,9 +1,11 @@
 package com.lanu.globaldonuksatisradari
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.work.WorkManager
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
@@ -101,7 +103,10 @@ class MainActivitySmokeTest {
         }
         crmDetailButton.performClick()
         composeRule.onNodeWithTag("crm_detail_back").assertIsDisplayed()
+        val detailScroll = composeRule.onNodeWithTag("crm_detail_scroll")
+        detailScroll.performScrollToNode(hasText("Açık takipler"))
         composeRule.onNodeWithText("Açık takipler").assertIsDisplayed()
+        detailScroll.performScrollToNode(hasText("Aktivite geçmişi"))
         composeRule.onNodeWithText("Aktivite geçmişi").assertIsDisplayed()
     }
 }
