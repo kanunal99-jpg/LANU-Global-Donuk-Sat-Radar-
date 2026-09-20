@@ -249,3 +249,4 @@ jobs:
             "$APK_PATH" \
             "$SHA_PATH" \
             "$BUILD_INFO_PATH"
+
