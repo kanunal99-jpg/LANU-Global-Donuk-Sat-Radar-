@@ -27,6 +27,7 @@ import com.lanu.globaldonuksatisradari.data.BusinessRepositoryFactory
 import com.lanu.globaldonuksatisradari.data.NominatimBusinessSource
 import com.lanu.globaldonuksatisradari.data.NominatimBusinessSourceAdapter
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 
@@ -51,9 +52,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         auth = SupabaseAuthClient(this)
-        CrmSyncScheduler.schedule(this)
         val cloudAuth = if (isInstrumentationTest()) null else auth
         setContent { SalesRadarApp(cloudAuth) }
+        // Keep the first Compose frame independent from cold-start WorkManager initialization.
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { CrmSyncScheduler.schedule(applicationContext) }
+        }
     }
 }
 
