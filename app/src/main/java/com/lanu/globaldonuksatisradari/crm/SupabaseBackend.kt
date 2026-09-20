@@ -134,8 +134,8 @@ class SupabaseAuthClient(context: Context) {
     } }
 
     suspend fun ensureSession(): SupabaseSession? = withContext(Dispatchers.IO) {
-        val current = _session.value ?: return null
-        return runCatching {
+        val current = _session.value ?: return@withContext null
+        runCatching {
             request("GET", "/auth/v1/user", accessToken = current.accessToken)
             current
         }.getOrElse {
