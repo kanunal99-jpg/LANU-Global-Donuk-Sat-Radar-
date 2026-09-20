@@ -31,6 +31,13 @@ class RoomCrmSyncStateStore(
 /** Remote boundary for CRM synchronization. No concrete backend is assumed here. */
 interface RemoteCrmDataSource {
     suspend fun apply(operation: SyncOperationEntity): RemoteSyncResult
+    suspend fun pullInto(database: LanuCrmDatabase): RemotePullResult = RemotePullResult.NotConfigured
+}
+
+sealed interface RemotePullResult {
+    data object NotConfigured : RemotePullResult
+    data object Success : RemotePullResult
+    data class RetryableFailure(val reason: String) : RemotePullResult
 }
 
 sealed interface RemoteSyncResult {
