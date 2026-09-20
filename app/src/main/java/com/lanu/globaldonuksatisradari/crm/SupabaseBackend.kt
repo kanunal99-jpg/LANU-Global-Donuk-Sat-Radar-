@@ -324,7 +324,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                                 address = p.optString("address").takeIf(String::isNotBlank),
                                 latitude = p.optDouble("latitude").takeIf { !p.isNull("latitude") },
                                 longitude = p.optDouble("longitude").takeIf { !p.isNull("longitude") },
-                                dataQuality = runCatching { DataQuality.valueOf(p.optString("data_quality", "UNKNOWN")) }.getOrDefault(DataQuality.UNKNOWN),
+                                dataQuality = runCatching { DataQuality.valueOf(p.optString("data_quality", "UNKNOWN")) }.getOrDefault(DataQuality.UNKNOWN).name,
                                 stage = p.optString("stage", CrmStage.PROSPECT.name),
                                 ownerUserId = session.userId,
                                 notes = p.optString("notes").takeIf(String::isNotBlank),
