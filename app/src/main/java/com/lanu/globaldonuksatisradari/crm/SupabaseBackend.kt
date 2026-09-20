@@ -193,6 +193,7 @@ class SupabaseAuthClient(context: Context) {
             setRequestProperty("Authorization", "Bearer " + accessToken)
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Prefer", "resolution=merge-duplicates,return=minimal")
             if (body != null) doOutput = true
         }
         try {
@@ -249,11 +250,11 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
     override suspend fun pullInto(database: LanuCrmDatabase): RemotePullResult {
         val session = auth.ensureSession() ?: return RemotePullResult.NotConfigured
         return runCatching {
-            val customers = fetchAll("lanu_crm_customers", session)
-            val activities = fetchAll("lanu_crm_activities", session)
-            val nextActions = fetchAll("lanu_crm_next_actions", session)
-            val opportunities = fetchAll("lanu_crm_opportunities", session)
-            val transitions = fetchAll("lanu_crm_stage_transitions", session)
+            val customers = fetchAll("lanu_crm_customers", "updated_at", session)
+            val activities = fetchAll("lanu_crm_activities", "created_at", session)
+            val nextActions = fetchAll("lanu_crm_next_actions", "updated_at", session)
+            val opportunities = fetchAll("lanu_crm_opportunities", "updated_at", session)
+            val transitions = fetchAll("lanu_crm_stage_transitions", "changed_at", session)
 
             database.withTransaction {
                 customers.forEach { p ->
@@ -286,7 +287,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                 activities.forEach { p ->
                     val id = p.getString("id")
                     val local = database.activityDao().findById(id)
-                    if (local == null || remoteVersion >= local.version) {
+                    if (local == null || local.syncState == SyncState.SYNCED.name) {
                         database.activityDao().upsert(
                             CrmActivityEntity(
                                 id = id,
@@ -330,7 +331,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                     val id = p.getString("id")
                     val local = database.opportunityDao().findById(id)
                     val remoteVersion = p.optLong("version", 1L)
-                    if (local == null || local.syncState == SyncState.SYNCED.name) {
+                    if (local == null || remoteVersion >= local.version) {
                         val amountMinor = p.optString("amount").takeIf(String::isNotBlank)?.let {
                             runCatching { BigDecimal(it).movePointRight(2).longValueExact() }.getOrNull()
                         }
@@ -373,7 +374,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
         }
     }
 
-    private fun fetchAll(table: String, session: SupabaseSession): List<JSONObject> {
+    private fun fetchAll(table: String, orderColumn: String, session: SupabaseSession): List<JSONObject> {
         val result = mutableListOf<JSONObject>()
         var offset = 0
         val pageSize = 500
@@ -381,7 +382,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
             val text = auth.rawRequest(
                 "GET",
                 "/rest/v1/" + table + "?select=*&owner_user_id=eq." + session.userId +
-                    "&order=updated_at.asc&limit=" + pageSize + "&offset=" + offset,
+                    "&order=" + orderColumn + ".asc&limit=" + pageSize + "&offset=" + offset,
                 null,
                 session.accessToken,
             )
