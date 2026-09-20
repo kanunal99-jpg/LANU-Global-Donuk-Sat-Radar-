@@ -31,6 +31,8 @@ import kotlinx.coroutines.launch
 
 data class City(val name: String, val districts: List<String>)
 
+enum class AppSection { RADAR, MANUAL_POINT, ROUTINE }
+
 private val cities = listOf(
     City("İstanbul", listOf("Kadıköy", "Beşiktaş", "Şişli", "Bakırköy", "Ataşehir")),
     City("Ankara", listOf("Çankaya", "Keçiören", "Yenimahalle")),
@@ -58,6 +60,27 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var selectedCity by remember { mutableStateOf(cities.first()) }
+
+    var section by remember { mutableStateOf(AppSection.RADAR) }
+    val backStack = remember { mutableStateListOf<AppSection>() }
+    val forwardStack = remember { mutableStateListOf<AppSection>() }
+    fun navigateTo(target: AppSection) {
+        if (target == section) return
+        backStack.add(section)
+        section = target
+        forwardStack.clear()
+    }
+    fun goBack() {
+        val previous = backStack.removeLastOrNull() ?: return
+        forwardStack.add(section)
+        section = previous
+    }
+    fun goForward() {
+        val next = forwardStack.removeLastOrNull() ?: return
+        backStack.add(section)
+        section = next
+    }
+
     var cityMenu by remember { mutableStateOf(false) }
     var districtMenu by remember { mutableStateOf(false) }
     var neighborhoodMenu by remember { mutableStateOf(false) }
@@ -151,8 +174,61 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     }
 
     MaterialTheme {
-        Scaffold(topBar = { TopAppBar(title = { Text("LANU Global Donuk Satış Radarı") }) }) { padding ->
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            when {
+                                selectedCrmCustomer != null -> "CRM Müşteri Detayı"
+                                section == AppSection.MANUAL_POINT -> "Manuel Nokta"
+                                section == AppSection.ROUTINE -> "Rutin Planlama"
+                                else -> "LANU Global Donuk Satış Radarı"
+                            },
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(
+                            onClick = {
+                                if (selectedCrmCustomer != null) selectedCustomerId = null else goBack()
+                            },
+                            enabled = selectedCrmCustomer != null || backStack.isNotEmpty(),
+                        ) { Text("‹") }
+                    },
+                    actions = {
+                        IconButton(
+                            onClick = { goForward() },
+                            enabled = forwardStack.isNotEmpty(),
+                        ) { Text("›") }
+                    },
+                )
+            },
+            bottomBar = {
+                NavigationBar {
+                    NavigationBarItem(
+                        selected = section == AppSection.RADAR && selectedCrmCustomer == null,
+                        onClick = { selectedCustomerId = null; navigateTo(AppSection.RADAR) },
+                        icon = { Text("R") },
+                        label = { Text("Radar") },
+                    )
+                    NavigationBarItem(
+                        selected = section == AppSection.MANUAL_POINT && selectedCrmCustomer == null,
+                        onClick = { selectedCustomerId = null; navigateTo(AppSection.MANUAL_POINT) },
+                        icon = { Text("+") },
+                        label = { Text("Manuel Nokta") },
+                    )
+                    NavigationBarItem(
+                        selected = section == AppSection.ROUTINE && selectedCrmCustomer == null,
+                        onClick = { selectedCustomerId = null; navigateTo(AppSection.ROUTINE) },
+                        icon = { Text("⇄") },
+                        label = { Text("Rutin") },
+                    )
+                }
+            },
+        ) { padding ->
             if (selectedCrmCustomer == null) {
+                when (section) {
+                    AppSection.RADAR -> {
                 LazyColumn(
                     modifier = Modifier
                         .testTag("main_scroll")
@@ -416,6 +492,22 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
 
                     auth?.let { cloudAuth ->
                         item { SupabaseSessionCard(cloudAuth) }
+                    }
+                }
+                    }
+                    AppSection.MANUAL_POINT -> {
+                        ManualPointScreen(
+                            repository = localCrmRepository,
+                            defaultCity = selectedCity.name,
+                            onSaved = { navigateTo(AppSection.ROUTINE) },
+                        )
+                    }
+                    AppSection.ROUTINE -> {
+                        RoutineScreen(
+                            customers = crmCustomers,
+                            selectedCity = selectedCity.name,
+                            selectedDistrict = selectedDistrict,
+                        )
                     }
                 }
             } else {
