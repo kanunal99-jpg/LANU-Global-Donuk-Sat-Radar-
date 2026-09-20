@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CrmNextActionEntity::class,
         CrmOpportunityEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 @TypeConverters(CrmRoomConverters::class)
@@ -90,6 +90,18 @@ abstract class LanuCrmDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE crm_customer ADD COLUMN address TEXT")
+                db.execSQL("ALTER TABLE crm_customer ADD COLUMN latitude REAL")
+                db.execSQL("ALTER TABLE crm_customer ADD COLUMN longitude REAL")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_crm_customer_latitude_longitude " +
+                        "ON crm_customer(latitude, longitude)",
+                )
+            }
+        }
+
         @Volatile
         private var instance: LanuCrmDatabase? = null
 
@@ -100,7 +112,7 @@ abstract class LanuCrmDatabase : RoomDatabase() {
                     LanuCrmDatabase::class.java,
                     "lanu_global_donuk_crm.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                     .also { instance = it }
             }
