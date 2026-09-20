@@ -140,7 +140,10 @@ object CrmRoutePlanner {
         customers: List<CrmCustomer>,
         startCustomerId: String? = null,
     ): List<RouteStop> {
-        val candidates = customers.filter { it.latitude != null && it.longitude != null }
+        val candidates = customers.filter {
+            it.latitude != null && it.longitude != null &&
+                it.latitude in -90.0..90.0 && it.longitude in -180.0..180.0
+        }
         if (candidates.isEmpty()) return emptyList()
         val remaining = candidates.toMutableList()
         val ordered = mutableListOf<CrmCustomer>()
