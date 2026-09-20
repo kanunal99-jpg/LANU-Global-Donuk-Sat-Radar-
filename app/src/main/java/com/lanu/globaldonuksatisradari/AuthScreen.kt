@@ -85,6 +85,7 @@ fun SupabaseAuthScreen(auth: SupabaseAuthClient) {
 @Composable
 fun SupabaseSessionCard(auth: SupabaseAuthClient) {
     val session by auth.session.collectAsState()
+    val currentSession = session
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
@@ -96,7 +97,7 @@ fun SupabaseSessionCard(auth: SupabaseAuthClient) {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (session == null) {
+            if (currentSession == null) {
                 Text("Bulut CRM senkronizasyonu", style = MaterialTheme.typography.titleMedium)
                 Text("İnternet yokken Room üzerinde çalışmaya devam eder. Giriş yapınca bekleyen kayıtlar güvenli backend'e senkronize edilir.")
                 OutlinedTextField(
@@ -143,7 +144,7 @@ fun SupabaseSessionCard(auth: SupabaseAuthClient) {
                 }
             } else {
                 Text("Bulut CRM: bağlı", style = MaterialTheme.typography.titleMedium)
-                Text("Kullanıcı: " + session.userId)
+                Text("Kullanıcı: " + currentSession.userId)
                 OutlinedButton(
                     onClick = { auth.signOut(); message = "Oturum kapatıldı. Yerel CRM verileri cihazda kalır." },
                     modifier = Modifier.fillMaxWidth(),
