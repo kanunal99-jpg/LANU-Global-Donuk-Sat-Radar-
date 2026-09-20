@@ -60,10 +60,10 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun persistedCrmCustomer_opensRealDetailWorkflow() {
-        runBlocking {
+        val seededCustomer = runBlocking {
             val context = composeRule.activity
             val repository = LocalCrmRepository(LanuCrmDatabase.getInstance(context))
-            repository.addBusinessAsCustomer(
+            val customer = repository.addBusinessAsCustomer(
                 VerifiedBusiness(
                     id = "instrumentation-ui-crm-detail",
                     name = "Smoke CRM Kafe",
@@ -86,12 +86,13 @@ class MainActivitySmokeTest {
                 "Seeded CRM customer must persist in Room",
                 repository.observeCustomers("İstanbul").first().any { it.businessName == "Smoke CRM Kafe" },
             )
+            customer
         }
 
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
 
-        val crmDetailButton = composeRule.onNodeWithTag("crm_open_instrumentation-ui-crm-detail")
+        val crmDetailButton = composeRule.onNodeWithTag("crm_open_" + seededCustomer.id)
         crmDetailButton.performScrollTo()
         composeRule.waitUntil(15_000) {
             runCatching {
