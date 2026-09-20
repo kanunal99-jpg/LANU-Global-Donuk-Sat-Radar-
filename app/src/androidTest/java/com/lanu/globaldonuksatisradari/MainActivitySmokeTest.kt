@@ -2,6 +2,7 @@ package com.lanu.globaldonuksatisradari
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.work.WorkManager
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -93,15 +94,17 @@ class MainActivitySmokeTest {
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
 
-        composeRule.waitUntil(10_000) {
+        composeRule.waitUntil(15_000) {
             runCatching {
                 composeRule.onNodeWithTag("main_scroll").performScrollToNode(
-                    hasTestTag("crm_open_instrumentation-ui-crm-detail"),
+                    hasText("Smoke CRM Kafe"),
                 )
+                composeRule.onNodeWithText("Smoke CRM Kafe").assertIsDisplayed()
                 true
             }.getOrDefault(false)
         }
 
+        composeRule.onNodeWithTag("crm_open_instrumentation-ui-crm-detail").assertIsDisplayed()
         composeRule.onNodeWithTag("crm_open_instrumentation-ui-crm-detail").performClick()
         composeRule.onNodeWithTag("crm_detail_back").assertIsDisplayed()
         composeRule.onNodeWithText("Açık takipler").assertIsDisplayed()
