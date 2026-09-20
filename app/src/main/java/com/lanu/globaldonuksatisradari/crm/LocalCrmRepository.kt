@@ -705,6 +705,7 @@ private object CrmPayloads {
         put("address", customer.address)
         customer.latitude?.let { put("latitude", it) } ?: put("latitude", JSONObject.NULL)
         customer.longitude?.let { put("longitude", it) } ?: put("longitude", JSONObject.NULL)
+        put("dataQuality", customer.dataQuality.name)
         put("stage", customer.stage.name)
         put("ownerUserId", customer.ownerUserId)
         put("notes", customer.notes)
