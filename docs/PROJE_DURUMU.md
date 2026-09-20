@@ -184,3 +184,16 @@
 `Kaynak/veri tasarımı → araştırma → kod → test → CI → başarılı build → doğrulama → release → tik`
 
 Bir özellik kanıtlanmadan tamamlanmış sayılmaz.
+
+
+## 2026-09-20 — Navigasyon, manuel nokta ve rutin planlama
+
+- AppSection tabanlı Radar / Manuel Nokta / Rutin menüleri eklendi.
+- Üst menüde Geri / İleri kontrolleri eklendi; bölüm geçmişi ile ileri-geri dolaşım destekleniyor.
+- Manuel müşteri/nokta kaydı: ad, açık adres, il, ilçe, mahalle, X=boylam ve Y=enlem.
+- CRM customer modeline address/latitude/longitude eklendi; Room 4→5 migration eklendi.
+- Mevcut gerçek Nominatim işletmeleri CRM'e kaydedilirken kaynak koordinatları da CRM'de tutuluyor.
+- Yakınlık bazlı rutin motoru Haversine mesafesi + greedy nearest-neighbor yaklaşımı ile gerçek koordinatlı müşteri havuzundan rota sıralıyor.
+- Rutin ekranı şehir/ilçe kapsamı, başlangıç müşterisi seçimi, adım mesafesi ve kümülatif mesafeyi gösteriyor.
+- Supabase CRM customer tablosuna address/latitude/longitude alanları ve indeks eklendi; push/pull adapter bu alanları senkronize ediyor.
+- Manuel nokta ve rota için unit/instrumentation testleri eklendi.
