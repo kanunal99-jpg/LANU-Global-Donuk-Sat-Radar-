@@ -321,6 +321,9 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                                 city = p.optString("city"),
                                 district = p.optString("district"),
                                 neighborhood = p.optString("neighborhood").takeIf(String::isNotBlank),
+                                address = p.optString("address").takeIf(String::isNotBlank),
+                                latitude = p.optDouble("latitude").takeIf { !p.isNull("latitude") },
+                                longitude = p.optDouble("longitude").takeIf { !p.isNull("longitude") },
                                 stage = p.optString("stage", CrmStage.PROSPECT.name),
                                 ownerUserId = session.userId,
                                 notes = p.optString("notes").takeIf(String::isNotBlank),
@@ -449,12 +452,15 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
         put("id", p.getString("id"))
         put("owner_user_id", userId)
         put("stage", p.getString("stage"))
-        put("source", "osm")
+        put("source", if (p.optString("businessSourceId").startsWith("manual:")) "manual" else "osm")
         put("source_id", p.getString("businessSourceId"))
         put("name", p.getString("businessName"))
         put("city", p.getString("city"))
         put("district", p.getString("district"))
         put("neighborhood", p.optString("neighborhood").takeIf(String::isNotBlank) ?: JSONObject.NULL)
+        put("address", p.optString("address").takeIf(String::isNotBlank) ?: JSONObject.NULL)
+        put("latitude", if (p.isNull("latitude")) JSONObject.NULL else p.getDouble("latitude"))
+        put("longitude", if (p.isNull("longitude")) JSONObject.NULL else p.getDouble("longitude"))
         put("notes", p.optString("notes").takeIf(String::isNotBlank) ?: JSONObject.NULL)
         put("sync_version", p.optLong("version", 1L))
     }
