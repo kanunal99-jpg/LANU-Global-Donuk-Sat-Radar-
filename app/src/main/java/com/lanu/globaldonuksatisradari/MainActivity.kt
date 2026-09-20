@@ -55,6 +55,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var selectedCity by remember { mutableStateOf(cities.first()) }
     var cityMenu by remember { mutableStateOf(false) }
     var districtMenu by remember { mutableStateOf(false) }
+    var neighborhoodMenu by remember { mutableStateOf(false) }
     var selectedDistrict by remember { mutableStateOf("Tümü") }
     var selectedNeighborhood by remember { mutableStateOf("Tümü") }
     var query by remember { mutableStateOf("") }
@@ -212,19 +213,19 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         val neighborhoods = listOf("Tümü") + results.mapNotNull { it.neighborhood }.distinct().sorted()
                         Box {
                             OutlinedButton(
-                                onClick = { if (neighborhoods.size > 1) districtMenu = true },
+                                onClick = { if (neighborhoods.size > 1) neighborhoodMenu = true },
                                 modifier = Modifier.fillMaxWidth(),
                             ) { Text("Mahalle: $selectedNeighborhood") }
                             DropdownMenu(
-                                expanded = districtMenu && neighborhoods.size > 1,
-                                onDismissRequest = { districtMenu = false },
+                                expanded = neighborhoodMenu && neighborhoods.size > 1,
+                                onDismissRequest = { neighborhoodMenu = false },
                             ) {
                                 neighborhoods.forEach { neighborhood ->
                                     DropdownMenuItem(
                                         text = { Text(neighborhood) },
                                         onClick = {
                                             selectedNeighborhood = neighborhood
-                                            districtMenu = false
+                                            neighborhoodMenu = false
                                         },
                                     )
                                 }
