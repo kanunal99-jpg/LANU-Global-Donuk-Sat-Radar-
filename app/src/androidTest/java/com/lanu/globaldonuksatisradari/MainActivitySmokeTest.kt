@@ -1,12 +1,13 @@
 package com.lanu.globaldonuksatisradari
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasTestTag
 import androidx.work.WorkManager
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.data.DataSourceDescriptor
@@ -92,14 +93,15 @@ class MainActivitySmokeTest {
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
 
-        val crmDetailButton = composeRule.onNodeWithTag("crm_open_" + seededCustomer.id)
-        crmDetailButton.performScrollTo()
+        val crmDetailTag = "crm_open_" + seededCustomer.id
         composeRule.waitUntil(15_000) {
             runCatching {
-                crmDetailButton.assertIsDisplayed()
+                composeRule.onNodeWithTag("main_scroll").performScrollToNode(hasTestTag(crmDetailTag))
+                composeRule.onNodeWithTag(crmDetailTag).assertIsDisplayed()
                 true
             }.getOrDefault(false)
         }
+        val crmDetailButton = composeRule.onNodeWithTag(crmDetailTag)
         crmDetailButton.assertIsDisplayed()
         crmDetailButton.performClick()
         composeRule.onNodeWithTag("crm_detail_back").assertIsDisplayed()
