@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CrmNextActionEntity::class,
         CrmOpportunityEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 @TypeConverters(CrmRoomConverters::class)
@@ -102,6 +102,15 @@ abstract class LanuCrmDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE crm_customer ADD COLUMN dataQuality TEXT NOT NULL DEFAULT 'UNKNOWN'")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_crm_customer_dataQuality ON crm_customer(dataQuality)",
+                )
+            }
+        }
+
         @Volatile
         private var instance: LanuCrmDatabase? = null
 
@@ -112,7 +121,7 @@ abstract class LanuCrmDatabase : RoomDatabase() {
                     LanuCrmDatabase::class.java,
                     "lanu_global_donuk_crm.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build()
                     .also { instance = it }
             }
