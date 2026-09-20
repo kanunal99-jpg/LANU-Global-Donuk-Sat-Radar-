@@ -24,7 +24,7 @@ class CrmSyncWorker(
         val database = LanuCrmDatabase.getInstance(applicationContext)
         val engine = CrmSyncEngine(
             syncDao = database.syncOperationDao(),
-            remote = CrmSyncRemoteProvider.dataSource,
+            remote = SupabaseCrmRemoteDataSource(SupabaseAuthClient(applicationContext)),
             stateStore = RoomCrmSyncStateStore(database),
         )
         val results = engine.processBatch()
