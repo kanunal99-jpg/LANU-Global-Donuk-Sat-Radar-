@@ -245,6 +245,155 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
         }
     }
 
+    override suspend fun pullInto(database: LanuCrmDatabase): RemotePullResult {
+        val session = auth.ensureSession() ?: return RemotePullResult.NotConfigured
+        return runCatching {
+            val customers = fetchAll("lanu_crm_customers", session)
+            val activities = fetchAll("lanu_crm_activities", session)
+            val nextActions = fetchAll("lanu_crm_next_actions", session)
+            val opportunities = fetchAll("lanu_crm_opportunities", session)
+            val transitions = fetchAll("lanu_crm_stage_transitions", session)
+
+            database.withTransaction {
+                customers.forEach { p ->
+                    val id = p.getString("id")
+                    val remoteVersion = p.optLong("sync_version", 1L)
+                    val local = database.customerDao().findById(id)
+                    val accept = local == null || remoteVersion > local.version ||
+                        local.syncState == SyncState.SYNCED.name
+                    if (accept) {
+                        database.customerDao().upsert(
+                            CrmCustomerEntity(
+                                id = id,
+                                businessSourceId = p.optString("source_id"),
+                                businessName = p.optString("name"),
+                                city = p.optString("city"),
+                                district = p.optString("district"),
+                                neighborhood = p.optString("neighborhood").takeIf(String::isNotBlank),
+                                stage = p.optString("stage", CrmStage.PROSPECT.name),
+                                ownerUserId = session.userId,
+                                notes = p.optString("notes").takeIf(String::isNotBlank),
+                                createdAtEpochMs = parseInstant(p.optString("created_at")),
+                                updatedAtEpochMs = parseInstant(p.optString("updated_at")),
+                                version = remoteVersion,
+                                syncState = SyncState.SYNCED.name,
+                            ),
+                        )
+                    }
+                }
+
+                activities.forEach { p ->
+                    val id = p.getString("id")
+                    val local = database.activityDao().findById(id)
+                    if (local == null || local.syncState == SyncState.SYNCED.name) {
+                        database.activityDao().upsert(
+                            CrmActivityEntity(
+                                id = id,
+                                customerId = p.getString("customer_id"),
+                                type = p.getString("type"),
+                                occurredAtEpochMs = parseInstant(p.optString("occurred_at")),
+                                note = p.optString("note").takeIf(String::isNotBlank),
+                                createdByUserId = p.optString("owner_user_id").takeIf(String::isNotBlank),
+                                createdAtEpochMs = parseInstant(p.optString("created_at")),
+                                version = 1L,
+                                syncState = SyncState.SYNCED.name,
+                            ),
+                        )
+                    }
+                }
+
+                nextActions.forEach { p ->
+                    val id = p.getString("id")
+                    val remoteVersion = p.optLong("version", 1L)
+                    val local = database.nextActionDao().findById(id)
+                    if (local == null || remoteVersion >= local.version) {
+                        database.nextActionDao().upsert(
+                            CrmNextActionEntity(
+                                id = id,
+                                customerId = p.getString("customer_id"),
+                                type = p.getString("type"),
+                                dueAtEpochMs = parseInstant(p.optString("due_at")),
+                                note = p.optString("note").takeIf(String::isNotBlank),
+                                createdByUserId = p.optString("created_by_user_id").takeIf(String::isNotBlank),
+                                createdAtEpochMs = parseInstant(p.optString("created_at")),
+                                completedAtEpochMs = p.optString("completed_at").takeIf(String::isNotBlank)?.let(::parseInstant),
+                                completedByUserId = p.optString("completed_by_user_id").takeIf(String::isNotBlank),
+                                version = remoteVersion,
+                                syncState = SyncState.SYNCED.name,
+                            ),
+                        )
+                    }
+                }
+
+                opportunities.forEach { p ->
+                    val id = p.getString("id")
+                    val local = database.opportunityDao().findById(id)
+                    val remoteVersion = local?.version?.coerceAtLeast(1L) ?: 1L
+                    if (local == null || local.syncState == SyncState.SYNCED.name) {
+                        val amountMinor = p.optString("amount").takeIf(String::isNotBlank)?.let {
+                            runCatching { BigDecimal(it).movePointRight(2).longValueExact() }.getOrNull()
+                        }
+                        database.opportunityDao().upsert(
+                            CrmOpportunityEntity(
+                                id = id,
+                                customerId = p.getString("customer_id"),
+                                title = p.optString("title"),
+                                status = p.optString("status", CrmOpportunityStatus.OPEN.name),
+                                notes = p.optString("note").takeIf(String::isNotBlank),
+                                estimatedValueMinor = amountMinor,
+                                currency = p.optString("currency").takeIf(String::isNotBlank),
+                                valueOrigin = p.optString("amount_origin", CrmValueOrigin.UNKNOWN.name),
+                                createdAtEpochMs = parseInstant(p.optString("created_at")),
+                                updatedAtEpochMs = parseInstant(p.optString("updated_at")),
+                                version = remoteVersion,
+                                syncState = SyncState.SYNCED.name,
+                            ),
+                        )
+                    }
+                }
+
+                transitions.forEach { p ->
+                    database.stageTransitionDao().insert(
+                        CrmStageTransitionEntity(
+                            id = p.getString("id"),
+                            customerId = p.getString("customer_id"),
+                            fromStage = p.optString("from_stage").takeIf(String::isNotBlank),
+                            toStage = p.optString("to_stage"),
+                            changedAtEpochMs = parseInstant(p.optString("changed_at")),
+                            changedByUserId = p.optString("changed_by_user_id").takeIf(String::isNotBlank),
+                            clientVersion = p.optLong("client_version", 1L),
+                        ),
+                    )
+                }
+            }
+            RemotePullResult.Success
+        }.getOrElse {
+            RemotePullResult.RetryableFailure(it.message ?: "Uzak CRM verisi alınamadı.")
+        }
+    }
+
+    private fun fetchAll(table: String, session: SupabaseSession): List<JSONObject> {
+        val result = mutableListOf<JSONObject>()
+        var offset = 0
+        val pageSize = 500
+        while (true) {
+            val text = auth.rawRequest(
+                "GET",
+                "/rest/v1/" + table + "?select=*&owner_user_id=eq." + session.userId +
+                    "&order=updated_at.asc&limit=" + pageSize + "&offset=" + offset,
+                null,
+                session.accessToken,
+            )
+            val page = JSONArray(text)
+            for (index in 0 until page.length()) result += page.getJSONObject(index)
+            if (page.length() < pageSize) return result
+            offset += pageSize
+        }
+    }
+
+    private fun parseInstant(value: String): Long =
+        runCatching { java.time.Instant.parse(value).toEpochMilli() }.getOrDefault(System.currentTimeMillis())
+
     private fun customerRow(p: JSONObject, userId: String) = JSONObject().apply {
         put("id", p.getString("id"))
         put("owner_user_id", userId)
