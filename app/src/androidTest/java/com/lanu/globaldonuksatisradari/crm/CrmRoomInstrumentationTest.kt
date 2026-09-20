@@ -119,4 +119,37 @@ class CrmRoomInstrumentationTest {
             database.close()
         }
     }
+
+    @Test
+    fun manualCustomerPoint_persistsAddressCoordinatesAndEntersRoutinePool() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, LanuCrmDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val repository = LocalCrmRepository(
+                database = database,
+                now = { 5_000L },
+                idGenerator = { "manual-test-id" },
+            )
+            val customer = repository.addManualCustomerPoint(
+                businessName = "Manuel Nokta",
+                address = "Örnek Mah. 10/A",
+                city = "İstanbul",
+                district = "Kadıköy",
+                neighborhood = "Caferağa",
+                latitude = 40.991,
+                longitude = 29.031,
+            )
+            val observed = repository.observeCustomers("İstanbul").first().single()
+            assertEquals("Örnek Mah. 10/A", observed.address)
+            assertEquals(40.991, observed.latitude, 0.000001)
+            assertEquals(29.031, observed.longitude, 0.000001)
+            assertEquals(customer.id, observed.id)
+            assertEquals(listOf(customer.id), CrmRoutePlanner.plan(listOf(observed)).map { it.customer.id })
+            assertTrue(repository.pendingSync().any { it.entityId == customer.id })
+        } finally {
+            database.close()
+        }
+    }
 }
