@@ -62,10 +62,10 @@ object OverpassQueryBuilder {
                 val escapedDistrict = escapeQuoted(it)
                 """
                 relation(area.cityArea)["boundary"="administrative"]["admin_level"="6"]["name"="$escapedDistrict"]->.districtRelation;
-                map_to_area.districtRelation->.searchArea;
+                .districtRelation map_to_area->.searchArea;
                 """.trimIndent()
             }
-            ?: "map_to_area.cityArea->.searchArea;"
+            ?: ".cityArea map_to_area->.searchArea;"
         return cityArea + "\n" + districtPart
     }
 
