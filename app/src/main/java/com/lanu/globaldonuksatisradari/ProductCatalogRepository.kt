@@ -86,6 +86,14 @@ class ProductCatalogRepository(context: Context) {
         require(normalizedName.isNotEmpty()) { "Ürün adı boş olamaz." }
         require(priceMinor >= 0L) { "Fiyat negatif olamaz." }
 
+        fun validateHttpsUrl(value: String?, field: String) {
+            value?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                require(it.startsWith("https://")) { "$field yalnızca HTTPS olmalıdır." }
+            }
+        }
+        validateHttpsUrl(imageUrl, "Ürün fotoğrafı URL")
+        validateHttpsUrl(sourceUrl, "Kaynak URL")
+
         val normalizedCurrency = currency.trim().uppercase(Locale.ROOT)
         require(normalizedCurrency.length == 3) { "Para birimi 3 harf olmalıdır. Örnek: TRY" }
 
