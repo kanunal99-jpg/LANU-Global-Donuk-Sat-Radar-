@@ -7,10 +7,10 @@ import org.junit.Test
 class IstanbulDistrictsTest {
     @Test
     fun containsExactly39UniqueDistricts() {
-        assertEquals(39, IstanbulDistricts.all.size)
-        assertEquals(39, IstanbulDistricts.all.distinct().size)
+        assertEquals(39, IstanbulDistricts.ALL.size)
+        assertEquals(39, IstanbulDistricts.ALL.distinct().size)
         assertTrue(
-            IstanbulDistricts.all.containsAll(
+            IstanbulDistricts.ALL.containsAll(
                 listOf(
                     "Adalar",
                     "Arnavutköy",
@@ -22,6 +22,6 @@ class IstanbulDistrictsTest {
                 )
             )
         )
-        assertTrue(IstanbulDistricts.all.all { it.isNotBlank() })
+        assertTrue(IstanbulDistricts.ALL.all { it.isNotBlank() })
     }
 }
