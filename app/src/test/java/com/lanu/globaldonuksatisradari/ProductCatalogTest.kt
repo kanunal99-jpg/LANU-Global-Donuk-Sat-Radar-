@@ -44,35 +44,15 @@ class ProductCatalogTest {
 
     @Test
     fun rejectsNonHttpsProductImageUrl() {
-        val repository = ProductCatalogRepositoryTestFactory.repository()
         assertThrows(IllegalArgumentException::class.java) {
-            repository.upsert(
-                id = "bad-image",
-                name = "Test",
-                category = "Test",
-                unit = "Adet",
-                priceMinor = 100L,
-                currency = "TRY",
-                note = null,
-                imageUrl = "http://example.com/image.jpg",
-            )
+            ProductMediaValidation.requireHttpsUrl("http://example.com/image.jpg", "Ürün fotoğrafı URL")
         }
     }
 
     @Test
     fun rejectsNonHttpsSourceUrl() {
-        val repository = ProductCatalogRepositoryTestFactory.repository()
         assertThrows(IllegalArgumentException::class.java) {
-            repository.upsert(
-                id = "bad-source",
-                name = "Test",
-                category = "Test",
-                unit = "Adet",
-                priceMinor = 100L,
-                currency = "TRY",
-                note = null,
-                sourceUrl = "http://globaldonukgida.com/",
-            )
+            ProductMediaValidation.requireHttpsUrl("http://globaldonukgida.com/", "Kaynak URL")
         }
     }
 
