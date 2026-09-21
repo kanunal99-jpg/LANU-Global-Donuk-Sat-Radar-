@@ -743,9 +743,25 @@ private fun BusinessResultCard(business: VerifiedBusiness, onClick: () -> Unit, 
             business.phone?.let { Text("Telefon: $it", style = MaterialTheme.typography.bodySmall) }
             business.website?.let { Text("Web: $it", style = MaterialTheme.typography.bodySmall) }
             business.openingHours?.let { Text("Saatler: $it", style = MaterialTheme.typography.bodySmall) }
+            business.menuUrl?.let { Text("Menü: $it", style = MaterialTheme.typography.bodySmall) }
+            business.menuText?.let { Text("Menü bilgisi: $it", style = MaterialTheme.typography.bodySmall) }
             business.latitude?.let { lat -> business.longitude?.let { lon -> Text("Koordinat: $lat, $lon", style = MaterialTheme.typography.bodySmall) } }
             Text("Kaynak: ${business.source.name}", style = MaterialTheme.typography.bodySmall)
-            Text("Detaylı satış raporunu açmak için dokunun.", style = MaterialTheme.typography.bodySmall)
+            Text("Telefon ve menü yalnızca gerçek kaynakta mevcutsa gösterilir.", style = MaterialTheme.typography.bodySmall)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                business.phone?.let { phone ->
+                    OutlinedButton(
+                        onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:${android.net.Uri.encode(phone)}"))) },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Ara") }
+                }
+                business.menuUrl?.let { menu ->
+                    OutlinedButton(
+                        onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(menu))) },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Menü") }
+                }
+            }
             OutlinedButton(onClick = onSaveToCrm, modifier = Modifier.fillMaxWidth()) { Text("CRM'e kaydet") }
         }
     }
