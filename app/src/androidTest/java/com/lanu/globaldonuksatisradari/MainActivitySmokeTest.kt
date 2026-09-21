@@ -52,9 +52,9 @@ class MainActivitySmokeTest {
     }
 
     @Test(timeout = 60_000)
-    fun blankSearch_showsValidationMessage() {
-        waitForTag("real_search_button").performClick()
-        waitForText("Arama için bir işletme/HORECA terimi yazın").assertExists()
+    fun blankSearch_keepsBroadInventoryModeAvailable() {
+        waitForText("Boş bırakırsanız restoran + kafe + fırın + fast food gerçek kaynak taraması yapılır.").assertExists()
+        waitForText("İşletme envanteri filtreleri").assertExists()
     }
 
     @Test(timeout = 60_000)
