@@ -77,9 +77,23 @@ class MultiSourceBusinessRepository(
                 val fetched = runCatching {
                     primary.fetchValidated(query, "İstanbul", districtName)
                 }.getOrDefault(emptyList())
+
                 if (fetched.isNotEmpty()) {
                     cache.put(key, fetched)
                     fetched
+                } else if (query.isNotBlank()) {
+                    // A district-level primary outage must not hide that district from a targeted search.
+                    // Nominatim remains a targeted, non-exhaustive fallback and is never used for blank
+                    // city-wide harvesting.
+                    val alternativeRecords = runCatching {
+                        alternative.fetchValidated(query, "İstanbul", districtName)
+                    }.getOrDefault(emptyList())
+                    if (alternativeRecords.isNotEmpty()) {
+                        cache.put(key, alternativeRecords)
+                        alternativeRecords
+                    } else {
+                        cached
+                    }
                 } else {
                     cached
                 }
