@@ -24,9 +24,7 @@ import com.lanu.globaldonuksatisradari.crm.CrmSyncScheduler
 import com.lanu.globaldonuksatisradari.crm.SupabaseAuthClient
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
-import com.lanu.globaldonuksatisradari.data.BusinessRepositoryFactory
-import com.lanu.globaldonuksatisradari.data.NominatimBusinessSource
-import com.lanu.globaldonuksatisradari.data.NominatimBusinessSourceAdapter
+import com.lanu.globaldonuksatisradari.data.MultiSourceBusinessRepository
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -126,11 +124,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    val repository = remember {
-        BusinessRepositoryFactory.create(
-            NominatimBusinessSource.contract,
-            NominatimBusinessSourceAdapter(),
-        )
+    val repository = remember(context) {
+        MultiSourceBusinessRepository(context)
     }
     val localCrmRepository = remember(context) {
         LocalCrmRepository(LanuCrmDatabase.getInstance(context))
@@ -323,7 +318,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("İşletme / HORECA araması (isteğe bağlı)") },
                             supportingText = {
-                                Text("Boş bırakırsanız restoran + kafe + fırın + fast food gerçek kaynak taraması yapılır.")
+                                Text("Boş bırakırsanız seçilen şehir/ilçe için OSM işletme envanteri taranır; hedefli kategori aramalarında çiğköfte, cafe, restoran, catering, PlayStation ve daha fazlası desteklenir.")
                             },
                             singleLine = true,
                         )
@@ -495,35 +490,26 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         loading = true
                                         scope.launch {
                                             val district = selectedDistrict.takeUnless { it == "Tümü" }
-                                            val terms = if (query.isBlank()) {
-                                                listOf("restaurant", "cafe", "bakery", "fast food")
-                                            } else {
-                                                listOf(query.trim())
-                                            }
-                                            val merged = linkedMapOf<String, VerifiedBusiness>()
-                                            val failures = mutableListOf<String>()
-                                            terms.forEach { term ->
-                                                runCatching {
-                                                    repository.search(
-                                                        query = term,
-                                                        city = selectedCity.name,
-                                                        district = district,
-                                                    )
-                                                }.onSuccess { records ->
-                                                    records.forEach { merged.putIfAbsent(it.id, it) }
-                                                }.onFailure { throwable ->
-                                                    failures += term + ": " + (throwable.message ?: "kaynak hatası")
-                                                }
-                                            }
-                                            results = merged.values.toList()
-                                            if (results.isEmpty()) {
-                                                error = if (failures.isNotEmpty()) {
-                                                    "Gerçek kaynak erişilemedi. " + failures.first()
+                                            runCatching {
+                                                repository.search(
+                                                    query = query.trim(),
+                                                    city = selectedCity.name,
+                                                    district = district,
+                                                )
+                                            }.onSuccess { records ->
+                                                results = records
+                                                if (records.isEmpty()) {
+                                                    error = "Seçilen kapsamda kayıt bulunamadı; önce ilçe/kategori seçerek daha hedefli arama yapabilirsiniz."
                                                 } else {
-                                                    "Seçilen filtrelerde gerçek kaynakta kayıt bulunamadı."
+                                                    crmMessage = "§{records.size} gerçek/envanter kaydı getirildi. Daha önce bulunan kayıtlar cihazdaki yerel envanter önbelleğinde korunur."
                                                 }
-                                            } else if (failures.isNotEmpty()) {
-                                                crmMessage = results.size.toString() + " gerçek kayıt geldi; bazı kategori sorguları başarısız oldu."
+                                            }.onFailure { throwable ->
+                                                val fallbackText = throwable.message ?: "bilinmeyen kaynak hatası"
+                                                error = if (results.isNotEmpty()) {
+                                                    "Yeni kaynak taraması başarısız oldu; önceki yerel envanter korunuyor. $fallbackText"
+                                                } else {
+                                                    "Gerçek kaynak erişilemedi. $fallbackText"
+                                                }
                                             }
                                             loading = false
                                         }
@@ -535,7 +521,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     )
                                 }
                                 Text(
-                                    "Kaynak: OpenStreetMap Nominatim. Sonuçlar gerçek OSM kayıtlarından gelir; Nominatim en iyi eşleşmeleri döndürür, eksiksiz ilçe işletme envanteri değildir.",
+                                    "Veri ağı: ANA OSM Overpass bölgesel envanter → ALTERNATİF Nominatim hedefli arama → FALLBACK cihaz yerel önbelleği. TOBB/oda, Google Maps/Places ve sosyal medya kaynakları için lisans/API erişimi ayrıca bağlanabilir; maliyet oluşturan servis otomatik etkinleştirilmez.",
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }
@@ -543,10 +529,10 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                     }
                     item {
                         Text(
-                            "Kaynak: OpenStreetMap Nominatim • Seçilen ilçe/mahalle filtresine göre gerçek kayıtlar • Toplu şehir taraması değildir.",
+                            "OSM katkıları: Overpass/OSM bölgesel veri + hedefli Nominatim araması. Daha önce toplanan kayıtlar yeni aramalarda kaybolmaz.",
                             style = MaterialTheme.typography.bodySmall,
                         )
-                        Text("© OpenStreetMap contributors", style = MaterialTheme.typography.bodySmall)
+                        Text("© OpenStreetMap contributors · ODbL", style = MaterialTheme.typography.bodySmall)
                     }
                     item {
                         if (filteredCrmCustomers.isNotEmpty()) {
