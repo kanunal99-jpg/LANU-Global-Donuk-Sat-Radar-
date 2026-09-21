@@ -223,6 +223,14 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         }
     }
 
+    val qualitySummary = remember(visibleResults) {
+        val scores = visibleResults.map { BusinessQualityEvaluator.evaluate(it).score }
+        val average = if (scores.isEmpty()) 0 else scores.sum() / scores.size
+        val incomplete = scores.count { it < 65 }
+        val sources = visibleResults.map { it.source.name }.distinct().sorted()
+        Triple(average, incomplete, sources)
+    }
+
     val dashboardMetrics = remember(
         filteredCrmCustomers,
         regionActivities,
@@ -668,7 +676,22 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             Column(Modifier.padding(16.dp)) {
                                 Text("Bulunan gerçek kayıtlar", style = MaterialTheme.typography.titleMedium)
                                 Text(visibleResults.size.toString() + " kayıt")
-                                if (visibleResults.isNotEmpty()) Text("Raporu açmak için bir işletme kaydına dokunun.", style = MaterialTheme.typography.bodySmall)
+                                if (visibleResults.isNotEmpty()) {
+                                    Text(
+                                        "Ortalama veri kalitesi: " + qualitySummary.first + "/100 • Eksik/orta kayıt: " + qualitySummary.second,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                    Text(
+                                        "Kaynaklar: " + qualitySummary.third.joinToString(", "),
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                    Text(
+                                        "Kalite skoru; ad, ilçe, adres, koordinat, telefon, web, kategori, saat ve menü alanlarının gerçek kaynakta bulunmasına göre hesaplanır.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                    Text("Raporu açmak için bir işletme kaydına dokunun.", style = MaterialTheme.typography.bodySmall)
+                                }
                             }
                         }
                     }
