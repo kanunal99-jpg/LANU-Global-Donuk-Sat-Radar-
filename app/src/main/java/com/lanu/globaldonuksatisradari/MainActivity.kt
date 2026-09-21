@@ -44,6 +44,14 @@ private val cities = listOf(
     City("Antalya", listOf("Muratpaşa", "Konyaaltı")),
 )
 
+private fun matchesInventoryPresence(value: String?, filter: String): Boolean =
+    when (filter) {
+        "Tümü" -> true
+        "Var" -> !value.isNullOrBlank()
+        "Yok" -> value.isNullOrBlank()
+        else -> true
+}
+
 class MainActivity : ComponentActivity() {
 
     private fun isInstrumentationTest(): Boolean = runCatching {
@@ -92,6 +100,13 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var neighborhoodMenu by remember { mutableStateOf(false) }
     var selectedDistrict by remember { mutableStateOf("Tümü") }
     var selectedNeighborhood by remember { mutableStateOf("Tümü") }
+    var categoryFilter by remember { mutableStateOf("Tümü") }
+    var phoneFilter by remember { mutableStateOf("Tümü") }
+    var menuFilter by remember { mutableStateOf("Tümü") }
+    var websiteFilter by remember { mutableStateOf("Tümü") }
+    var openingHoursFilter by remember { mutableStateOf("Tümü") }
+    var addressFilter by remember { mutableStateOf("Tümü") }
+    var coordinatesFilter by remember { mutableStateOf("Tümü") }
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<VerifiedBusiness>>(emptyList()) }
     var selectedBusiness by remember { mutableStateOf<VerifiedBusiness?>(null) }
@@ -173,10 +188,33 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val regionActivities by regionActivitiesFlow.collectAsState(initial = emptyList())
     val regionNextActions by regionNextActionsFlow.collectAsState(initial = emptyList())
     val regionOpportunities by regionOpportunitiesFlow.collectAsState(initial = emptyList())
-    val visibleResults = remember(results, selectedDistrict, selectedNeighborhood) {
+    val presenceOptions = listOf("Tümü", "Var", "Yok")
+    val categoryOptions = remember(results) {
+        listOf("Tümü") + results.mapNotNull { it.category?.trim()?.takeIf(String::isNotBlank) }.distinct().sorted()
+    }
+    val visibleResults = remember(
+        results,
+        selectedDistrict,
+        selectedNeighborhood,
+        categoryFilter,
+        phoneFilter,
+        menuFilter,
+        websiteFilter,
+        openingHoursFilter,
+        addressFilter,
+        coordinatesFilter,
+    ) {
         results.filter { business ->
+            val hasCoordinates = business.latitude != null && business.longitude != null
             (selectedDistrict == "Tümü" || business.district.equals(selectedDistrict, ignoreCase = true)) &&
-                (selectedNeighborhood == "Tümü" || business.neighborhood?.equals(selectedNeighborhood, ignoreCase = true) == true)
+                (selectedNeighborhood == "Tümü" || business.neighborhood?.equals(selectedNeighborhood, ignoreCase = true) == true) &&
+                (categoryFilter == "Tümü" || business.category.equals(categoryFilter, ignoreCase = true)) &&
+                matchesInventoryPresence(business.phone, phoneFilter) &&
+                matchesInventoryPresence(business.menuUrl ?: business.menuText, menuFilter) &&
+                matchesInventoryPresence(business.website, websiteFilter) &&
+                matchesInventoryPresence(business.openingHours, openingHoursFilter) &&
+                matchesInventoryPresence(business.address, addressFilter) &&
+                matchesInventoryPresence(if (hasCoordinates) "1" else null, coordinatesFilter)
         }
     }
 
@@ -302,6 +340,13 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         cityMenu = false
                                         results = emptyList()
                                         selectedNeighborhood = "Tümü"
+                                        categoryFilter = "Tümü"
+                                        phoneFilter = "Tümü"
+                                        menuFilter = "Tümü"
+                                        websiteFilter = "Tümü"
+                                        openingHoursFilter = "Tümü"
+                                        addressFilter = "Tümü"
+                                        coordinatesFilter = "Tümü"
                                         selectedBusiness = null
                                         selectedCustomerId = null
                                         crmMessage = null
@@ -327,6 +372,13 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         DropdownMenuItem(text = { Text(district) }, onClick = {
                                             selectedDistrict = district
                                             selectedNeighborhood = "Tümü"
+                                            categoryFilter = "Tümü"
+                                            phoneFilter = "Tümü"
+                                            menuFilter = "Tümü"
+                                            websiteFilter = "Tümü"
+                                            openingHoursFilter = "Tümü"
+                                            addressFilter = "Tümü"
+                                            coordinatesFilter = "Tümü"
                                             districtMenu = false
                                             selectedBusiness = null
                                             selectedCustomerId = null
@@ -357,6 +409,66 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         },
                                     )
                                 }
+                            }
+                        }
+                    }
+                    item {
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text("İşletme envanteri filtreleri", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "Konum + kategori + telefon + menü + web + çalışma saati + adres + koordinat alanlarının tamamı filtrelenebilir.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                InventoryFilterMenu(
+                                    label = "Kategori",
+                                    selected = categoryFilter,
+                                    options = categoryOptions,
+                                    onSelected = { categoryFilter = it },
+                                )
+                                InventoryFilterMenu(
+                                    label = "Telefon",
+                                    selected = phoneFilter,
+                                    options = presenceOptions,
+                                    onSelected = { phoneFilter = it },
+                                )
+                                InventoryFilterMenu(
+                                    label = "Menü",
+                                    selected = menuFilter,
+                                    options = presenceOptions,
+                                    onSelected = { menuFilter = it },
+                                )
+                                InventoryFilterMenu(
+                                    label = "Web",
+                                    selected = websiteFilter,
+                                    options = presenceOptions,
+                                    onSelected = { websiteFilter = it },
+                                )
+                                InventoryFilterMenu(
+                                    label = "Çalışma saati",
+                                    selected = openingHoursFilter,
+                                    options = presenceOptions,
+                                    onSelected = { openingHoursFilter = it },
+                                )
+                                InventoryFilterMenu(
+                                    label = "Adres",
+                                    selected = addressFilter,
+                                    options = presenceOptions,
+                                    onSelected = { addressFilter = it },
+                                )
+                                InventoryFilterMenu(
+                                    label = "Koordinat",
+                                    selected = coordinatesFilter,
+                                    options = presenceOptions,
+                                    onSelected = { coordinatesFilter = it },
+                                )
+                                Text(
+                                    "Aktif sonuç: ${visibleResults.size}",
+                                    style = MaterialTheme.typography.labelLarge,
+                                )
                             }
                         }
                     }
