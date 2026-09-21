@@ -11,6 +11,10 @@ import java.net.URL
 
 object OverpassBusinessSource {
     const val BASE_URL = "https://overpass-api.de/api/interpreter"
+    val FALLBACK_URLS = listOf(
+        "https://overpass.private.coffee/api/interpreter",
+        "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    )
     private const val SOURCE_REVIEWED_AT = 1789646400000L
 
     val descriptor = DataSourceDescriptor(
@@ -44,12 +48,12 @@ object OverpassQueryBuilder {
         val body = if (query.isBlank()) buildBroadQuery() else buildTermQuery(query.trim())
 
         return """
-            [out:json][timeout:90][maxsize:12582912];
+            [out:json][timeout:90][maxsize:33554432];
             $scope
             (
             $body
             );
-            out center tags;
+            out center tags qt;
         """.trimIndent()
     }
 
@@ -140,6 +144,7 @@ object OverpassQueryBuilder {
 
 class OverpassBusinessSourceAdapter(
     private val baseUrlProvider: () -> String = { OverpassBusinessSource.BASE_URL },
+    private val fallbackUrlProvider: () -> List<String> = { OverpassBusinessSource.FALLBACK_URLS },
     private val nowEpochMs: () -> Long = { System.currentTimeMillis() },
 ) : BusinessSourceAdapter {
     override val contract: BusinessSourceContract = OverpassBusinessSource.contract
@@ -150,16 +155,41 @@ class OverpassBusinessSourceAdapter(
         district: String?,
     ): List<VerifiedBusiness> = withContext(Dispatchers.IO) {
         if (!contract.validate().isSuccess || city.isBlank()) return@withContext emptyList()
+
+        val endpoints = buildList {
+            add(baseUrlProvider())
+            addAll(fallbackUrlProvider())
+        }.map(String::trim)
+            .filter { it.startsWith("https://") }
+            .distinct()
+
+        for (endpoint in endpoints) {
+            runCatching {
+                fetchFromEndpoint(endpoint, query, city, district)
+            }.getOrNull()?.let { return@withContext it }
+        }
+        emptyList()
+    }
+
+    private suspend fun fetchFromEndpoint(
+        endpoint: String,
+        query: String,
+        city: String,
+        district: String?,
+    ): List<VerifiedBusiness>? {
         RateLimiter.await()
 
-        val connection = (URL(baseUrlProvider()).openConnection() as HttpURLConnection).apply {
+        val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = 20_000
             readTimeout = 120_000
             doOutput = true
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-            setRequestProperty("User-Agent", "LANU-Global-Donuk-Satis-Radari/0.3 (+https://github.com/kanunal99-jpg/LANU-Global-Donuk-Sat-Radar-)")
+            setRequestProperty(
+                "User-Agent",
+                "LANU-Global-Donuk-Satis-Radari/0.3 (+https://github.com/kanunal99-jpg/LANU-Global-Donuk-Sat-Radar-)"
+            )
         }
 
         try {
@@ -171,7 +201,8 @@ class OverpassBusinessSourceAdapter(
                 writer.write("data=")
                 writer.write(encodedQuery)
             }
-            if (connection.responseCode !in 200..299) return@withContext emptyList()
+
+            if (connection.responseCode !in 200..299) return null
 
             val input = BufferedInputStream(connection.inputStream)
             val text = buildString {
@@ -181,13 +212,13 @@ class OverpassBusinessSourceAdapter(
                     val read = input.read(buffer)
                     if (read <= 0) break
                     total += read
-                    if (total > 12 * 1024 * 1024) {
+                    if (total > 32 * 1024 * 1024) {
                         throw IllegalStateException("Overpass yanıtı güvenli boyut sınırını aştı")
                     }
                     append(String(buffer, 0, read, Charsets.UTF_8))
                 }
             }
-            parse(text, city, district, nowEpochMs())
+            return parse(text, city, district, nowEpochMs())
         } finally {
             connection.disconnect()
         }
@@ -227,7 +258,18 @@ class OverpassBusinessSourceAdapter(
                 tags.optString("addr:city").takeIf(String::isNotBlank),
             ).joinToString(", ").takeIf(String::isNotBlank)
 
-            val category = firstTag(tags, "amenity", "shop", "craft", "tourism", "leisure", "office", "cuisine")
+            val category = firstTag(
+                tags,
+                "amenity",
+                "shop",
+                "craft",
+                "tourism",
+                "leisure",
+                "office",
+                "healthcare",
+                "sport",
+                "cuisine",
+            )
             val id = item.optString("type") + ":" + item.optLong("id")
             if (id.isBlank() || id.endsWith(":0")) continue
 
