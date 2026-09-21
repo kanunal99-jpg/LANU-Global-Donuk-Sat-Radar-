@@ -124,7 +124,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         ProductCatalogRepository(context)
     }
     val crmCustomers by localCrmRepository
-        .observeCustomers(selectedCity.name)
+        .observeCustomers(null)
         .collectAsState(initial = emptyList())
     val pendingSyncCount by localCrmRepository
         .observePendingSyncCount()
