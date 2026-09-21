@@ -20,13 +20,6 @@ data class BusinessQuality(
         }
 }
 
-/**
- * Ölçülebilir veri kalitesi: uygulama kaynakta olmayan bilgiyi uydurmaz.
- *
- * Evidence coverage is deliberately separate from completeness:
- * a field may be populated but still be unproven if a future source adapter
- * bypasses provenance creation.
- */
 object BusinessQualityEvaluator {
     fun evaluate(business: VerifiedBusiness): BusinessQuality {
         val fields = listOf(
@@ -44,7 +37,7 @@ object BusinessQualityEvaluator {
             "Hukuki unvan" to business.legalName,
             "Ticaret sicil no" to business.tradeRegistryNumber,
         )
-        val missing = fields.filter { it.second.isNullOrBlank() }.map { it.first }
+        val missing = fields.filter { !hasValue(it.second) }.map { it.first }
         var score = 0
         score += if (business.name.isNotBlank()) 15 else 0
         score += if (business.city.isNotBlank()) 5 else 0
@@ -60,18 +53,16 @@ object BusinessQualityEvaluator {
         score += if (!business.legalName.isNullOrBlank()) 3 else 0
         score += if (!business.tradeRegistryNumber.isNullOrBlank()) 3 else 0
 
-        val effectiveEvidence = business.effectiveEvidence()
-        val evidenceFields = effectiveEvidence.map { it.field }.toSet()
+        val evidenceFields = business.effectiveEvidence().map { it.field }.toSet()
         val evidenceBackedFields = fields.count { (label, value) ->
-            value != null && value.toString().isNotBlank() && evidenceFields.contains(fieldKey(label))
+            hasValue(value) && evidenceFields.contains(fieldKey(label))
         }
-        val evidenceCoveragePercent =
-            if (populatedFieldCount(fields) == 0) 0
-            else evidenceBackedFields * 100 / populatedFieldCount(fields)
+        val populated = populatedFieldCount(fields)
+        val evidenceCoveragePercent = if (populated == 0) 0 else evidenceBackedFields * 100 / populated
 
         return BusinessQuality(
             score = score.coerceIn(0, 100),
-            populatedFields = populatedFieldCount(fields),
+            populatedFields = populated,
             totalFields = fields.size,
             missingFields = missing,
             evidenceBackedFields = evidenceBackedFields,
@@ -79,8 +70,11 @@ object BusinessQualityEvaluator {
         )
     }
 
+    private fun hasValue(value: Any?): Boolean =
+        value != null && value.toString().isNotBlank()
+
     private fun populatedFieldCount(fields: List<Pair<String, Any?>>): Int =
-        fields.count { !it.second.isNullOrBlank() }
+        fields.count { hasValue(it.second) }
 
     private fun fieldKey(label: String): String = when (label) {
         "İşletme adı" -> "name"
