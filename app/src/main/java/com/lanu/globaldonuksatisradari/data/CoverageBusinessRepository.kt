@@ -4,11 +4,12 @@ import android.content.Context
 import com.lanu.globaldonuksatisradari.IstanbulDistricts
 
 /**
- * Production wiring: Coverage Engine -> real OSM adapters -> validated business records.
- * Empty results remain empty; failures are isolated by the engine's source fallback chain.
+ * Production wiring: Coverage Engine -> real OSM adapters -> local cache -> safe empty.
+ * Successful empty responses remain authoritative; local cache is used only after source failures.
  */
 class CoverageBusinessRepository(
-    @Suppress("UNUSED_PARAMETER") context: Context,
+    context: Context,
+    private val localCache: CoverageLocalCache = SharedPreferencesCoverageLocalCache(context),
 ) : BusinessRepository {
 
     private val overpass = OverpassBusinessSourceAdapter()
@@ -74,8 +75,10 @@ class CoverageBusinessRepository(
         }
 
         val scans = engine.scanAll(scopes)
-        return BusinessDeduplication.deduplicateCrossSource(
-            scans.flatMap { it.businesses },
+        return CoverageResultMerger.merge(
+            scans = scans,
+            localCache = localCache,
+            nowEpochMs = System.currentTimeMillis(),
         )
     }
 
