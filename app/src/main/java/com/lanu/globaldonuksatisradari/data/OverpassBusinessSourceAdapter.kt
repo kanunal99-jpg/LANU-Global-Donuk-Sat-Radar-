@@ -40,7 +40,7 @@ object OverpassBusinessSource {
 }
 
 object OverpassQueryBuilder {
-    private val BUSINESS_TAGS = listOf("amenity", "shop", "craft", "tourism", "leisure", "office")
+    private val BUSINESS_TAGS = listOf("amenity", "shop", "craft", "tourism", "leisure", "office", "healthcare", "sport", "food", "social_facility", "community_centre")
 
     fun build(city: String, district: String?, query: String): String {
         require(city.isNotBlank()) { "Şehir boş olamaz" }
