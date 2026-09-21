@@ -54,6 +54,7 @@ fun BusinessDetailCard(
             Text("Telefon: ${business.phone ?: "Kaynakta yok"}")
             Text("Web: ${business.website ?: "Kaynakta yok"}")
             Text("Çalışma saatleri: ${business.openingHours ?: "Kaynakta yok"}")
+            Text("Menü: ${business.menuUrl ?: business.menuText ?: "Kaynakta yok"}")
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 business.phone?.let { phone ->
@@ -71,6 +72,12 @@ fun BusinessDetailCard(
                         },
                         modifier = Modifier.weight(1f),
                     ) { Text("Web") }
+                }
+                business.menuUrl?.let { menu ->
+                    OutlinedButton(
+                        onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(menu))) },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Menü") }
                 }
             }
 
