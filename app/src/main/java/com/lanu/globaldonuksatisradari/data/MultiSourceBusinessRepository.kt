@@ -194,8 +194,10 @@ private class BusinessInventoryCache(
     }.getOrNull()
 
     companion object {
+        private const val CACHE_SCHEMA = "v2"
+
         fun key(city: String, district: String?, query: String): String {
-            val raw = listOf(city, district.orEmpty(), query.ifBlank { "*" })
+            val raw = listOf(CACHE_SCHEMA, city, district.orEmpty(), query.ifBlank { "*" })
                 .joinToString("|")
                 .lowercase()
                 .map { if (it.isLetterOrDigit()) it else '_' }
