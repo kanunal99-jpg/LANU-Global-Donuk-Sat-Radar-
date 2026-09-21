@@ -596,7 +596,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         SalesDashboard(
                             selectedCity = selectedCity.name,
                             selectedDistrict = selectedDistrict,
-                            availableDistricts = selectedCity.districts,
+                            availableDistricts = availableDistricts,
                             metrics = dashboardMetrics,
                             onDistrictSelected = {
                                 selectedDistrict = it
@@ -864,6 +864,18 @@ private fun BusinessResultCard(business: VerifiedBusiness, onClick: () -> Unit, 
             business.menuText?.let { Text("Menü bilgisi: $it", style = MaterialTheme.typography.bodySmall) }
             business.latitude?.let { lat -> business.longitude?.let { lon -> Text("Koordinat: $lat, $lon", style = MaterialTheme.typography.bodySmall) } }
             Text("Kaynak: ${business.source.name}", style = MaterialTheme.typography.bodySmall)
+            val quality = BusinessQualityEvaluator.evaluate(business)
+            Text(
+                "Veri kalitesi: " + quality.label + " • " + quality.score + "/100 • " + quality.completenessPercent + "% doluluk",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            if (quality.missingFields.isNotEmpty()) {
+                Text(
+                    "Eksik alanlar: " + quality.missingFields.take(3).joinToString(", ") + if (quality.missingFields.size > 3) "…" else "",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             Text("Telefon ve menü yalnızca gerçek kaynakta mevcutsa gösterilir.", style = MaterialTheme.typography.bodySmall)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 business.phone?.let { phone ->
