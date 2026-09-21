@@ -1,6 +1,8 @@
 package com.lanu.globaldonuksatisradari.data
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -25,16 +27,16 @@ class MultiSourceBusinessRepository(
         query: String,
         city: String,
         district: String?,
-    ): List<VerifiedBusiness> {
+    ): List<VerifiedBusiness> = withContext(Dispatchers.IO) {
         if (city.equals("İstanbul", ignoreCase = true) && district == null) {
-            return searchWholeIstanbul(query)
+            return@withContext searchWholeIstanbul(query)
         }
 
         val key = BusinessInventoryCache.key(city, district, query)
         val cached = cache.get(key)
 
         if (query.isBlank() && cached.isNotEmpty() && cache.ageMs(key) < 24 * 60 * 60 * 1000L) {
-            return BusinessDeduplication.deduplicate(cached)
+            return@withContext BusinessDeduplication.deduplicate(cached)
         }
 
         val primaryRecords = runCatching {
@@ -44,7 +46,7 @@ class MultiSourceBusinessRepository(
         if (primaryRecords.isNotEmpty()) {
             val merged = BusinessDeduplication.deduplicate(primaryRecords + cached)
             cache.put(key, merged)
-            return merged
+            return@withContext merged
         }
 
         if (query.isNotBlank() || district != null) {
@@ -54,11 +56,11 @@ class MultiSourceBusinessRepository(
             if (alternativeRecords.isNotEmpty()) {
                 val merged = BusinessDeduplication.deduplicate(alternativeRecords + cached)
                 cache.put(key, merged)
-                return merged
+                return@withContext merged
             }
         }
 
-        return BusinessDeduplication.deduplicate(cached)
+        return@withContext BusinessDeduplication.deduplicate(cached)
     }
 
     private suspend fun searchWholeIstanbul(query: String): List<VerifiedBusiness> {
