@@ -53,7 +53,7 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun blankSearch_keepsBroadInventoryModeAvailable() {
-        waitForText("Boş bırakırsanız restoran + kafe + fırın + fast food gerçek kaynak taraması yapılır.").assertExists()
+        waitForText("Boş bırakırsanız seçilen şehir/ilçe için OSM işletme envanteri taranır; hedefli kategori aramalarında çiğköfte, cafe, restoran, catering, PlayStation ve daha fazlası desteklenir.").assertExists()
         waitForText("İşletme envanteri filtreleri").assertExists()
     }
 
