@@ -734,6 +734,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
 
 @Composable
 private fun BusinessResultCard(business: VerifiedBusiness, onClick: () -> Unit, onSaveToCrm: () -> Unit) {
+    val context = LocalContext.current
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(business.name, style = MaterialTheme.typography.titleMedium)
