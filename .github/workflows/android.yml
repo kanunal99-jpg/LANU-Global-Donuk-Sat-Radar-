@@ -188,7 +188,7 @@ jobs:
           TEST_CLASS="com.lanu.globaldonuksatisradari.MainActivitySmokeTest"
           TESTS=(
             "launch_showsCoreSalesRadarUi"
-            "blankSearch_showsValidationMessage"
+            "blankSearch_keepsBroadInventoryModeAvailable"
             "launch_schedulesCrmSyncWork"
             "launch_createsStableActivity"
             "persistedCrmCustomer_opensRealDetailWorkflow"
