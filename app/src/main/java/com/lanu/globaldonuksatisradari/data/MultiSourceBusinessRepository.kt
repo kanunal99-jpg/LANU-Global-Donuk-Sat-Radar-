@@ -68,7 +68,7 @@ private class BusinessInventoryCache(
     }
 
     fun put(key: String, records: List<VerifiedBusiness>) {
-        val limited = records.distinctBy { "§{it.source.id}:§{it.id}" }.take(5_000)
+        val limited = records.distinctBy { it.source.id + ":" + it.id }.take(5_000)
         val array = JSONArray()
         limited.forEach { array.put(serialize(it)) }
         val root = JSONObject()
@@ -144,7 +144,7 @@ private class BusinessInventoryCache(
                 .map { if (it.isLetterOrDigit()) it else '_' }
                 .joinToString("")
                 .take(100)
-            return "inventory_§{raw}"
+            return "inventory_" + raw
         }
     }
 }
