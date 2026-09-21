@@ -11,6 +11,9 @@ class OverpassBusinessSourceAdapterTest {
         assertTrue(query.contains("""nwr["name"]["amenity"]"""))
         assertTrue(query.contains("""nwr["name"]["shop"]"""))
         assertTrue(query.contains("""nwr["name"]["craft"]"""))
+        assertTrue(query.contains("""nwr["name"]["healthcare"]"""))
+        assertTrue(query.contains("""nwr["name"]["sport"]"""))
+        assertTrue(query.contains("""nwr["name"]["food"]"""))
         assertTrue(!query.contains("map_to_area"))
     }
 
