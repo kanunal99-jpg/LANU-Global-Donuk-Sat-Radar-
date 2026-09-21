@@ -379,7 +379,6 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     onClick = {
                                         error = null
                                         selectedBusiness = null
-                                        selectedCustomerId = null
                                         crmMessage = null
                                         loading = true
                                         scope.launch {
