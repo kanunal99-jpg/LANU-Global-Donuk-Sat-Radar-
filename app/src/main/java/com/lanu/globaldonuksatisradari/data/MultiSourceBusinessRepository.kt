@@ -7,6 +7,16 @@ import org.json.JSONObject
 class MultiSourceBusinessRepository(
     context: Context,
 ) : BusinessRepository {
+    private val ISTANBUL_DISTRICTS = listOf(
+        "Adalar", "Arnavutköy", "Ataşehir", "Avcılar", "Bağcılar", "Bahçelievler",
+        "Bakırköy", "Başakşehir", "Bayrampaşa", "Beşiktaş", "Beykoz", "Beylikdüzü",
+        "Beyoğlu", "Büyükçekmece", "Çatalca", "Çekmeköy", "Esenler", "Esenyurt",
+        "Eyüpsultan", "Fatih", "Gaziosmanpaşa", "Güngören", "Kadıköy", "Kağıthane",
+        "Kartal", "Küçükçekmece", "Maltepe", "Pendik", "Sancaktepe", "Sarıyer",
+        "Silivri", "Sultanbeyli", "Sultangazi", "Şile", "Şişli", "Tuzla",
+        "Ümraniye", "Üsküdar", "Zeytinburnu",
+    )
+
     private val primary = OverpassBusinessSourceAdapter()
     private val alternative = NominatimBusinessSourceAdapter()
     private val cache = BusinessInventoryCache(context.applicationContext)
@@ -16,6 +26,10 @@ class MultiSourceBusinessRepository(
         city: String,
         district: String?,
     ): List<VerifiedBusiness> {
+        if (city.equals("İstanbul", ignoreCase = true) && district == null) {
+            return searchWholeIstanbul(query)
+        }
+
         val key = BusinessInventoryCache.key(city, district, query)
         val cached = cache.get(key)
 
@@ -45,6 +59,47 @@ class MultiSourceBusinessRepository(
         }
 
         return BusinessDeduplication.deduplicate(cached)
+    }
+
+    private suspend fun searchWholeIstanbul(query: String): List<VerifiedBusiness> {
+        val merged = linkedMapOf<String, VerifiedBusiness>()
+
+        ISTANBUL_DISTRICTS.forEach { districtName ->
+            val key = BusinessInventoryCache.key("İstanbul", districtName, query)
+            val cached = cache.get(key)
+            val freshCached = cached.isNotEmpty() && cache.ageMs(key) < 24 * 60 * 60 * 1000L
+
+            val records = if (freshCached) {
+                cached
+            } else {
+                val fetched = runCatching {
+                    primary.fetchValidated(query, "İstanbul", districtName)
+                }.getOrDefault(emptyList())
+                if (fetched.isNotEmpty()) {
+                    cache.put(key, fetched)
+                    fetched
+                } else {
+                    cached
+                }
+            }
+
+            records.forEach { business ->
+                merged[business.source.id + ":" + business.id] = business
+            }
+        }
+
+        if (merged.isNotEmpty()) return merged.values.toList()
+
+        val cityFallback = cache.get(BusinessInventoryCache.key("İstanbul", null, query))
+        if (cityFallback.isNotEmpty()) return BusinessDeduplication.deduplicate(cityFallback)
+
+        if (query.isNotBlank()) {
+            return runCatching {
+                alternative.fetchValidated(query, "İstanbul", null)
+            }.getOrDefault(emptyList())
+        }
+
+        return emptyList()
     }
 }
 
