@@ -1,5 +1,6 @@
 package com.lanu.globaldonuksatisradari.data
 
+import com.lanu.globaldonuksatisradari.IstanbulDistricts
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -18,15 +19,7 @@ class CoverageBusinessRepositoryTest {
 
     @Test
     fun istanbulDistrictCatalogContainsAll39Districts() {
-        val expected = setOf(
-            "Adalar", "Arnavutköy", "Ataşehir", "Avcılar", "Bağcılar", "Bahçelievler",
-            "Bakırköy", "Başakşehir", "Bayrampaşa", "Beşiktaş", "Beykoz", "Beylikdüzü",
-            "Beyoğlu", "Büyükçekmece", "Çatalca", "Çekmeköy", "Esenler", "Esenyurt",
-            "Eyüpsultan", "Fatih", "Gaziosmanpaşa", "Güngören", "Kadıköy", "Kağıthane",
-            "Kartal", "Küçükçekmece", "Maltepe", "Pendik", "Sancaktepe", "Sarıyer",
-            "Silivri", "Sultanbeyli", "Sultangazi", "Şile", "Şişli", "Tuzla",
-            "Ümraniye", "Üsküdar", "Zeytinburnu",
-        )
-        assertEquals(39, expected.size)
+        assertEquals(39, IstanbulDistricts.ALL.size)
+        assertEquals(39, IstanbulDistricts.ALL.toSet().size)
     }
 }
