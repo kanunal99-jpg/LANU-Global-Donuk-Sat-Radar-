@@ -34,7 +34,7 @@ class DistrictCatalogRepository(context: Context) {
 
     private fun fetch(endpoint: String, city: String): List<String> {
         val areaName = city.replace("\\", "\\\\").replace("\"", "\\\"")
-        val query = """[out:json][timeout:45];area[\"name\"=\"$areaName\"][\"boundary\"=\"administrative\"][\"admin_level\"=\"4\"]->.cityArea;relation(area.cityArea)[\"boundary\"=\"administrative\"][\"admin_level\"=\"6\"][\"name\"]->.districts;out tags;"""
+        val query = """[out:json][timeout:45];area["name"="$areaName"]["boundary"="administrative"]["admin_level"="4"]->.cityArea;relation(area.cityArea)["boundary"="administrative"]["admin_level"="6"]["name"]->.districts;out tags;"""
         val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = 15_000
