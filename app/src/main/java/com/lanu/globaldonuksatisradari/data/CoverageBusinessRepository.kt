@@ -16,32 +16,32 @@ class CoverageBusinessRepository(
     private val engine = BusinessCoverageEngine(
         sources = listOf(
             CoverageSource { scope ->
-                runCatching {
-                    val businesses = overpass.fetchValidated(
-                        query = scope.category.takeUnless { it == "*" }.orEmpty(),
-                        city = scope.city,
-                        district = scope.district.takeUnless { it == "Tümü" },
-                    )
+                val businesses = overpass.fetchValidated(
+                    query = scope.category.takeUnless { it == "*" }.orEmpty(),
+                    city = scope.city,
+                    district = scope.district.takeUnless { it == "Tümü" },
+                )
+                Result.success(
                     CoverageSourceResult(
                         source = overpass.contract.descriptor,
                         businesses = businesses,
                         completedAtEpochMs = System.currentTimeMillis(),
-                    )
-                }
+                    ),
+                )
             },
             CoverageSource { scope ->
-                runCatching {
-                    val businesses = nominatim.fetchValidated(
-                        query = scope.category.takeUnless { it == "*" }.orEmpty(),
-                        city = scope.city,
-                        district = scope.district.takeUnless { it == "Tümü" },
-                    )
+                val businesses = nominatim.fetchValidated(
+                    query = scope.category.takeUnless { it == "*" }.orEmpty(),
+                    city = scope.city,
+                    district = scope.district.takeUnless { it == "Tümü" },
+                )
+                Result.success(
                     CoverageSourceResult(
                         source = nominatim.contract.descriptor,
                         businesses = businesses,
                         completedAtEpochMs = System.currentTimeMillis(),
-                    )
-                }
+                    ),
+                )
             },
         ),
         nowEpochMs = { System.currentTimeMillis() },
