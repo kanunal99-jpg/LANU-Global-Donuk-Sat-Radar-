@@ -7,9 +7,11 @@ class OverpassBusinessSourceAdapterTest {
     @Test
     fun blankIstanbulQueryBuildsBroadBusinessInventory() {
         val query = OverpassQueryBuilder.build("İstanbul", null, "")
+        assertTrue(query.contains("""area["name"="İstanbul"]["boundary"="administrative"]["admin_level"="4"]->.searchArea;"""))
         assertTrue(query.contains("""nwr["name"]["amenity"]"""))
         assertTrue(query.contains("""nwr["name"]["shop"]"""))
         assertTrue(query.contains("""nwr["name"]["craft"]"""))
+        assertTrue(!query.contains("map_to_area"))
     }
 
     @Test
