@@ -130,7 +130,7 @@ object OverpassQueryBuilder {
             .replace('ç', 'c')
 
     private fun escapeQuoted(value: String): String =
-        value.replace("\\", "\\\\").replace(""", "\"")
+        value.replace("\\", "\\\\").replace("\"", "\\\"")
 
     private fun escapeRegex(value: String): String =
         value.replace("\\", "\\\\").replace(""", "\"")
@@ -226,7 +226,7 @@ class OverpassBusinessSourceAdapter(
             ).joinToString(", ").takeIf(String::isNotBlank)
 
             val category = firstTag(tags, "amenity", "shop", "craft", "tourism", "leisure", "office", "cuisine")
-            val id = "§{item.optString("type")}:§{item.optLong("id")}".trim(':')
+            val id = item.optString("type") + ":" + item.optLong("id")
             if (id.isBlank() || id.endsWith(":0")) continue
 
             result += VerifiedBusiness(
