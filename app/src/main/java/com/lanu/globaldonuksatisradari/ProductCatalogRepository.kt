@@ -21,6 +21,10 @@ data class CatalogProduct(
     val priceMinor: Long,
     val currency: String,
     val note: String?,
+    val description: String?,
+    val imageUrl: String?,
+    val sourceUrl: String?,
+    val sourceVerifiedAtEpochMs: Long?,
     val updatedAtEpochMs: Long,
 )
 
@@ -73,6 +77,10 @@ class ProductCatalogRepository(context: Context) {
         priceMinor: Long,
         currency: String,
         note: String?,
+        description: String? = null,
+        imageUrl: String? = null,
+        sourceUrl: String? = null,
+        sourceVerifiedAtEpochMs: Long? = null,
     ): CatalogProduct {
         val normalizedName = name.trim()
         require(normalizedName.isNotEmpty()) { "Ürün adı boş olamaz." }
@@ -89,6 +97,10 @@ class ProductCatalogRepository(context: Context) {
             priceMinor = priceMinor,
             currency = normalizedCurrency,
             note = note?.trim()?.takeIf { it.isNotEmpty() },
+            description = description?.trim()?.takeIf { it.isNotEmpty() },
+            imageUrl = imageUrl?.trim()?.takeIf { it.isNotEmpty() },
+            sourceUrl = sourceUrl?.trim()?.takeIf { it.isNotEmpty() },
+            sourceVerifiedAtEpochMs = sourceVerifiedAtEpochMs,
             updatedAtEpochMs = System.currentTimeMillis(),
         )
 
@@ -130,6 +142,10 @@ class ProductCatalogRepository(context: Context) {
                             priceMinor = item.getLong("priceMinor"),
                             currency = item.optString("currency", "TRY").ifBlank { "TRY" },
                             note = item.optString("note").takeIf { it.isNotBlank() },
+                            description = item.optString("description").takeIf { it.isNotBlank() },
+                            imageUrl = item.optString("imageUrl").takeIf { it.isNotBlank() },
+                            sourceUrl = item.optString("sourceUrl").takeIf { it.isNotBlank() },
+                            sourceVerifiedAtEpochMs = item.optLong("sourceVerifiedAtEpochMs", 0L).takeIf { it > 0L },
                             updatedAtEpochMs = item.optLong("updatedAtEpochMs", 0L),
                         ),
                     )
@@ -150,6 +166,10 @@ class ProductCatalogRepository(context: Context) {
                     put("priceMinor", product.priceMinor)
                     put("currency", product.currency)
                     put("note", product.note)
+                    put("description", product.description)
+                    put("imageUrl", product.imageUrl)
+                    put("sourceUrl", product.sourceUrl)
+                    put("sourceVerifiedAtEpochMs", product.sourceVerifiedAtEpochMs)
                     put("updatedAtEpochMs", product.updatedAtEpochMs)
                 },
             )
