@@ -24,6 +24,8 @@ import com.lanu.globaldonuksatisradari.crm.CrmSyncScheduler
 import com.lanu.globaldonuksatisradari.crm.SupabaseAuthClient
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
+import com.lanu.globaldonuksatisradari.data.BusinessQualityEvaluator
+import com.lanu.globaldonuksatisradari.data.DistrictCatalogRepository
 import com.lanu.globaldonuksatisradari.data.MultiSourceBusinessRepository
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.Dispatchers
@@ -34,13 +36,9 @@ data class City(val name: String, val districts: List<String>)
 
 enum class AppSection { RADAR, PRODUCT_CATALOG, MANUAL_POINT, ROUTINE }
 
-private val cities = listOf(
-    City("İstanbul", IstanbulDistricts.ALL),
-    City("Ankara", listOf("Çankaya", "Keçiören", "Yenimahalle")),
-    City("İzmir", listOf("Konak", "Karşıyaka", "Bornova")),
-    City("Bursa", listOf("Nilüfer", "Osmangazi")),
-    City("Antalya", listOf("Muratpaşa", "Konyaaltı")),
-)
+private val cities = TurkeyCityCatalog.ALL.map { entry ->
+    City(entry.name, entry.fallbackDistricts)
+}
 
 private fun matchesInventoryPresence(value: String?, filter: String): Boolean =
     when (filter) {
@@ -95,6 +93,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
 
     var cityMenu by remember { mutableStateOf(false) }
     var districtMenu by remember { mutableStateOf(false) }
+    var availableDistricts by remember { mutableStateOf(selectedCity.districts) }
+    var districtLoading by remember { mutableStateOf(false) }
     var neighborhoodMenu by remember { mutableStateOf(false) }
     var selectedDistrict by remember { mutableStateOf("Tümü") }
     var selectedNeighborhood by remember { mutableStateOf("Tümü") }
@@ -126,6 +126,16 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
 
     val repository = remember(context) {
         MultiSourceBusinessRepository(context)
+    }
+    val districtRepository = remember(context) {
+        DistrictCatalogRepository(context)
+    }
+    LaunchedEffect(selectedCity.name) {
+        districtLoading = true
+        val fallback = selectedCity.districts
+        availableDistricts = fallback
+        availableDistricts = districtRepository.getDistricts(selectedCity.name, fallback)
+        districtLoading = false
     }
     val localCrmRepository = remember(context) {
         LocalCrmRepository(LanuCrmDatabase.getInstance(context))
@@ -292,13 +302,11 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         Text("LANU Global Donuk Gıda", style = MaterialTheme.typography.titleLarge)
                         Text("Satış & CRM Radarı", style = MaterialTheme.typography.headlineSmall)
                         Text("Şehir → ilçe → mahalle → gerçek işletme keşfi", style = MaterialTheme.typography.bodyMedium)
-                        if (selectedCity.name == "İstanbul") {
-                            Text(
-                                "İstanbul’da 39 ilçe filtresi aktif.",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
+                        Text(
+                            "Türkiye: " + cities.size + " il aktif • ilçe listeleri ağdan keşfedilir ve cihazda önbelleklenir.",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             OutlinedButton(onClick = { navigateTo(AppSection.MANUAL_POINT) }, modifier = Modifier.weight(1f)) {
                                 Text("Manuel nokta")
@@ -363,7 +371,17 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 onDismissRequest = { districtMenu = false },
                             ) {
                                 LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
-                                    items(listOf("Tümü") + selectedCity.districts) { district ->
+                                    item {
+                                        DropdownMenuItem(
+                                            text = { Text(if (districtLoading) "İlçeler yükleniyor…" else "Tümü") },
+                                            onClick = {
+                                                selectedDistrict = "Tümü"
+                                                selectedNeighborhood = "Tümü"
+                                                districtMenu = false
+                                            },
+                                        )
+                                    }
+                                    items(availableDistricts) { district ->
                                         DropdownMenuItem(text = { Text(district) }, onClick = {
                                             selectedDistrict = district
                                             selectedNeighborhood = "Tümü"
