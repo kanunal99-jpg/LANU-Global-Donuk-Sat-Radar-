@@ -28,6 +28,8 @@ data class VerifiedBusiness(
     val website: String? = null,
     /** Present only when the verified source actually provides opening-hours data. */
     val openingHours: String? = null,
+    val menuUrl: String? = null,
+    val menuText: String? = null,
 )
 
 /** Keeps unverified external records out of the application domain. */
