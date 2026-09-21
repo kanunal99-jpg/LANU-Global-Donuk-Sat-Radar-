@@ -21,6 +21,62 @@ class ProductCatalogTest {
     }
 
     @Test
+    fun productSupportsOfficialDescriptionPhotoAndSourceMetadata() {
+        val product = CatalogProduct(
+            id = "global-demo",
+            name = "Resmî katalog kaydı",
+            category = "Pişmiş donuk yemek",
+            unit = "Porsiyon",
+            priceMinor = 0L,
+            currency = "TRY",
+            note = null,
+            description = "Kaynakta yayınlanan ürün açıklaması.",
+            imageUrl = "https://globaldonukgida.com/example.jpg",
+            sourceUrl = "https://globaldonukgida.com/",
+            sourceVerifiedAtEpochMs = 1_000L,
+            updatedAtEpochMs = 1_000L,
+        )
+
+        assertEquals("https://globaldonukgida.com/example.jpg", product.imageUrl)
+        assertEquals("https://globaldonukgida.com/", product.sourceUrl)
+        assertEquals(1_000L, product.sourceVerifiedAtEpochMs)
+    }
+
+    @Test
+    fun rejectsNonHttpsProductImageUrl() {
+        val repository = ProductCatalogRepositoryTestFactory.repository()
+        assertThrows(IllegalArgumentException::class.java) {
+            repository.upsert(
+                id = "bad-image",
+                name = "Test",
+                category = "Test",
+                unit = "Adet",
+                priceMinor = 100L,
+                currency = "TRY",
+                note = null,
+                imageUrl = "http://example.com/image.jpg",
+            )
+        }
+    }
+
+    @Test
+    fun rejectsNonHttpsSourceUrl() {
+        val repository = ProductCatalogRepositoryTestFactory.repository()
+        assertThrows(IllegalArgumentException::class.java) {
+            repository.upsert(
+                id = "bad-source",
+                name = "Test",
+                category = "Test",
+                unit = "Adet",
+                priceMinor = 100L,
+                currency = "TRY",
+                note = null,
+                sourceUrl = "http://globaldonukgida.com/",
+            )
+        }
+    }
+
+    @Test
     fun rejectsNegativePrice() {
         assertThrows(IllegalArgumentException::class.java) {
             ProductPrice.parseToMinor("-10")
