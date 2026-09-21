@@ -28,6 +28,14 @@ data class CatalogProduct(
     val updatedAtEpochMs: Long,
 )
 
+object ProductMediaValidation {
+    fun requireHttpsUrl(value: String?, field: String) {
+        value?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            require(it.startsWith("https://")) { "$field yalnızca HTTPS olmalıdır." }
+        }
+    }
+}
+
 object ProductPrice {
     fun parseToMinor(input: String): Long {
         val raw = input
@@ -86,13 +94,8 @@ class ProductCatalogRepository(context: Context) {
         require(normalizedName.isNotEmpty()) { "Ürün adı boş olamaz." }
         require(priceMinor >= 0L) { "Fiyat negatif olamaz." }
 
-        fun validateHttpsUrl(value: String?, field: String) {
-            value?.trim()?.takeIf { it.isNotEmpty() }?.let {
-                require(it.startsWith("https://")) { "$field yalnızca HTTPS olmalıdır." }
-            }
-        }
-        validateHttpsUrl(imageUrl, "Ürün fotoğrafı URL")
-        validateHttpsUrl(sourceUrl, "Kaynak URL")
+        ProductMediaValidation.requireHttpsUrl(imageUrl, "Ürün fotoğrafı URL")
+        ProductMediaValidation.requireHttpsUrl(sourceUrl, "Kaynak URL")
 
         val normalizedCurrency = currency.trim().uppercase(Locale.ROOT)
         require(normalizedCurrency.length == 3) { "Para birimi 3 harf olmalıdır. Örnek: TRY" }
