@@ -501,7 +501,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                                 if (records.isEmpty()) {
                                                     error = "Seçilen kapsamda kayıt bulunamadı; önce ilçe/kategori seçerek daha hedefli arama yapabilirsiniz."
                                                 } else {
-                                                    crmMessage = "§{records.size} gerçek/envanter kaydı getirildi. Daha önce bulunan kayıtlar cihazdaki yerel envanter önbelleğinde korunur."
+                                                    crmMessage = "${records.size} gerçek/envanter kaydı getirildi. Daha önce bulunan kayıtlar cihazdaki yerel envanter önbelleğinde korunur."
                                                 }
                                             }.onFailure { throwable ->
                                                 val fallbackText = throwable.message ?: "bilinmeyen kaynak hatası"
