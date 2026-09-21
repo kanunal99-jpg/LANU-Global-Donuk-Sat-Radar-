@@ -1,6 +1,7 @@
 package com.lanu.globaldonuksatisradari
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -293,18 +295,30 @@ private fun ProductCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    var imageFailed by remember(product.imageUrl) { mutableStateOf(false) }
+
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             product.imageUrl?.let { url ->
-                AsyncImage(
-                    model = url,
-                    contentDescription = product.name,
+                Box(
                     modifier = Modifier.fillMaxWidth().height(180.dp),
-                    contentScale = ContentScale.Crop,
-                )
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (imageFailed) {
+                        Text("Ürün fotoğrafı yüklenemedi")
+                    } else {
+                        AsyncImage(
+                            model = url,
+                            contentDescription = product.name,
+                            modifier = Modifier.fillMaxWidth().height(180.dp),
+                            contentScale = ContentScale.Crop,
+                            onError = { imageFailed = true },
+                        )
+                    }
+                }
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
