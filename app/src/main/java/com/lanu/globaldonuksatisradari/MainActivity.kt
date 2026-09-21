@@ -26,7 +26,7 @@ import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.data.BusinessQualityEvaluator
 import com.lanu.globaldonuksatisradari.data.DistrictCatalogRepository
-import com.lanu.globaldonuksatisradari.data.MultiSourceBusinessRepository
+import com.lanu.globaldonuksatisradari.data.CoverageBusinessRepository
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -125,7 +125,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val context = LocalContext.current
 
     val repository = remember(context) {
-        MultiSourceBusinessRepository(context)
+        CoverageBusinessRepository(context)
     }
     val districtRepository = remember(context) {
         DistrictCatalogRepository(context)
