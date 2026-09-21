@@ -33,7 +33,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
-import coil3.compose.AsyncImage
+import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import java.util.Locale
 
