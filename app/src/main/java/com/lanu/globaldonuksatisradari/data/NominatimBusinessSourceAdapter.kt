@@ -31,7 +31,7 @@ object NominatimBusinessSource {
         supportsBulk = false,
         fieldNames = setOf(
             "name", "city", "district", "neighborhood", "latitude", "longitude",
-            "category", "address", "phone", "website", "opening_hours",
+            "category", "address", "phone", "website", "opening_hours", "menu", "menu_url", "website:menu", "contact:menu",
         ),
     )
 }
@@ -119,6 +119,8 @@ class NominatimBusinessSourceAdapter(
                 phone = firstExtraValue(extra, "phone", "contact:phone", "contact_phone"),
                 website = firstExtraValue(extra, "website", "contact:website", "url"),
                 openingHours = firstExtraValue(extra, "opening_hours"),
+                menuUrl = firstExtraValue(extra, "menu_url", "website:menu", "contact:menu", "menu:website"),
+                menuText = firstExtraValue(extra, "menu", "menu:description"),
             )
         }
         return BusinessDeduplication.deduplicate(result)
