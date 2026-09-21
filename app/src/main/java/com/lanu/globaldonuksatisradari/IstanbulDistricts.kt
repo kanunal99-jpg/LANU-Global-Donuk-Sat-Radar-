@@ -1,7 +1,7 @@
 package com.lanu.globaldonuksatisradari
 
 object IstanbulDistricts {
-    val all: List<String> = listOf(
+    val ALL: List<String> = listOf(
         "Adalar",
         "Arnavutköy",
         "Ataşehir",
