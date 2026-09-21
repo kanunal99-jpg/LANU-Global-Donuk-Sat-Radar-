@@ -55,18 +55,20 @@ object OverpassQueryBuilder {
 
     private fun buildScope(city: String, district: String?): String {
         val escapedCity = escapeQuoted(city)
-        val cityArea = """area["name"="$escapedCity"]["boundary"="administrative"]["admin_level"="4"]->.cityArea;"""
-        val districtPart = district
-            ?.takeUnless { it.isBlank() || it.equals("Tümü", ignoreCase = true) }
-            ?.let {
-                val escapedDistrict = escapeQuoted(it)
-                """
-                relation(area.cityArea)["boundary"="administrative"]["admin_level"="6"]["name"="$escapedDistrict"]->.districtRelation;
-                .districtRelation map_to_area->.searchArea;
-                """.trimIndent()
-            }
-            ?: ".cityArea map_to_area->.searchArea;"
-        return cityArea + "\n" + districtPart
+        val selectedDistrict = district?.takeUnless {
+            it.isBlank() || it.equals("Tümü", ignoreCase = true)
+        }
+
+        return if (selectedDistrict == null) {
+            """area["name"="$escapedCity"]["boundary"="administrative"]["admin_level"="4"]->.searchArea;"""
+        } else {
+            val escapedDistrict = escapeQuoted(selectedDistrict)
+            """
+            area["name"="$escapedCity"]["boundary"="administrative"]["admin_level"="4"]->.cityArea;
+            relation(area.cityArea)["boundary"="administrative"]["admin_level"="6"]["name"="$escapedDistrict"]->.districtRelation;
+            .districtRelation map_to_area->.searchArea;
+            """.trimIndent()
+        }
     }
 
     private fun buildBroadQuery(): String =
