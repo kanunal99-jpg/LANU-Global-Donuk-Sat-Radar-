@@ -184,12 +184,6 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         }
     }
 
-    val visibleResults = remember(results, selectedNeighborhood) {
-        results.filter {
-            selectedNeighborhood == "Tümü" || it.neighborhood.equals(selectedNeighborhood, ignoreCase = true)
-        }
-    }
-
     val dashboardMetrics = remember(
         filteredCrmCustomers,
         regionActivities,
