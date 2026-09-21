@@ -186,7 +186,7 @@ class OverpassBusinessSourceAdapter(
         query: String,
         city: String,
         district: String?,
-    ): List<VerifiedBusiness>? {
+    ): List<VerifiedBusiness> {
         RateLimiter.await()
 
         val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
