@@ -133,7 +133,7 @@ object OverpassQueryBuilder {
         value.replace("\\", "\\\\").replace("\"", "\\\"")
 
     private fun escapeRegex(value: String): String =
-        value.replace("\\", "\\\\").replace(""", "\"")
+        value.replace("\\", "\\\\").replace("\"", "\\\"")
 }
 
 class OverpassBusinessSourceAdapter(
