@@ -36,7 +36,7 @@ class MultiSourceBusinessRepository(
         val cached = cache.get(key)
 
         if (query.isBlank() && cached.isNotEmpty() && cache.ageMs(key) < 24 * 60 * 60 * 1000L) {
-            return@withContext BusinessDeduplication.deduplicate(cached)
+            return@withContext BusinessDeduplication.deduplicateCrossSource(cached)
         }
 
         val primaryRecords = runCatching {
@@ -44,7 +44,7 @@ class MultiSourceBusinessRepository(
         }.getOrDefault(emptyList())
 
         if (primaryRecords.isNotEmpty()) {
-            val merged = BusinessDeduplication.deduplicate(primaryRecords + cached)
+            val merged = BusinessDeduplication.deduplicateCrossSource(primaryRecords + cached)
             cache.put(key, merged)
             return@withContext merged
         }
@@ -54,13 +54,13 @@ class MultiSourceBusinessRepository(
                 alternative.fetchValidated(query.ifBlank { "restaurant" }, city, district)
             }.getOrDefault(emptyList())
             if (alternativeRecords.isNotEmpty()) {
-                val merged = BusinessDeduplication.deduplicate(alternativeRecords + cached)
+                val merged = BusinessDeduplication.deduplicateCrossSource(alternativeRecords + cached)
                 cache.put(key, merged)
                 return@withContext merged
             }
         }
 
-        return@withContext BusinessDeduplication.deduplicate(cached)
+        return@withContext BusinessDeduplication.deduplicateCrossSource(cached)
     }
 
     private suspend fun searchWholeIstanbul(query: String): List<VerifiedBusiness> {
@@ -107,7 +107,7 @@ class MultiSourceBusinessRepository(
         if (merged.isNotEmpty()) return merged.values.toList()
 
         val cityFallback = cache.get(BusinessInventoryCache.key("İstanbul", null, query))
-        if (cityFallback.isNotEmpty()) return BusinessDeduplication.deduplicate(cityFallback)
+        if (cityFallback.isNotEmpty()) return BusinessDeduplication.deduplicateCrossSource(cityFallback)
 
         if (query.isNotBlank()) {
             return runCatching {
