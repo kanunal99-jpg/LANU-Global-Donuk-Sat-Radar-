@@ -88,8 +88,24 @@ class NominatimBusinessSourceAdapter(
             if (name.isBlank()) continue
             val address = item.optJSONObject("address")
             val extra = item.optJSONObject("extratags")
+            val addressDistrictCandidates = address?.let {
+                listOfNotNull(
+                    it.optString("suburb").takeIf(String::isNotBlank),
+                    it.optString("city_district").takeIf(String::isNotBlank),
+                    it.optString("town").takeIf(String::isNotBlank),
+                    it.optString("county").takeIf(String::isNotBlank),
+                )
+            }.orEmpty()
+            val selectedDistrictNormalized = selectedDistrict
+                ?.takeUnless { it.isBlank() || it.equals("Tümü", ignoreCase = true) }
+                ?.let(::normalizePlaceName)
+            if (selectedDistrictNormalized != null &&
+                addressDistrictCandidates.none { normalizePlaceName(it) == selectedDistrictNormalized }
+            ) {
+                continue
+            }
             val district = selectedDistrict?.takeUnless { it.isBlank() || it.equals("Tümü", ignoreCase = true) }
-                ?: address?.let { listOfNotNull(it.optString("suburb").takeIf(String::isNotBlank), it.optString("city_district").takeIf(String::isNotBlank), it.optString("town").takeIf(String::isNotBlank)).firstOrNull() }
+                ?: addressDistrictCandidates.firstOrNull()
                 ?: continue
             val id = "${item.optString("osm_type")}:${item.optString("osm_id")}".trim(':')
             if (id.isBlank()) continue
@@ -107,6 +123,16 @@ class NominatimBusinessSourceAdapter(
         }
         return BusinessDeduplication.deduplicate(result)
     }
+
+    private fun normalizePlaceName(value: String): String =
+        value.trim()
+            .lowercase()
+            .replace('ı', 'i')
+            .replace('ş', 's')
+            .replace('ğ', 'g')
+            .replace('ü', 'u')
+            .replace('ö', 'o')
+            .replace('ç', 'c')
 
     private fun firstExtraValue(extra: org.json.JSONObject?, vararg keys: String): String? = keys.firstNotNullOfOrNull { key ->
         extra?.optString(key)?.trim()?.takeIf(String::isNotBlank)
