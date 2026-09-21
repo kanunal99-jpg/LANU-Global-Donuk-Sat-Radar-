@@ -6,6 +6,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedInputStream
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -154,7 +155,10 @@ class OverpassBusinessSourceAdapter(
         city: String,
         district: String?,
     ): List<VerifiedBusiness> = withContext(Dispatchers.IO) {
-        if (!contract.validate().isSuccess || city.isBlank()) return@withContext emptyList()
+        contract.validate().getOrElse { error ->
+            throw IllegalStateException("Overpass kaynak sözleşmesi geçersiz", error)
+        }
+        require(city.isNotBlank()) { "Şehir boş olamaz" }
 
         val endpoints = buildList {
             add(baseUrlProvider())
@@ -163,12 +167,18 @@ class OverpassBusinessSourceAdapter(
             .filter { it.startsWith("https://") }
             .distinct()
 
+        var lastFailure: Exception? = null
         for (endpoint in endpoints) {
-            runCatching {
-                fetchFromEndpoint(endpoint, query, city, district)
-            }.getOrNull()?.let { return@withContext it }
+            try {
+                return@withContext fetchFromEndpoint(endpoint, query, city, district)
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                lastFailure = error
+            }
         }
-        emptyList()
+
+        throw lastFailure ?: IllegalStateException("Overpass için kullanılabilir HTTPS endpoint bulunamadı")
     }
 
     private suspend fun fetchFromEndpoint(
@@ -176,7 +186,7 @@ class OverpassBusinessSourceAdapter(
         query: String,
         city: String,
         district: String?,
-    ): List<VerifiedBusiness>? {
+    ): List<VerifiedBusiness> {
         RateLimiter.await()
 
         val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
@@ -202,7 +212,10 @@ class OverpassBusinessSourceAdapter(
                 writer.write(encodedQuery)
             }
 
-            if (connection.responseCode !in 200..299) return null
+            val responseCode = connection.responseCode
+            if (responseCode !in 200..299) {
+                throw IOException("Overpass HTTP $responseCode")
+            }
 
             val input = BufferedInputStream(connection.inputStream)
             val text = buildString {

@@ -4,6 +4,7 @@ import android.os.SystemClock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URLEncoder
 import java.net.URL
@@ -58,7 +59,10 @@ class NominatimBusinessSourceAdapter(
     override val contract: BusinessSourceContract = NominatimBusinessSource.contract
 
     override suspend fun fetch(query: String, city: String, district: String?): List<VerifiedBusiness> = withContext(Dispatchers.IO) {
-        if (contract.validate().isFailure || query.isBlank()) return@withContext emptyList()
+        contract.validate().getOrElse { error ->
+            throw IllegalStateException("Nominatim kaynak sözleşmesi geçersiz", error)
+        }
+        require(query.isNotBlank()) { "Nominatim hedefli arama için sorgu boş olamaz" }
         val cacheKey = listOf(query.trim().lowercase(), city.trim().lowercase(), district?.trim()?.lowercase().orEmpty(), baseUrlProvider()).joinToString("|")
         SearchCache.get(cacheKey)?.let { return@withContext it }
         RateLimiter.await()
@@ -71,7 +75,10 @@ class NominatimBusinessSourceAdapter(
             setRequestProperty("User-Agent", "LANU-Global-Donuk-Satis-Radari/0.2 (+https://github.com/kanunal99-jpg/LANU-Global-Donuk-Sat-Radar-)")
         }
         try {
-            if (connection.responseCode !in 200..299) return@withContext emptyList()
+            val responseCode = connection.responseCode
+            if (responseCode !in 200..299) {
+                throw IOException("Nominatim HTTP $responseCode")
+            }
             val payload = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
             val parsed = parse(payload, city, district, nowEpochMs())
             SearchCache.put(cacheKey, parsed)

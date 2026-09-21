@@ -63,12 +63,16 @@ class BusinessCoverageEngine(
         val attempts = mutableListOf<CoverageAttempt>()
 
         for (source in sources) {
-            val result = runCatching { source.scan(scope) }.getOrElse {
+            val result = try {
+                source.scan(scope)
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
                 attempts += CoverageAttempt(
                     sourceId = "unknown",
                     success = false,
                     resultCount = 0,
-                    errorCode = it::class.simpleName ?: "SOURCE_EXCEPTION",
+                    errorCode = error::class.simpleName ?: "SOURCE_EXCEPTION",
                 )
                 continue
             }
@@ -90,7 +94,7 @@ class BusinessCoverageEngine(
             }
 
             attempts += CoverageAttempt(
-                sourceId = "source-\${attempts.size + 1}",
+                sourceId = "source-${attempts.size + 1}",
                 success = false,
                 resultCount = 0,
                 errorCode = result.exceptionOrNull()?.javaClass?.simpleName ?: "SOURCE_ERROR",
@@ -110,7 +114,9 @@ class BusinessCoverageEngine(
         scopes.map { scan(it) }
 
     fun health(results: List<CoverageScanResult>): CoverageHealth {
-        val uniqueIds = results.flatMap { it.businesses }.map { it.id }.toSet()
+        val uniqueIds = results.flatMap { it.businesses }
+            .map { it.source.id + ":" + it.id }
+            .toSet()
         return CoverageHealth(
             requestedScopes = results.size,
             completedScopes = results.count { it.completedAtEpochMs > 0 },

@@ -6,7 +6,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 
 class BusinessCoverageEngineTest {
-    private val source = DataSourceDescriptor(
+    private val primary = DataSourceDescriptor(
         id = "primary",
         name = "Primary",
         publisher = "Test",
@@ -24,7 +24,7 @@ class BusinessCoverageEngineTest {
         lastVerifiedAtEpochMs = 1L,
     )
 
-    private fun business(id: String) = VerifiedBusiness(
+    private fun business(id: String, source: DataSourceDescriptor = primary) = VerifiedBusiness(
         id = id,
         name = id,
         city = "İstanbul",
@@ -46,7 +46,7 @@ class BusinessCoverageEngineTest {
             sources = listOf(
                 CoverageSource { Result.failure(IllegalStateException("primary down")) },
                 CoverageSource {
-                    Result.success(CoverageSourceResult(fallback, listOf(business("b1")), 10L))
+                    Result.success(CoverageSourceResult(fallback, listOf(business("b1", fallback)), 10L))
                 },
             ),
             nowEpochMs = { 20L },
@@ -62,14 +62,14 @@ class BusinessCoverageEngineTest {
     }
 
     @Test
-    fun emptySuccessfulSourceIsObservedAsEmptyAndDoesNotInventData() = runTest {
+    fun emptySuccessfulSourceDoesNotTriggerFallbackOrInventData() = runTest {
         val engine = BusinessCoverageEngine(
             sources = listOf(
                 CoverageSource {
-                    Result.success(CoverageSourceResult(source, emptyList(), 10L))
+                    Result.success(CoverageSourceResult(primary, emptyList(), 10L))
                 },
                 CoverageSource {
-                    Result.success(CoverageSourceResult(fallback, listOf(business("b1")), 11L))
+                    Result.success(CoverageSourceResult(fallback, listOf(business("b1", fallback)), 11L))
                 },
             ),
             nowEpochMs = { 20L },
@@ -83,11 +83,11 @@ class BusinessCoverageEngineTest {
     }
 
     @Test
-    fun healthUsesRealObservedCounts() = runTest {
+    fun healthUsesSourceAndRecordIds() = runTest {
         val engine = BusinessCoverageEngine(
             sources = listOf(
                 CoverageSource {
-                    Result.success(CoverageSourceResult(source, listOf(business("same")), 10L))
+                    Result.success(CoverageSourceResult(primary, listOf(business("same")), 10L))
                 },
             ),
             nowEpochMs = { 20L },
