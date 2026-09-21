@@ -1,6 +1,7 @@
 package com.lanu.globaldonuksatisradari.data
 
 import android.content.Context
+import com.lanu.globaldonuksatisradari.IstanbulDistricts
 
 /**
  * Production wiring: Coverage Engine -> real OSM adapters -> validated business records.
@@ -55,7 +56,7 @@ class CoverageBusinessRepository(
         val normalizedDistrict = district?.takeUnless { it.isBlank() || it.equals("Tümü", true) }
 
         val scopes = if (city.equals("İstanbul", true) && normalizedDistrict == null) {
-            ISTANBUL_DISTRICTS.map { districtName ->
+            IstanbulDistricts.ALL.map { districtName ->
                 CoverageScope(
                     city = city,
                     district = districtName,
@@ -78,15 +79,4 @@ class CoverageBusinessRepository(
         )
     }
 
-    companion object {
-        private val ISTANBUL_DISTRICTS = listOf(
-            "Adalar", "Arnavutköy", "Ataşehir", "Avcılar", "Bağcılar", "Bahçelievler",
-            "Bakırköy", "Başakşehir", "Bayrampaşa", "Beşiktaş", "Beykoz", "Beylikdüzü",
-            "Beyoğlu", "Büyükçekmece", "Çatalca", "Çekmeköy", "Esenler", "Esenyurt",
-            "Eyüpsultan", "Fatih", "Gaziosmanpaşa", "Güngören", "Kadıköy", "Kağıthane",
-            "Kartal", "Küçükçekmece", "Maltepe", "Pendik", "Sancaktepe", "Sarıyer",
-            "Silivri", "Sultanbeyli", "Sultangazi", "Şile", "Şişli", "Tuzla",
-            "Ümraniye", "Üsküdar", "Zeytinburnu",
-        )
-    }
 }
