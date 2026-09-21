@@ -37,11 +37,11 @@ data class City(val name: String, val districts: List<String>)
 enum class AppSection { RADAR, PRODUCT_CATALOG, MANUAL_POINT, ROUTINE }
 
 private val cities = listOf(
-    City("İstanbul", IstanbulDistricts.all),
+    City("İstanbul", IstanbulDistricts.ALL),
     City("Ankara", listOf("Çankaya", "Keçiören", "Yenimahalle")),
     City("İzmir", listOf("Konak", "Karşıyaka", "Bornova")),
     City("Bursa", listOf("Nilüfer", "Osmangazi")),
-    City("Antalya", listOf("Muratpaşa", "Konyaaltı"))
+    City("Antalya", listOf("Muratpaşa", "Konyaaltı")),
 )
 
 class MainActivity : ComponentActivity() {
@@ -181,6 +181,12 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         results.filter { business ->
             (selectedDistrict == "Tümü" || business.district.equals(selectedDistrict, ignoreCase = true)) &&
                 (selectedNeighborhood == "Tümü" || business.neighborhood?.equals(selectedNeighborhood, ignoreCase = true) == true)
+        }
+    }
+
+    val visibleResults = remember(results, selectedNeighborhood) {
+        results.filter {
+            selectedNeighborhood == "Tümü" || it.neighborhood.equals(selectedNeighborhood, ignoreCase = true)
         }
     }
 
@@ -435,7 +441,10 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         }
                     }
                     item {
-                        Text("Kaynak: OpenStreetMap Nominatim • Kullanıcı tetiklemeli arama • Eksiksiz İstanbul işletme listesi değildir.", style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            "Kaynak: OpenStreetMap Nominatim • Seçilen ilçe/mahalle filtresine göre gerçek kayıtlar • Toplu şehir taraması değildir.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                         Text("© OpenStreetMap contributors", style = MaterialTheme.typography.bodySmall)
                     }
                     item {
