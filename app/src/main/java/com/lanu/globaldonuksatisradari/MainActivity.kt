@@ -129,12 +129,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val pendingSyncCount by localCrmRepository
         .observePendingSyncCount()
         .collectAsState(initial = 0)
-    val filteredCrmCustomers = remember(crmCustomers, selectedDistrict, selectedNeighborhood) {
-        crmCustomers.filter {
-            (selectedDistrict == "Tümü" || it.district == selectedDistrict) &&
-                (selectedNeighborhood == "Tümü" || it.neighborhood == selectedNeighborhood)
-        }
-    }
+    // CRM kayıtları arama/ilçe filtresinden bağımsız kalıcıdır.
+    val filteredCrmCustomers = crmCustomers
     val selectedCrmCustomer = selectedCustomerId?.let { id -> crmCustomers.firstOrNull { it.id == id } }
     val selectedCustomerKey = selectedCustomerId.orEmpty()
     val selectedCustomerActivitiesFlow = remember(selectedCustomerKey) {
@@ -450,7 +446,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 ) {
                                     Text("CRM hızlı erişim", style = MaterialTheme.typography.titleMedium)
                                     Text(
-                                        "Son kayıtlar doğrudan buradan açılabilir.",
+                                        "Son kayıtlar arama ve ilçe değişimlerinden bağımsız burada kalır.",
                                         style = MaterialTheme.typography.bodySmall,
                                     )
                                     filteredCrmCustomers.take(5).forEach { customer ->
@@ -519,7 +515,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 Text("Yerel CRM", style = MaterialTheme.typography.titleMedium)
-                                Text("${filteredCrmCustomers.size} kayıt bu filtrede kalıcı olarak saklanıyor.")
+                                Text("${filteredCrmCustomers.size} CRM kaydı kalıcı olarak saklanıyor.")
                                 Text(
                                     "Arama sonuçları otomatik müşteriye dönüşmez; kaydetme kullanıcı eylemidir.",
                                     style = MaterialTheme.typography.bodySmall,
