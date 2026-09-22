@@ -134,7 +134,20 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                 )
             }
             Button(
-                onClick = ::openNew,
+                onClick = {
+                    editingId = null
+                    name = ""
+                    category = ""
+                    unit = "Adet"
+                    price = ""
+                    currency = "TRY"
+                    note = ""
+                    description = ""
+                    imageUrl = ""
+                    sourceUrl = "https://globaldonukgida.com/"
+                    editorError = null
+                    editorOpen = true
+                },
                 modifier = Modifier.testTag("product_add_button"),
             ) {
                 Text("Yeni ürün")
