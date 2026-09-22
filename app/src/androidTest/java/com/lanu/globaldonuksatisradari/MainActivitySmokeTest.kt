@@ -37,8 +37,19 @@ class MainActivitySmokeTest {
 
     private fun waitForTag(tag: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
         val matcher = hasTestTag(tag)
-        composeRule.waitUntilAtLeastOneExists(matcher, timeoutMs)
-        return composeRule.onNode(matcher)
+        composeRule.waitUntil(timeoutMs) {
+            runCatching {
+                composeRule.onNode(matcher, useUnmergedTree = true).assertExists()
+                true
+            }.getOrDefault(false)
+        }
+        return composeRule.onNode(matcher, useUnmergedTree = true)
+    }
+
+    private fun scrollMainToText(text: String) {
+        composeRule.onNodeWithTag("main_scroll")
+            .performScrollToNode(hasText(text, substring = false))
+        composeRule.waitForIdle()
     }
 
     @JvmField
@@ -54,6 +65,7 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun blankSearch_keepsBroadInventoryModeAvailable() {
+        scrollMainToText("İşletme envanteri filtreleri")
         waitForText("Boş bırakırsanız seçilen şehir/ilçe için OSM işletme envanteri taranır; hedefli kategori aramalarında çiğköfte, cafe, restoran, catering, PlayStation ve daha fazlası desteklenir.").assertExists()
         waitForText("İşletme envanteri filtreleri").assertExists()
     }
@@ -146,6 +158,7 @@ class MainActivitySmokeTest {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
         waitForTag("product_add_button").performClick()
+        waitForText("Yeni Ürün").assertIsDisplayed()
         waitForTag("product_name_input").performTextInput("Smoke Donuk Ürün")
         waitForTag("product_price_input").performTextInput("125,50")
         waitForTag("product_save_button").performClick()
