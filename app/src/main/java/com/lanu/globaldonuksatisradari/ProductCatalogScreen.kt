@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
 import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
+import android.util.Log
 import java.util.Locale
 
 @Composable
@@ -147,6 +148,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                     sourceUrl = "https://globaldonukgida.com/"
                     editorError = null
                     editorOpen = true
+                    Log.d("LanuProductSmoke", "NEW_PRODUCT_CLICK editorOpen=true")
                 },
                 modifier = Modifier.testTag("product_add_button"),
             ) {
@@ -196,6 +198,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
     }
 
     if (editorOpen) {
+        Log.d("LanuProductSmoke", "EDITOR_RENDER editorOpen=true")
         AlertDialog(
             onDismissRequest = { editorOpen = false },
             title = {
