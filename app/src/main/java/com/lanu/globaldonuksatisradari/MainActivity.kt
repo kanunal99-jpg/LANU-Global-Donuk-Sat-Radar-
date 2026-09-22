@@ -434,7 +434,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         }
                     }
                     item {
-                        Card(modifier = Modifier.fillMaxWidth()) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().testTag("inventory_filters_card"),
+                        ) {
                             Column(
                                 modifier = Modifier.padding(14.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
