@@ -2,6 +2,7 @@ package com.lanu.globaldonuksatisradari
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.isDialog
@@ -195,7 +196,10 @@ class MainActivitySmokeTest {
     fun productCatalog_canOpenAndAddManualPrice() {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
-        waitForTag("product_add_button").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("product_add_button")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
         waitForTag("product_editor_open_state").assertExists()
         waitForDialog().assertExists()
         waitForDialogTag("product_name_input").performTextInput("Smoke Donuk Ürün")
