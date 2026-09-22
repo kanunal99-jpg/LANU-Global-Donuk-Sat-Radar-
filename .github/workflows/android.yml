@@ -200,7 +200,7 @@ jobs:
             echo "===== RUNNING SMOKE TEST: $TEST_NAME ====="
             timeout 90s gradle connectedDebugAndroidTest \
               --no-daemon --stacktrace \
-              --tests "${TEST_CLASS}.${TEST_NAME}"
+              "-Pandroid.testInstrumentationRunnerArguments.class=${TEST_CLASS}#${TEST_NAME}"
             TEST_EXIT="$?"
             if [ "$TEST_EXIT" -ne 0 ]; then
               echo "===== SMOKE TEST FAILED: $TEST_NAME (exit $TEST_EXIT) ====="
