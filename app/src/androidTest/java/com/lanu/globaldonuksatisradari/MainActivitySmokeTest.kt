@@ -52,6 +52,12 @@ class MainActivitySmokeTest {
         composeRule.waitForIdle()
     }
 
+    private fun scrollMainToTag(tag: String) {
+        composeRule.onNodeWithTag("main_scroll")
+            .performScrollToNode(hasTestTag(tag))
+        composeRule.waitForIdle()
+    }
+
     @JvmField
     @org.junit.Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
@@ -66,9 +72,8 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun blankSearch_keepsBroadInventoryModeAvailable() {
-        scrollMainToText("Boş bırakırsanız seçilen şehir/ilçe için OSM işletme envanteri taranır; hedefli kategori aramalarında çiğköfte, cafe, restoran, catering, PlayStation ve daha fazlası desteklenir.")
-        waitForText("Boş bırakırsanız seçilen şehir/ilçe için OSM işletme envanteri taranır; hedefli kategori aramalarında çiğköfte, cafe, restoran, catering, PlayStation ve daha fazlası desteklenir.").assertExists()
-        waitForText("İşletme envanteri filtreleri").assertExists()
+        scrollMainToTag("inventory_filters_card")
+        waitForTag("inventory_filters_card").assertIsDisplayed()
     }
 
     @Test(timeout = 60_000)
@@ -159,7 +164,7 @@ class MainActivitySmokeTest {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
         waitForTag("product_add_button").performClick()
-        waitForTag("product_editor_title").assertIsDisplayed()
+        waitForTag("product_editor_content").assertIsDisplayed()
         waitForTag("product_name_input").performTextInput("Smoke Donuk Ürün")
         waitForTag("product_price_input").performTextInput("125,50")
         waitForTag("product_save_button").performClick()
