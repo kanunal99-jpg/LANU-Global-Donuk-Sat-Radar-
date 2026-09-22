@@ -159,6 +159,15 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
             }
         }
 
+        if (editorOpen) {
+            Box(
+                modifier = Modifier
+                    .testTag("product_editor_open_state")
+                    .height(1.dp)
+                    .fillMaxWidth(),
+            )
+        }
+
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
