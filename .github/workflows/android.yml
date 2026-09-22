@@ -186,30 +186,15 @@ jobs:
 
           set +e
           TEST_CLASS="com.lanu.globaldonuksatisradari.MainActivitySmokeTest"
-          TESTS=(
-            "launch_showsCoreSalesRadarUi"
-            "blankSearch_keepsBroadInventoryModeAvailable"
-            "launch_schedulesCrmSyncWork"
-            "launch_createsStableActivity"
-            "persistedCrmCustomer_opensRealDetailWorkflow"
-            "navigationBackForwardAndNewSections_areReachable"
-            "productCatalog_canOpenAndAddManualPrice"
-          )
-          TEST_EXIT=0
-          for TEST_NAME in "${TESTS[@]}"; do
-            echo "===== RUNNING SMOKE TEST: $TEST_NAME ====="
-            timeout 90s gradle connectedDebugAndroidTest \
-              --no-daemon --stacktrace \
-              "-Pandroid.testInstrumentationRunnerArguments.class=${TEST_CLASS}#${TEST_NAME}"
-            TEST_EXIT="$?"
-            if [ "$TEST_EXIT" -ne 0 ]; then
-              echo "===== SMOKE TEST FAILED: $TEST_NAME (exit $TEST_EXIT) ====="
-              break
-            fi
-          done
+          echo "===== RUNNING SMOKE TEST CLASS: $TEST_CLASS ====="
+          timeout 420s gradle connectedDebugAndroidTest \
+            --no-daemon --stacktrace \
+            "-Pandroid.testInstrumentationRunnerArguments.class=$TEST_CLASS"
+          TEST_EXIT="$?"
           set -e
 
           if [ "$TEST_EXIT" -ne 0 ]; then
+            echo "===== SMOKE TEST CLASS FAILED (exit $TEST_EXIT) ====="
             echo "===== ADB/JUNIT DIAGNOSTICS ====="
             adb devices -l || true
             adb -s "$SERIAL" shell getprop ro.build.version.release || true
