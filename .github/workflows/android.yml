@@ -207,7 +207,6 @@ jobs:
               break
             fi
           done
-          TEST_EXIT="$?"
           set -e
 
           if [ "$TEST_EXIT" -ne 0 ]; then
