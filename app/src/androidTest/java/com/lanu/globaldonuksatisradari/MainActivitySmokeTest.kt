@@ -3,6 +3,8 @@ package com.lanu.globaldonuksatisradari
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.isDialog
 import androidx.work.WorkManager
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -33,6 +35,28 @@ class MainActivitySmokeTest {
         val matcher = hasText(text, substring = false)
         composeRule.waitUntilAtLeastOneExists(matcher, timeoutMs)
         return composeRule.onNode(matcher)
+    }
+
+    private fun waitForDialog(timeoutMs: Long = 45_000): SemanticsNodeInteraction {
+        val matcher = isDialog()
+        composeRule.waitUntil(timeoutMs) {
+            runCatching {
+                composeRule.onNode(matcher, useUnmergedTree = true).assertExists()
+                true
+            }.getOrDefault(false)
+        }
+        return composeRule.onNode(matcher, useUnmergedTree = true)
+    }
+
+    private fun waitForDialogTag(tag: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
+        val matcher = hasTestTag(tag) and hasAnyAncestor(isDialog())
+        composeRule.waitUntil(timeoutMs) {
+            runCatching {
+                composeRule.onNode(matcher, useUnmergedTree = true).assertExists()
+                true
+            }.getOrDefault(false)
+        }
+        return composeRule.onNode(matcher, useUnmergedTree = true)
     }
 
     private fun waitForTag(tag: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
@@ -164,10 +188,10 @@ class MainActivitySmokeTest {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
         waitForTag("product_add_button").performClick()
-        waitForTag("product_editor_content").assertIsDisplayed()
-        waitForTag("product_name_input").performTextInput("Smoke Donuk Ürün")
-        waitForTag("product_price_input").performTextInput("125,50")
-        waitForTag("product_save_button").performClick()
+        waitForDialog().assertExists()
+        waitForDialogTag("product_name_input").performTextInput("Smoke Donuk Ürün")
+        waitForDialogTag("product_price_input").performTextInput("125,50")
+        waitForDialogTag("product_save_button").performClick()
         waitForText("Smoke Donuk Ürün").assertExists()
         waitForText("125,50 TRY").assertExists()
     }
