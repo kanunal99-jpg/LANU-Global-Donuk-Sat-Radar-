@@ -70,11 +70,15 @@ class MainActivitySmokeTest {
 
     private fun waitForTag(tag: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
         val matcher = hasTestTag(tag)
-        composeRule.waitUntil(timeoutMs) {
-            runCatching {
-                composeRule.onNode(matcher, useUnmergedTree = true).assertExists()
-                true
-            }.getOrDefault(false)
+        try {
+            composeRule.waitUntil(timeoutMs) {
+                runCatching {
+                    composeRule.onNode(matcher, useUnmergedTree = true).assertExists()
+                    true
+                }.getOrDefault(false)
+            }
+        } catch (error: Throwable) {
+            throw AssertionError("Timed out waiting for test tag: $tag", error)
         }
         return composeRule.onNode(matcher, useUnmergedTree = true)
     }
