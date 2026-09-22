@@ -9,7 +9,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -30,35 +29,16 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 @OptIn(ExperimentalTestApi::class)
 class MainActivitySmokeTest {
 
-    private fun dumpUiOnFailure(label: String) {
-        println("===== COMPOSE UI DIAGNOSTIC: " + label + " =====")
-        runCatching {
-            composeRule.onRoot(useUnmergedTree = true).printToLog("LANU_SMOKE")
-        }.onFailure { failure -> println("UI semantics dump failed: " + failure.message) }
-    }
-
     private fun waitForText(text: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
         val matcher = hasText(text, substring = false)
-        return runCatching {
-            composeRule.waitUntilAtLeastOneExists(matcher, timeoutMs)
-            composeRule.onNode(matcher)
-        }.getOrElse {
-            dumpUiOnFailure("text=" + text)
-            throw it
-        }
+        composeRule.waitUntilAtLeastOneExists(matcher, timeoutMs)
+        return composeRule.onNode(matcher)
     }
 
     private fun waitForTag(tag: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
         val matcher = hasTestTag(tag)
-        return runCatching {
-            composeRule.waitUntil(timeoutMs) {
-                composeRule.onAllNodes(matcher, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
-            }
-            composeRule.onNode(matcher, useUnmergedTree = true)
-        }.getOrElse {
-            dumpUiOnFailure("tag=" + tag)
-            throw it
-        }
+        composeRule.waitUntilAtLeastOneExists(matcher, timeoutMs)
+        return composeRule.onNode(matcher)
     }
 
     @JvmField
