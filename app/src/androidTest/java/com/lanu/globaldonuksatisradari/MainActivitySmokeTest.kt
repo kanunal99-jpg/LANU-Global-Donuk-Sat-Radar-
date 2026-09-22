@@ -28,16 +28,33 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 @OptIn(ExperimentalTestApi::class)
 class MainActivitySmokeTest {
 
+    private fun dumpUiOnFailure(label: String) {
+        println("===== COMPOSE UI DIAGNOSTIC: " + label + " =====")
+        runCatching {
+            composeRule.onRoot(useUnmergedTree = true).printToLog("LANU_SMOKE")
+        }.onFailure { failure -> println("UI semantics dump failed: " + failure.message) }
+    }
+
     private fun waitForText(text: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
         val matcher = hasText(text, substring = false)
-        composeRule.waitUntilAtLeastOneExists(matcher, timeoutMs)
-        return composeRule.onNode(matcher)
+        return runCatching {
+            composeRule.waitUntilAtLeastOneExists(matcher, timeoutMs)
+            composeRule.onNode(matcher)
+        }.getOrElse {
+            dumpUiOnFailure("text=" + text)
+            throw it
+        }
     }
 
     private fun waitForTag(tag: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
         val matcher = hasTestTag(tag)
-        composeRule.waitUntilAtLeastOneExists(matcher, timeoutMs)
-        return composeRule.onNode(matcher)
+        return runCatching {
+            composeRule.waitUntilAtLeastOneExists(matcher, timeoutMs)
+            composeRule.onNode(matcher)
+        }.getOrElse {
+            dumpUiOnFailure("tag=" + tag)
+            throw it
+        }
     }
 
     @JvmField
