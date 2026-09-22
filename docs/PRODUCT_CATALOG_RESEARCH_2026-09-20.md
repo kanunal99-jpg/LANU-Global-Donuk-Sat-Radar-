@@ -11,6 +11,24 @@ Bu nedenle uygulama hiçbir SKU, gramaj, fiyat veya stok değerini tahmin ederek
 - https://globaldonukgida.com/neden-global-donuk-gida/
 - https://globaldonukgida.com/is-ortakligi/
 
+## 2026-09-21 yeniden doğrulama
+
+Resmî site yeniden tarandı. Kamuya açık ve arama motorlarınca indekslenmiş sayfalarda şirketin ürün modeli ve ürün grubu hakkında doğrulanabilir açıklamalar var; ancak tek tek SKU/ürün adı + ürün fotoğrafı + gramaj/koli/alerjen tablosu şeklinde güvenilir bir ürün listesi bulunamadı. Bu nedenle başka üreticilerin ürünleri Global Donuk Gıda ürünüymüş gibi eklenmeyecek ve fotoğrafı da başka kaynaktan kopyalanmayacaktır.
+
+Doğrulanabilen içerik:
+- Pişmiş donuk yemek modeli.
+- Standart porsiyonlama.
+- Hızlı dondurma.
+- -18°C soğuk zincir.
+- Türk ve dünya mutfağından farklı lezzetlerden oluşan ürün yelpazesi.
+
+Uygulamadaki katalog veri modeli artık ayrıca:
+- detaylı açıklama,
+- ürün fotoğrafı HTTPS URL'si,
+- resmî kaynak HTTPS URL'si,
+- kaynak doğrulama zamanı
+alanlarını destekliyor. Fotoğraf URL'si varsa uygulama içinde güvenli ağ görüntüleme ve yüklenemezse fallback davranışı kullanılacak.
+
 ## Uygulama kuralı
 Ürün kataloğu için yetkili şirket kaynağından CSV/XLSX/PDF veya API sağlandığında:
 1. SKU/ürün kodu
