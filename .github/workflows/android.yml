@@ -200,7 +200,7 @@ jobs:
             adb -s "$SERIAL" shell getprop ro.build.version.release || true
             adb -s "$SERIAL" shell getprop ro.build.version.sdk || true
             adb -s "$SERIAL" logcat -d -v threadtime | \
-              grep -E "AndroidJUnit4|AndroidJUnitRunner|initializationError|NoClassDefFoundError|ClassNotFoundException|NoSuchMethodError|IncompatibleClassChangeError|VerifyError|StackOverflowError|FATAL EXCEPTION|AssertionError|TimeoutException" | tail -n 800 || true
+              grep -E "AndroidJUnit4|AndroidJUnitRunner|initializationError|NoClassDefFoundError|ClassNotFoundException|NoSuchMethodError|IncompatibleClassChangeError|VerifyError|StackOverflowError|FATAL EXCEPTION|AssertionError|TimeoutException|LanuProductSmoke" | tail -n 800 || true
             echo "===== EMULATOR LOG ====="
             tail -n 800 /tmp/emulator.log || true
             exit "$TEST_EXIT"
