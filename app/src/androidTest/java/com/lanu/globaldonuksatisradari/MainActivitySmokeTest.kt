@@ -37,24 +37,32 @@ class MainActivitySmokeTest {
         return composeRule.onNode(matcher)
     }
 
-    private fun waitForDialog(timeoutMs: Long = 45_000): SemanticsNodeInteraction {
+    private fun waitForDialog(timeoutMs: Long = 30_000): SemanticsNodeInteraction {
         val matcher = isDialog()
-        composeRule.waitUntil(timeoutMs) {
-            runCatching {
-                composeRule.onNode(matcher, useUnmergedTree = true).assertExists()
-                true
-            }.getOrDefault(false)
+        try {
+            composeRule.waitUntil(timeoutMs) {
+                runCatching {
+                    composeRule.onNode(matcher, useUnmergedTree = true).assertExists()
+                    true
+                }.getOrDefault(false)
+            }
+        } catch (error: Throwable) {
+            throw AssertionError("Timed out waiting for product editor dialog root", error)
         }
         return composeRule.onNode(matcher, useUnmergedTree = true)
     }
 
-    private fun waitForDialogTag(tag: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
+    private fun waitForDialogTag(tag: String, timeoutMs: Long = 30_000): SemanticsNodeInteraction {
         val matcher = hasTestTag(tag) and hasAnyAncestor(isDialog())
-        composeRule.waitUntil(timeoutMs) {
-            runCatching {
-                composeRule.onNode(matcher, useUnmergedTree = true).assertExists()
-                true
-            }.getOrDefault(false)
+        try {
+            composeRule.waitUntil(timeoutMs) {
+                runCatching {
+                    composeRule.onNode(matcher, useUnmergedTree = true).assertExists()
+                    true
+                }.getOrDefault(false)
+            }
+        } catch (error: Throwable) {
+            throw AssertionError("Timed out waiting for product editor dialog tag: $tag", error)
         }
         return composeRule.onNode(matcher, useUnmergedTree = true)
     }
