@@ -176,7 +176,12 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
     if (editorOpen) {
         AlertDialog(
             onDismissRequest = { editorOpen = false },
-            title = { Text(if (editingId == null) "Yeni Ürün" else "Ürünü Düzenle") },
+            title = {
+                Text(
+                    if (editingId == null) "Yeni Ürün" else "Ürünü Düzenle",
+                    modifier = Modifier.testTag("product_editor_title"),
+                )
+            },
             text = {
                 Column(
                     modifier = Modifier.verticalScroll(rememberScrollState()),
