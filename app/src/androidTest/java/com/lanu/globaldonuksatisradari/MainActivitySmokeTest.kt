@@ -9,6 +9,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodes
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.ExperimentalTestApi
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
@@ -49,8 +51,10 @@ class MainActivitySmokeTest {
     private fun waitForTag(tag: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
         val matcher = hasTestTag(tag)
         return runCatching {
-            composeRule.waitUntilAtLeastOneExists(matcher, timeoutMs)
-            composeRule.onNode(matcher)
+            composeRule.waitUntil(timeoutMs) {
+                composeRule.onAllNodes(matcher, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+            }
+            composeRule.onNode(matcher, useUnmergedTree = true)
         }.getOrElse {
             dumpUiOnFailure("tag=" + tag)
             throw it
@@ -63,8 +67,8 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun launch_showsCoreSalesRadarUi() {
-        waitForText("LANU Global Donuk Satış Radarı").assertIsDisplayed()
-        waitForText("Satış Radarı").assertExists()
+        waitForText("LANU Global Donuk Gıda").assertIsDisplayed()
+        waitForText("Satış & CRM Radarı").assertIsDisplayed()
         waitForTag("real_search_button").assertIsDisplayed()
     }
 
@@ -134,6 +138,7 @@ class MainActivitySmokeTest {
         composeRule.waitForIdle()
 
         val crmDetailTag = "crm_open_" + seededCustomer.id
+        composeRule.onNodeWithTag("main_scroll").performScrollToNode(hasTestTag(crmDetailTag))
         val crmDetailButton = waitForTag(crmDetailTag)
         crmDetailButton.performClick()
         composeRule.onNodeWithTag("crm_detail_back").assertIsDisplayed()
@@ -147,7 +152,7 @@ class MainActivitySmokeTest {
         waitForText("Manuel Nokta Kaydı").assertIsDisplayed()
 
         waitForText("← Geri").performClick()
-        waitForText("Satış Radarı").assertExists()
+        waitForText("Satış & CRM Radarı").assertExists()
 
         waitForText("İleri →").performClick()
         waitForText("Manuel Nokta Kaydı").assertExists()
