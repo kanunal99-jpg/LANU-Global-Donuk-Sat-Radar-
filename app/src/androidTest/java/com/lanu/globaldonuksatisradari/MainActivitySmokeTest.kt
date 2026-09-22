@@ -60,12 +60,13 @@ class MainActivitySmokeTest {
     fun launch_showsCoreSalesRadarUi() {
         waitForText("LANU Global Donuk Gıda").assertIsDisplayed()
         waitForText("Satış & CRM Radarı").assertIsDisplayed()
+        scrollMainToText("Seçime göre gerçek verileri getir")
         waitForTag("real_search_button").assertIsDisplayed()
     }
 
     @Test(timeout = 60_000)
     fun blankSearch_keepsBroadInventoryModeAvailable() {
-        scrollMainToText("İşletme envanteri filtreleri")
+        scrollMainToText("Boş bırakırsanız seçilen şehir/ilçe için OSM işletme envanteri taranır; hedefli kategori aramalarında çiğköfte, cafe, restoran, catering, PlayStation ve daha fazlası desteklenir.")
         waitForText("Boş bırakırsanız seçilen şehir/ilçe için OSM işletme envanteri taranır; hedefli kategori aramalarında çiğköfte, cafe, restoran, catering, PlayStation ve daha fazlası desteklenir.").assertExists()
         waitForText("İşletme envanteri filtreleri").assertExists()
     }
@@ -158,7 +159,7 @@ class MainActivitySmokeTest {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
         waitForTag("product_add_button").performClick()
-        waitForText("Yeni Ürün").assertIsDisplayed()
+        waitForTag("product_editor_title").assertIsDisplayed()
         waitForTag("product_name_input").performTextInput("Smoke Donuk Ürün")
         waitForTag("product_price_input").performTextInput("125,50")
         waitForTag("product_save_button").performClick()
