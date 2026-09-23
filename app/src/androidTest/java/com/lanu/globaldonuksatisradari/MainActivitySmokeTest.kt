@@ -174,8 +174,12 @@ class MainActivitySmokeTest {
     fun productCatalog_canOpenAndAddManualPrice() {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
-        waitForTag("product_add_button").assertIsDisplayed().performClick()
         val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+        assertTrue(
+            "Yeni ürün button must be visible to UiAutomator",
+            device.wait(Until.hasObject(By.text("Yeni ürün")), 5_000),
+        )
+        device.findObject(By.text("Yeni ürün")).click()
         assertTrue(
             "Product editor dialog must open",
             device.wait(Until.hasObject(By.res("product_editor_dialog")), 5_000),
