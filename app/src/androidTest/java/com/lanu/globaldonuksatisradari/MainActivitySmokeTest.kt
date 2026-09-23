@@ -174,7 +174,7 @@ class MainActivitySmokeTest {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
         waitForTag("product_add_button").performClick()
-        waitForTag("product_editor_content").assertExists()
+        waitForText("Ürün adı *").assertExists()
         waitForTag("product_name_input").performTextInput("Smoke Donuk Ürün")
         waitForTag("product_price_input").performTextInput("125,50")
         waitForTag("product_save_button").performClick()
