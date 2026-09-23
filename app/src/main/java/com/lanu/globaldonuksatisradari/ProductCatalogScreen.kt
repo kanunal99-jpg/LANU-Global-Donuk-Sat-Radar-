@@ -40,13 +40,10 @@ import android.util.Log
 import java.util.Locale
 
 @Composable
-fun ProductCatalogScreen(
-    repository: ProductCatalogRepository,
-    editorOpen: Boolean,
-    onEditorOpenChange: (Boolean) -> Unit,
-) {
+fun ProductCatalogScreen(repository: ProductCatalogRepository) {
     val products by repository.products.collectAsState()
     var query by remember { mutableStateOf("") }
+    var editorOpen by rememberSaveable { mutableStateOf(false) }
     var editingId by remember { mutableStateOf<String?>(null) }
     var deletingId by remember { mutableStateOf<String?>(null) }
 
@@ -73,7 +70,7 @@ fun ProductCatalogScreen(
         imageUrl = ""
         sourceUrl = "https://globaldonukgida.com/"
         editorError = null
-        onEditorOpenChange(true)
+        editorOpen = true
     }
 
     fun openEdit(product: CatalogProduct) {
@@ -88,7 +85,7 @@ fun ProductCatalogScreen(
         imageUrl = product.imageUrl.orEmpty()
         sourceUrl = product.sourceUrl ?: "https://globaldonukgida.com/"
         editorError = null
-        onEditorOpenChange(true)
+        editorOpen = true
     }
 
     fun save() {
@@ -106,7 +103,7 @@ fun ProductCatalogScreen(
                 sourceUrl = sourceUrl,
                 sourceVerifiedAtEpochMs = System.currentTimeMillis(),
             )
-            onEditorOpenChange(false)
+            editorOpen = false
         }.exceptionOrNull()?.message
     }
 
@@ -199,7 +196,7 @@ fun ProductCatalogScreen(
     if (editorOpen) {
         Log.d("LanuProductSmoke", "EDITOR_RENDER editorOpen=true")
         AlertDialog(
-            onDismissRequest = { onEditorOpenChange(false) },
+            onDismissRequest = { editorOpen = false },
             modifier = Modifier.testTag("product_editor_dialog"),
             title = {
                 Text(
@@ -294,7 +291,7 @@ fun ProductCatalogScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { onEditorOpenChange(false) }) {
+                TextButton(onClick = { editorOpen = false }) {
                     Text("Vazgeç")
                 }
             },
