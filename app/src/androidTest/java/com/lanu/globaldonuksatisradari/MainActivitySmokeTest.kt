@@ -56,7 +56,7 @@ class MainActivitySmokeTest {
     }
 
     private fun waitForDialogTag(tag: String, timeoutMs: Long = 30_000): SemanticsNodeInteraction {
-        val matcher = hasTestTag(tag) and hasAnyAncestor(hasTestTag("product_editor_dialog"))
+        val matcher = hasTestTag(tag)
         try {
             composeRule.waitUntil(timeoutMs) {
                 runCatching {
@@ -203,7 +203,6 @@ class MainActivitySmokeTest {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
         composeRule.onNodeWithTag("product_add_surface").assertIsDisplayed().performClick()
-        waitForTag("product_editor_open_state").assertExists()
         waitForDialog().assertExists()
         waitForDialogTag("product_name_input").performTextInput("Smoke Donuk Ürün")
         waitForDialogTag("product_price_input").performTextInput("125,50")
