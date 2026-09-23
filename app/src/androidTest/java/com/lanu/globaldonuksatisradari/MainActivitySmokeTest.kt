@@ -41,19 +41,20 @@ class MainActivitySmokeTest {
         return composeRule.onNode(matcher)
     }
 
-    private fun waitForEditableInField(fieldTag: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
-        val matcher = hasSetTextAction() and hasAnyAncestor(hasTestTag(fieldTag))
+    private fun waitForDialogEditable(index: Int, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
+        val matcher = hasSetTextAction() and hasAnyAncestor(isDialog())
         try {
             composeRule.waitUntil(timeoutMs) {
                 runCatching {
-                    composeRule.onNode(matcher, useUnmergedTree = true).assertExists()
-                    true
+                    composeRule.onAllNodes(matcher, useUnmergedTree = true)
+                        .fetchSemanticsNodes()
+                        .size > index
                 }.getOrDefault(false)
             }
         } catch (error: Throwable) {
-            throw AssertionError("Timed out waiting for editable product field host: $fieldTag", error)
+            throw AssertionError("Timed out waiting for dialog editable field index: $index", error)
         }
-        return composeRule.onNode(matcher, useUnmergedTree = true)
+        return composeRule.onAllNodes(matcher, useUnmergedTree = true)[index]
     }
 
     private fun waitForTag(tag: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
@@ -189,8 +190,8 @@ class MainActivitySmokeTest {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
         waitForTag("product_add_button").performClick()
-        waitForEditableInField("product_name_field").performTextInput("Smoke Donuk Ürün")
-        waitForEditableInField("product_price_field").performTextInput("125,50")
+        waitForDialogEditable(0).performTextInput("Smoke Donuk Ürün")
+        waitForDialogEditable(4).performTextInput("125,50")
         waitForTag("product_save_button").performClick()
         waitForText("Smoke Donuk Ürün").assertExists()
         waitForText("125,50 TRY").assertExists()
