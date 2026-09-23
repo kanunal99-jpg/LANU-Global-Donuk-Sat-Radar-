@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -189,6 +190,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .heightIn(max = 520.dp)
                         .testTag("product_editor_content")
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -196,7 +198,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().testTag("product_name_input"),
                         singleLine = true,
                         label = { Text("Ürün adı *") },
                     )
@@ -226,7 +228,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                     OutlinedTextField(
                         value = price,
                         onValueChange = { price = it },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().testTag("product_price_input"),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         label = { Text("Birim fiyat *") },
