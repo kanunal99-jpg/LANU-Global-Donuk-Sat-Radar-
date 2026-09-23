@@ -90,7 +90,7 @@ fun ProductCatalogScreen(
         imageUrl = product.imageUrl.orEmpty()
         sourceUrl = product.sourceUrl ?: "https://globaldonukgida.com/"
         editorError = null
-        editorOpen = true
+        onEditorOpenChange(true)
     }
 
     fun save() {
@@ -307,7 +307,7 @@ fun ProductCatalogScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { editorOpen = false }) {
+                TextButton(onClick = { onEditorOpenChange(false) }) {
                     Text("Vazgeç")
                 }
             },
