@@ -204,6 +204,7 @@ fun ProductCatalogScreen(
         Log.d("LanuProductSmoke", "EDITOR_RENDER editorOpen=true")
         AlertDialog(
             onDismissRequest = { onEditorOpenChange(false) },
+            modifier = Modifier.testTag("product_editor_dialog"),
             title = {
                 Text(
                     if (editingId == null) "Yeni Ürün" else "Ürünü Düzenle",
