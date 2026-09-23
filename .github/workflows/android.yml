@@ -26,6 +26,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Verify Gradle runner
+        run: |
+          set -euo pipefail
+          timeout 60s java -version
+          timeout 60s gradle --version
+
       - name: Run lint
         run: timeout 180s gradle lint --no-daemon --stacktrace
       - name: Run unit tests
