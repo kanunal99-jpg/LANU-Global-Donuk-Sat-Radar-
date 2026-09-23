@@ -42,10 +42,13 @@ import android.util.Log
 import java.util.Locale
 
 @Composable
-fun ProductCatalogScreen(repository: ProductCatalogRepository) {
+fun ProductCatalogScreen(
+    repository: ProductCatalogRepository,
+    editorOpen: Boolean,
+    onEditorOpenChange: (Boolean) -> Unit,
+) {
     val products by repository.products.collectAsState()
     var query by remember { mutableStateOf("") }
-    var editorOpen by rememberSaveable { mutableStateOf(false) }
     var editingId by remember { mutableStateOf<String?>(null) }
     var deletingId by remember { mutableStateOf<String?>(null) }
 
@@ -72,7 +75,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         imageUrl = ""
         sourceUrl = "https://globaldonukgida.com/"
         editorError = null
-        editorOpen = true
+        onEditorOpenChange(true)
     }
 
     fun openEdit(product: CatalogProduct) {
@@ -105,7 +108,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                 sourceUrl = sourceUrl,
                 sourceVerifiedAtEpochMs = System.currentTimeMillis(),
             )
-            editorOpen = false
+            onEditorOpenChange(false)
         }.exceptionOrNull()?.message
     }
 
@@ -150,7 +153,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                     imageUrl = ""
                     sourceUrl = "https://globaldonukgida.com/"
                     editorError = null
-                    editorOpen = true
+                    onEditorOpenChange(true)
                     Log.d("LanuProductSmoke", "NEW_PRODUCT_CLICK editorOpen=true")
                 },
                 modifier = Modifier
@@ -210,7 +213,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
     if (editorOpen) {
         Log.d("LanuProductSmoke", "EDITOR_RENDER editorOpen=true")
         AlertDialog(
-            onDismissRequest = { editorOpen = false },
+            onDismissRequest = { onEditorOpenChange(false) },
             title = {
                 Text(
                     if (editingId == null) "Yeni Ürün" else "Ürünü Düzenle",
