@@ -167,6 +167,12 @@ fun ProductCatalogScreen(
             }
         }
 
+        Box(
+            modifier = Modifier
+                .testTag("product_editor_state_" + editorOpen)
+                .height(1.dp)
+                .fillMaxWidth(),
+        )
         if (editorOpen) {
             Box(
                 modifier = Modifier
