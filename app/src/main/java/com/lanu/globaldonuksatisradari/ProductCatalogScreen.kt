@@ -1,6 +1,5 @@
 package com.lanu.globaldonuksatisradari
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -139,23 +138,14 @@ fun ProductCatalogScreen(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            Box(
-                modifier = Modifier
-                    .testTag("product_add_surface")
-                    .clickable {
-                        openNew()
-                        Log.d("LanuProductSmoke", "NEW_PRODUCT_SURFACE_CLICK editorOpen=true")
-                    },
+            Button(
+                onClick = {
+                    openNew()
+                    Log.d("LanuProductSmoke", "NEW_PRODUCT_CLICK editorOpen=true")
+                },
+                modifier = Modifier.testTag("product_add_surface"),
             ) {
-                Button(
-                    onClick = {
-                        openNew()
-                        Log.d("LanuProductSmoke", "NEW_PRODUCT_CLICK editorOpen=true")
-                    },
-                    modifier = Modifier.testTag("product_add_button"),
-                ) {
-                    Text("Yeni ürün")
-                }
+                Text("Yeni ürün")
             }
         }
 
