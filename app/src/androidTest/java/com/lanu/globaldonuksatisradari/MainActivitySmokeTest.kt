@@ -41,6 +41,21 @@ class MainActivitySmokeTest {
         return composeRule.onNode(matcher)
     }
 
+    private fun waitForEditableLabel(label: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
+        val matcher = hasSetTextAction() and hasText(label)
+        try {
+            composeRule.waitUntil(timeoutMs) {
+                runCatching {
+                    composeRule.onNode(matcher, useUnmergedTree = true).assertExists()
+                    true
+                }.getOrDefault(false)
+            }
+        } catch (error: Throwable) {
+            throw AssertionError("Timed out waiting for editable field label: $label", error)
+        }
+        return composeRule.onNode(matcher, useUnmergedTree = true)
+    }
+
     private fun waitForTag(tag: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
         val matcher = hasTestTag(tag)
         try {
@@ -174,9 +189,8 @@ class MainActivitySmokeTest {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
         waitForTag("product_add_button").performClick()
-        waitForText("Ürün adı *").assertExists()
-        waitForTag("product_name_input").performTextInput("Smoke Donuk Ürün")
-        waitForTag("product_price_input").performTextInput("125,50")
+        waitForEditableLabel("Ürün adı *").performTextInput("Smoke Donuk Ürün")
+        waitForEditableLabel("Birim fiyat *").performTextInput("125,50")
         waitForTag("product_save_button").performClick()
         waitForText("Smoke Donuk Ürün").assertExists()
         waitForText("125,50 TRY").assertExists()
