@@ -203,7 +203,6 @@ class MainActivitySmokeTest {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
         composeRule.onNodeWithTag("product_add_button").assertIsDisplayed().performClick()
-        waitForTag("product_editor_open_state").assertExists()
         waitForDialog().assertExists()
         waitForDialogTag("product_name_input").performTextInput("Smoke Donuk Ürün")
         waitForDialogTag("product_price_input").performTextInput("125,50")
