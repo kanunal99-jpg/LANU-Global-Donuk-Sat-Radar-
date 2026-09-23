@@ -51,6 +51,10 @@ class MainActivitySmokeTest {
                 }.getOrDefault(false)
             }
         } catch (error: Throwable) {
+            println("===== PRODUCT EDITOR SEMANTICS (MERGED) =====")
+            runCatching { composeRule.onRoot(useUnmergedTree = false).printToLog("LanuProductSmoke") }
+            println("===== PRODUCT EDITOR SEMANTICS (UNMERGED) =====")
+            runCatching { composeRule.onRoot(useUnmergedTree = true).printToLog("LanuProductSmoke") }
             throw AssertionError("Timed out waiting for editable field label: $label", error)
         }
         return composeRule.onNode(matcher, useUnmergedTree = true)
