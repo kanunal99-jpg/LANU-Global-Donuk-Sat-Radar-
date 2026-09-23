@@ -31,8 +31,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
@@ -142,28 +140,10 @@ fun ProductCatalogScreen(
             }
             Button(
                 onClick = {
-                    editingId = null
-                    name = ""
-                    category = ""
-                    unit = "Adet"
-                    price = ""
-                    currency = "TRY"
-                    note = ""
-                    description = ""
-                    imageUrl = ""
-                    sourceUrl = "https://globaldonukgida.com/"
-                    editorError = null
-                    onEditorOpenChange(true)
+                    openNew()
                     Log.d("LanuProductSmoke", "NEW_PRODUCT_CLICK editorOpen=true")
                 },
-                modifier = Modifier
-                    .testTag("product_add_button")
-                    .semantics {
-                        onClick {
-                            openNew()
-                            true
-                        }
-                    },
+                modifier = Modifier.testTag("product_add_button"),
             ) {
                 Text("Yeni ürün")
             }
