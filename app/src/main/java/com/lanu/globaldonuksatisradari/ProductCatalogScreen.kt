@@ -1,5 +1,6 @@
 package com.lanu.globaldonuksatisradari
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -72,6 +73,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         sourceUrl = "https://globaldonukgida.com/"
         editorError = null
         editorOpen = true
+        Log.d("LanuProductSmoke", "openNew invoked; editorOpen=true")
     }
 
     fun openEdit(product: CatalogProduct) {
@@ -178,9 +180,16 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         }
     }
 
+    LaunchedEffect(editorOpen) {
+        Log.d("LanuProductSmoke", "editorOpen state changed: $editorOpen")
+    }
+
     if (editorOpen) {
         AlertDialog(
-            onDismissRequest = { editorOpen = false },
+            onDismissRequest = {
+                Log.d("LanuProductSmoke", "AlertDialog onDismissRequest")
+                editorOpen = false
+            },
             modifier = Modifier
                 .testTag("product_editor_dialog")
                 .semantics { testTagsAsResourceId = true },
