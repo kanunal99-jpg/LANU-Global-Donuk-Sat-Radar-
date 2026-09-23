@@ -178,11 +178,11 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
     if (editorOpen) {
         AlertDialog(
             onDismissRequest = { editorOpen = false },
-
+            modifier = Modifier.testTag("product_editor_dialog"),
             title = {
                 Text(
                     if (editingId == null) "Yeni Ürün" else "Ürünü Düzenle",
-
+                    modifier = Modifier.testTag("product_editor_open_state"),
                 )
             },
             text = {
