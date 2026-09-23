@@ -2,15 +2,10 @@ package com.lanu.globaldonuksatisradari
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.hasTestTag
-import androidx.compose.ui.test.hasAnyAncestor
-import androidx.compose.ui.test.isDialog
 import androidx.work.WorkManager
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.printToLog
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
@@ -41,24 +36,6 @@ class MainActivitySmokeTest {
         val matcher = hasText(text, substring = false)
         composeRule.waitUntilAtLeastOneExists(matcher, timeoutMs)
         return composeRule.onNode(matcher)
-    }
-
-    private fun waitForDialogEditable(index: Int, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
-        val matcher = hasSetTextAction() and hasAnyAncestor(isDialog())
-        try {
-            composeRule.waitUntil(timeoutMs) {
-                runCatching {
-                    composeRule.onAllNodes(matcher)
-                        .fetchSemanticsNodes()
-                        .size > index
-                }.getOrDefault(false)
-            }
-        } catch (error: Throwable) {
-            composeRule.onRoot(useUnmergedTree = false).printToLog("LanuProductSmoke")
-            composeRule.onRoot(useUnmergedTree = true).printToLog("LanuProductSmoke")
-            throw AssertionError("Timed out waiting for dialog editable field index: $index", error)
-        }
-        return composeRule.onAllNodes(matcher)[index]
     }
 
     private fun waitForTag(tag: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
@@ -194,8 +171,9 @@ class MainActivitySmokeTest {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
         waitForTag("product_add_button").performClick()
-        waitForDialogEditable(0).performTextInput("Smoke Donuk Ürün")
-        waitForDialogEditable(4).performTextInput("125,50")
+        waitForTag("product_editor_open_state").assertIsDisplayed()
+        waitForTag("product_name_input").performTextInput("Smoke Donuk Ürün")
+        waitForTag("product_price_input").performTextInput("125,50")
         waitForTag("product_save_button").performClick()
         waitForText("Smoke Donuk Ürün").assertExists()
         waitForText("125,50 TRY").assertExists()
