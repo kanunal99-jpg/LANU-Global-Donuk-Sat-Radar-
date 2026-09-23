@@ -738,7 +738,10 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         ProductCatalogScreen(
                             repository = productCatalogRepository,
                             editorOpen = productEditorOpen,
-                            onEditorOpenChange = { productEditorOpen = it },
+                            onEditorOpenChange = {
+                                productEditorOpen = it
+                                android.util.Log.d("LanuProductSmoke", "MAIN_EDITOR_CALLBACK=$it")
+                            },
                         )
                     }
                     AppSection.MANUAL_POINT -> {
