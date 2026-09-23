@@ -53,6 +53,8 @@ class MainActivitySmokeTest {
                 }.getOrDefault(false)
             }
         } catch (error: Throwable) {
+            composeRule.onRoot(useUnmergedTree = false).printToLog("LanuProductSmoke")
+            composeRule.onRoot(useUnmergedTree = true).printToLog("LanuProductSmoke")
             throw AssertionError("Timed out waiting for dialog editable field index: $index", error)
         }
         return composeRule.onAllNodes(matcher)[index]
