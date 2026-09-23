@@ -193,13 +193,19 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        modifier = Modifier.fillMaxWidth().testTag("product_name_input"),
-                        singleLine = true,
-                        label = { Text("Ürün adı *") },
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("product_name_field"),
+                    ) {
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = { name = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("Ürün adı *") },
+                        )
+                    }
                     OutlinedTextField(
                         value = category,
                         onValueChange = { category = it },
@@ -223,15 +229,21 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                             label = { Text("Para") },
                         )
                     }
-                    OutlinedTextField(
-                        value = price,
-                        onValueChange = { price = it },
-                        modifier = Modifier.fillMaxWidth().testTag("product_price_input"),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        label = { Text("Birim fiyat *") },
-                        placeholder = { Text("Örn. 1250,50") },
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("product_price_field"),
+                    ) {
+                        OutlinedTextField(
+                            value = price,
+                            onValueChange = { price = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            label = { Text("Birim fiyat *") },
+                            placeholder = { Text("Örn. 1250,50") },
+                        )
+                    }
                     OutlinedTextField(
                         value = description,
                         onValueChange = { description = it },
