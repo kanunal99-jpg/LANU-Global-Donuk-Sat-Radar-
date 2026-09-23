@@ -41,7 +41,7 @@ class MainActivitySmokeTest {
     }
 
     private fun waitForDialog(timeoutMs: Long = 30_000): SemanticsNodeInteraction {
-        val matcher = isDialog()
+        val matcher = hasTestTag("product_editor_dialog")
         try {
             composeRule.waitUntil(timeoutMs) {
                 runCatching {
@@ -56,7 +56,7 @@ class MainActivitySmokeTest {
     }
 
     private fun waitForDialogTag(tag: String, timeoutMs: Long = 30_000): SemanticsNodeInteraction {
-        val matcher = hasTestTag(tag) and hasAnyAncestor(isDialog())
+        val matcher = hasTestTag(tag) and hasAnyAncestor(hasTestTag("product_editor_dialog"))
         try {
             composeRule.waitUntil(timeoutMs) {
                 runCatching {
