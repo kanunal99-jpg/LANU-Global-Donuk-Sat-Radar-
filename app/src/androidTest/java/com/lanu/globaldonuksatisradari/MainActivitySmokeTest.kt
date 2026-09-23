@@ -9,7 +9,6 @@ import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.isDialog
 import androidx.work.WorkManager
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
@@ -42,23 +41,20 @@ class MainActivitySmokeTest {
         return composeRule.onNode(matcher)
     }
 
-    private fun waitForEditableLabel(label: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
-        val matcher = hasSetTextAction() and hasText(label)
+    private fun waitForDialogEditable(index: Int, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
+        val matcher = hasSetTextAction() and hasAnyAncestor(isDialog())
         try {
             composeRule.waitUntil(timeoutMs) {
                 runCatching {
-                    composeRule.onNode(matcher, useUnmergedTree = true).assertExists()
-                    true
+                    composeRule.onAllNodes(matcher)
+                        .fetchSemanticsNodes()
+                        .size > index
                 }.getOrDefault(false)
             }
         } catch (error: Throwable) {
-            println("===== PRODUCT EDITOR SEMANTICS (MERGED) =====")
-            runCatching { composeRule.onRoot(useUnmergedTree = false).printToLog("LanuProductSmoke") }
-            println("===== PRODUCT EDITOR SEMANTICS (UNMERGED) =====")
-            runCatching { composeRule.onRoot(useUnmergedTree = true).printToLog("LanuProductSmoke") }
-            throw AssertionError("Timed out waiting for editable field label: $label", error)
+            throw AssertionError("Timed out waiting for dialog editable field index: $index", error)
         }
-        return composeRule.onNode(matcher, useUnmergedTree = true)
+        return composeRule.onAllNodes(matcher)[index]
     }
 
     private fun waitForTag(tag: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
@@ -194,8 +190,8 @@ class MainActivitySmokeTest {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
         waitForTag("product_add_button").performClick()
-        waitForEditableLabel("Ürün adı *").performTextInput("Smoke Donuk Ürün")
-        waitForEditableLabel("Birim fiyat *").performTextInput("125,50")
+        waitForDialogEditable(0).performTextInput("Smoke Donuk Ürün")
+        waitForDialogEditable(4).performTextInput("125,50")
         waitForTag("product_save_button").performClick()
         waitForText("Smoke Donuk Ürün").assertExists()
         waitForText("125,50 TRY").assertExists()
