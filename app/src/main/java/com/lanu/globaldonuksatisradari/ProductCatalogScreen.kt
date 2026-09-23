@@ -31,6 +31,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
@@ -179,7 +181,9 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
     if (editorOpen) {
         AlertDialog(
             onDismissRequest = { editorOpen = false },
-            modifier = Modifier.testTag("product_editor_dialog"),
+            modifier = Modifier
+                .testTag("product_editor_dialog")
+                .semantics { testTagsAsResourceId = true },
             title = {
                 Text(
                     if (editingId == null) "Yeni Ürün" else "Ürünü Düzenle",
