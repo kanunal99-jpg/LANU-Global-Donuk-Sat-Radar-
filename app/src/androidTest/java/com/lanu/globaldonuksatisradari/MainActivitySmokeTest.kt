@@ -41,7 +41,7 @@ class MainActivitySmokeTest {
     }
 
     private fun waitForDialog(timeoutMs: Long = 30_000): SemanticsNodeInteraction {
-        val matcher = hasTestTag("product_editor_dialog")
+        val matcher = hasText("Yeni Ürün", substring = false)
         try {
             composeRule.waitUntil(timeoutMs) {
                 runCatching {
@@ -50,7 +50,7 @@ class MainActivitySmokeTest {
                 }.getOrDefault(false)
             }
         } catch (error: Throwable) {
-            throw AssertionError("Timed out waiting for product editor dialog root", error)
+            throw AssertionError("Timed out waiting for product editor title", error)
         }
         return composeRule.onNode(matcher, useUnmergedTree = true)
     }
@@ -203,6 +203,7 @@ class MainActivitySmokeTest {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
         composeRule.onNodeWithTag("product_add_surface").assertIsDisplayed().performClick()
+        composeRule.waitForIdle()
         waitForDialog().assertExists()
         waitForDialogTag("product_name_input").performTextInput("Smoke Donuk Ürün")
         waitForDialogTag("product_price_input").performTextInput("125,50")
