@@ -174,7 +174,7 @@ class MainActivitySmokeTest {
     fun productCatalog_canOpenAndAddManualPrice() {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
-        waitForTag("product_add_button").performClick()
+        waitForTag("product_add_button").assertIsDisplayed().performClick()
         val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
         assertTrue(
             "Product editor dialog must open",
