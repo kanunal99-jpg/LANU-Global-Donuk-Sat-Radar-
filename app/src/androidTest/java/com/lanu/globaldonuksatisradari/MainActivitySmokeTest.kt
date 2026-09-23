@@ -40,63 +40,6 @@ class MainActivitySmokeTest {
         return composeRule.onNode(matcher)
     }
 
-    private fun waitForDialog(timeoutMs: Long = 30_000): SemanticsNodeInteraction {
-        val matcher = hasText("Yeni Ürün", substring = false)
-        try {
-            composeRule.waitUntil(timeoutMs) {
-                runCatching {
-                    composeRule.onNode(matcher, useUnmergedTree = true).assertExists()
-                    true
-                }.getOrDefault(false)
-            }
-        } catch (error: Throwable) {
-            throw AssertionError("Timed out waiting for product editor title", error)
-        }
-        return composeRule.onNode(matcher, useUnmergedTree = true)
-    }
-
-    private fun waitForDialogTag(tag: String, timeoutMs: Long = 30_000): SemanticsNodeInteraction {
-        val matcher = hasTestTag(tag)
-        try {
-            composeRule.waitUntil(timeoutMs) {
-                runCatching {
-                    composeRule.onNode(matcher, useUnmergedTree = true).assertExists()
-                    true
-                }.getOrDefault(false)
-            }
-        } catch (error: Throwable) {
-            throw AssertionError("Timed out waiting for product editor dialog tag: $tag", error)
-        }
-        return composeRule.onNode(matcher, useUnmergedTree = true)
-    }
-
-    private fun waitForTag(tag: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
-        val matcher = hasTestTag(tag)
-        try {
-            composeRule.waitUntil(timeoutMs) {
-                runCatching {
-                    composeRule.onNode(matcher, useUnmergedTree = true).assertExists()
-                    true
-                }.getOrDefault(false)
-            }
-        } catch (error: Throwable) {
-            throw AssertionError("Timed out waiting for test tag: $tag", error)
-        }
-        return composeRule.onNode(matcher, useUnmergedTree = true)
-    }
-
-    private fun scrollMainToText(text: String) {
-        composeRule.onNodeWithTag("main_scroll")
-            .performScrollToNode(hasText(text, substring = false))
-        composeRule.waitForIdle()
-    }
-
-    private fun scrollMainToTag(tag: String) {
-        composeRule.onNodeWithTag("main_scroll")
-            .performScrollToNode(hasTestTag(tag))
-        composeRule.waitForIdle()
-    }
-
     @JvmField
     @org.junit.Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
@@ -202,14 +145,10 @@ class MainActivitySmokeTest {
     fun productCatalog_canOpenAndAddManualPrice() {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
-        composeRule.onNodeWithText("Yeni ürün", substring = false)
-            .assertIsDisplayed()
-            .performClick()
-        composeRule.waitForIdle()
-        waitForDialog().assertExists()
-        waitForDialogTag("product_name_input").performTextInput("Smoke Donuk Ürün")
-        waitForDialogTag("product_price_input").performTextInput("125,50")
-        waitForDialogTag("product_save_button").performClick()
+        waitForTag("product_add_button").performClick()
+        waitForTag("product_name_input").performTextInput("Smoke Donuk Ürün")
+        waitForTag("product_price_input").performTextInput("125,50")
+        waitForTag("product_save_button").performClick()
         waitForText("Smoke Donuk Ürün").assertExists()
         waitForText("125,50 TRY").assertExists()
     }
