@@ -43,7 +43,7 @@ import java.util.Locale
 fun ProductCatalogScreen(repository: ProductCatalogRepository) {
     val products by repository.products.collectAsState()
     var query by remember { mutableStateOf("") }
-    var editorOpen by rememberSaveable { mutableStateOf(false) }
+    var editorOpen by remember { mutableStateOf(false) }
     var editingId by remember { mutableStateOf<String?>(null) }
     var deletingId by remember { mutableStateOf<String?>(null) }
 
