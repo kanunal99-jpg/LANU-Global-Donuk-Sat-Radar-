@@ -164,21 +164,6 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
             }
         }
 
-        Box(
-            modifier = Modifier
-                .testTag("product_editor_state_" + editorOpen)
-                .height(1.dp)
-                .fillMaxWidth(),
-        )
-        if (editorOpen) {
-            Box(
-                modifier = Modifier
-                    .testTag("product_editor_open_state")
-                    .height(1.dp)
-                    .fillMaxWidth(),
-            )
-        }
-
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -197,11 +182,11 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         Log.d("LanuProductSmoke", "EDITOR_RENDER editorOpen=true")
         AlertDialog(
             onDismissRequest = { editorOpen = false },
-            modifier = Modifier.testTag("product_editor_dialog"),
+            modifier = Modifier.testTag("product_editor_state_true").testTag("product_editor_dialog"),
             title = {
                 Text(
                     if (editingId == null) "Yeni Ürün" else "Ürünü Düzenle",
-                    modifier = Modifier.testTag("product_editor_title"),
+                    modifier = Modifier.testTag("product_editor_open_state").testTag("product_editor_title"),
                 )
             },
             text = {
