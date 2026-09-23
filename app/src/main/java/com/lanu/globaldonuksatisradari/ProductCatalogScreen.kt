@@ -182,7 +182,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         Log.d("LanuProductSmoke", "EDITOR_RENDER editorOpen=true")
         AlertDialog(
             onDismissRequest = { editorOpen = false },
-            modifier = Modifier.testTag("product_editor_state_true").testTag("product_editor_dialog"),
+            modifier = Modifier.testTag("product_editor_dialog"),
             title = {
                 Text(
                     if (editingId == null) "Yeni Ürün" else "Ürünü Düzenle",
