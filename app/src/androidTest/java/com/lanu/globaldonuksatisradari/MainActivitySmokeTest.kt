@@ -10,6 +10,7 @@ import androidx.compose.ui.test.isDialog
 import androidx.work.WorkManager
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.printToLog
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
