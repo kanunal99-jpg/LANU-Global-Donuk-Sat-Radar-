@@ -40,6 +40,33 @@ class MainActivitySmokeTest {
         return composeRule.onNode(matcher)
     }
 
+    private fun waitForTag(tag: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
+        val matcher = hasTestTag(tag)
+        try {
+            composeRule.waitUntil(timeoutMs) {
+                runCatching {
+                    composeRule.onNode(matcher, useUnmergedTree = true).assertExists()
+                    true
+                }.getOrDefault(false)
+            }
+        } catch (error: Throwable) {
+            throw AssertionError("Timed out waiting for test tag: $tag", error)
+        }
+        return composeRule.onNode(matcher, useUnmergedTree = true)
+    }
+
+    private fun scrollMainToText(text: String) {
+        composeRule.onNodeWithTag("main_scroll")
+            .performScrollToNode(hasText(text, substring = false))
+        composeRule.waitForIdle()
+    }
+
+    private fun scrollMainToTag(tag: String) {
+        composeRule.onNodeWithTag("main_scroll")
+            .performScrollToNode(hasTestTag(tag))
+        composeRule.waitForIdle()
+    }
+
     @JvmField
     @org.junit.Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
