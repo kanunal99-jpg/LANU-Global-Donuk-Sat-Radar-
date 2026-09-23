@@ -72,7 +72,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var selectedCity by remember { mutableStateOf(cities.first()) }
 
     var section by remember { mutableStateOf(AppSection.RADAR) }
-    var productEditorOpen by remember { mutableStateOf(false) }
+    var productEditorOpen by rememberSaveable { mutableStateOf(false) }
     val backStack = remember { mutableStateListOf<AppSection>() }
     val forwardStack = remember { mutableStateListOf<AppSection>() }
     fun navigateTo(target: AppSection) {
