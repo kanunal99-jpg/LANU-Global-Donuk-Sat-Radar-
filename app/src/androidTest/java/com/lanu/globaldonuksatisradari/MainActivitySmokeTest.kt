@@ -202,7 +202,7 @@ class MainActivitySmokeTest {
     fun productCatalog_canOpenAndAddManualPrice() {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
-        waitForText("Yeni ürün").assertIsDisplayed().performClick()
+        waitForText("Yeni ürün").assertIsDisplayed().performTouchInput { click(center) }
         waitForTag("product_editor_open_state").assertExists()
         waitForDialog().assertExists()
         waitForDialogTag("product_name_input").performTextInput("Smoke Donuk Ürün")
