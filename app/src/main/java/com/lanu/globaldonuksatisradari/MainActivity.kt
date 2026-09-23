@@ -73,7 +73,6 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var selectedCity by remember { mutableStateOf(cities.first()) }
 
     var section by remember { mutableStateOf(AppSection.RADAR) }
-    var productEditorOpen by rememberSaveable { mutableStateOf(false) }
     val backStack = remember { mutableStateListOf<AppSection>() }
     val forwardStack = remember { mutableStateListOf<AppSection>() }
     fun navigateTo(target: AppSection) {
@@ -737,11 +736,6 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                     AppSection.PRODUCT_CATALOG -> {
                         ProductCatalogScreen(
                             repository = productCatalogRepository,
-                            editorOpen = productEditorOpen,
-                            onEditorOpenChange = {
-                                productEditorOpen = it
-                                android.util.Log.d("LanuProductSmoke", "MAIN_EDITOR_CALLBACK=$it")
-                            },
                         )
                     }
                     AppSection.MANUAL_POINT -> {
