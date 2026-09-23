@@ -202,7 +202,7 @@ class MainActivitySmokeTest {
     fun productCatalog_canOpenAndAddManualPrice() {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
-        composeRule.onNodeWithTag("product_add_button").assertIsDisplayed().performClick()
+        waitForText("Yeni ürün").assertIsDisplayed().performClick()
         waitForDialog().assertExists()
         waitForDialogTag("product_name_input").performTextInput("Smoke Donuk Ürün")
         waitForDialogTag("product_price_input").performTextInput("125,50")
