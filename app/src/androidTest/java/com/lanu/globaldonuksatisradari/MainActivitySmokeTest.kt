@@ -9,6 +9,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
@@ -176,7 +178,7 @@ class MainActivitySmokeTest {
         waitForText("Ürün Kataloğu").assertIsDisplayed()
 
         val addButton = waitForTag("product_add_button").assertIsDisplayed().assertHasClickAction()
-        addButton.performClick()
+        addButton.performSemanticsAction(SemanticsActions.OnClick)
         composeRule.waitForIdle()
 
         waitForTag("product_editor_dialog").assertIsDisplayed()
