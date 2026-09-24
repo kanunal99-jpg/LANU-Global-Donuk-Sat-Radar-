@@ -33,6 +33,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.KeyboardType
@@ -142,7 +143,9 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
             }
             Button(
                 onClick = ::openNew,
-                modifier = Modifier.testTag("product_add_button"),
+                modifier = Modifier
+                    .testTag("product_add_button")
+                    .semantics { contentDescription = "product_add_button" },
             ) {
                 Text("Yeni ürün")
             }
