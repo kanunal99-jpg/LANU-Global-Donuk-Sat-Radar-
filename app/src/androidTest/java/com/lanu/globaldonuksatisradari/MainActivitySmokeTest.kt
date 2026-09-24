@@ -175,32 +175,15 @@ class MainActivitySmokeTest {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
 
-        // Primary: Compose interaction exercises the actual click callback.
-        composeRule.onNodeWithTag("product_add_button", useUnmergedTree = true).performClick()
-        composeRule.waitUntil(5_000) {
-            runCatching {
-                composeRule.onNodeWithTag("product_editor_dialog", useUnmergedTree = true).assertExists()
-                true
-            }.getOrDefault(false)
-        }
+        val addButton = waitForTag("product_add_button").assertIsDisplayed()
+        addButton.performTouchInput { click() }
+        composeRule.waitForIdle()
 
-        // Fallback: real device accessibility interaction if the Compose semantics bridge changes.
-        if (runCatching {
-                composeRule.onNodeWithTag("product_editor_dialog", useUnmergedTree = true).assertExists()
-                true
-            }.getOrDefault(false).not()) {
-            val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-            val addButton = when {
-                device.wait(Until.hasObject(By.res("product_add_button")), 5_000) -> device.findObject(By.res("product_add_button"))
-                device.wait(Until.hasObject(By.desc("product_add_button")), 5_000) -> device.findObject(By.desc("product_add_button"))
-                else -> throw AssertionError("Yeni ürün button must be visible to UiAutomator by resource id or content description")
-            }
-            addButton.click()
-        }
+        waitForTag("product_editor_dialog").assertIsDisplayed()
+        waitForTag("product_name_input").assertIsDisplayed().performTextInput("Smoke Donuk Ürün")
+        waitForTag("product_price_input").assertIsDisplayed().performTextInput("125,50")
+        waitForTag("product_save_button").assertIsDisplayed().performTouchInput { click() }
 
-        waitForTag("product_name_input").performTextInput("Smoke Donuk Ürün")
-        waitForTag("product_price_input").performTextInput("125,50")
-        waitForTag("product_save_button").performClick()
         waitForText("Smoke Donuk Ürün").assertExists()
         waitForText("125,50 TRY").assertExists()
     }
