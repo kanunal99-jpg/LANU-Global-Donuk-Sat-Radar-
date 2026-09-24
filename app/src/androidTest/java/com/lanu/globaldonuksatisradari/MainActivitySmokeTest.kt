@@ -175,8 +175,8 @@ class MainActivitySmokeTest {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
 
-        val addButton = waitForTag("product_add_button").assertIsDisplayed()
-        addButton.performTouchInput { click() }
+        val addButton = waitForTag("product_add_button").assertIsDisplayed().assertHasClickAction()
+        addButton.performClick()
         composeRule.waitForIdle()
 
         waitForTag("product_editor_dialog").assertIsDisplayed()
