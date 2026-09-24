@@ -125,7 +125,8 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(16.dp)
+            .semantics { testTagsAsResourceId = true },
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(
