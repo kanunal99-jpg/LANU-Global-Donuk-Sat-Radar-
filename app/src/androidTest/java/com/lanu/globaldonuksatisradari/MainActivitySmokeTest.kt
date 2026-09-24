@@ -175,11 +175,14 @@ class MainActivitySmokeTest {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
         val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-        assertTrue(
-            "Yeni ürün button must be visible to UiAutomator by resource id",
-            device.wait(Until.hasObject(By.res("product_add_button")), 5_000),
-        )
-        device.findObject(By.res("product_add_button")).click()
+        val addButton = when {
+            device.wait(Until.hasObject(By.res("product_add_button")), 5_000) ->
+                device.findObject(By.res("product_add_button"))
+            device.wait(Until.hasObject(By.desc("product_add_button")), 5_000) ->
+                device.findObject(By.desc("product_add_button"))
+            else -> throw AssertionError("Yeni ürün button must be visible to UiAutomator by resource id or content description")
+        }
+        addButton.click()
         assertTrue(
             "Product editor dialog must open",
             device.wait(Until.hasObject(By.res("product_editor_dialog")), 5_000),
