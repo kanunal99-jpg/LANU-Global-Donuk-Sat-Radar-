@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -434,7 +435,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         }
                     }
                     item {
-                        Card(modifier = Modifier.fillMaxWidth()) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().testTag("inventory_filters_card"),
+                        ) {
                             Column(
                                 modifier = Modifier.padding(14.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -731,7 +734,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                 }
                     }
                     AppSection.PRODUCT_CATALOG -> {
-                        ProductCatalogScreen(repository = productCatalogRepository)
+                        ProductCatalogScreen(
+                            repository = productCatalogRepository,
+                        )
                     }
                     AppSection.MANUAL_POINT -> {
                         ManualPointScreen(

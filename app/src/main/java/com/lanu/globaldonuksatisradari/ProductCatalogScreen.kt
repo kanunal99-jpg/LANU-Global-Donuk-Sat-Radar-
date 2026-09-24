@@ -1,5 +1,6 @@
 package com.lanu.globaldonuksatisradari
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -27,9 +29,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
@@ -69,6 +75,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         sourceUrl = "https://globaldonukgida.com/"
         editorError = null
         editorOpen = true
+        Log.d("LanuProductSmoke", "openNew invoked; editorOpen=true")
     }
 
     fun openEdit(product: CatalogProduct) {
@@ -119,7 +126,8 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(16.dp)
+            .semantics { testTagsAsResourceId = true },
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(
@@ -160,7 +168,9 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         }
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(filteredProducts, key = { it.id }) { product ->
@@ -173,13 +183,32 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         }
     }
 
+    LaunchedEffect(editorOpen) {
+        Log.d("LanuProductSmoke", "editorOpen state changed: $editorOpen")
+    }
+
     if (editorOpen) {
         AlertDialog(
-            onDismissRequest = { editorOpen = false },
-            title = { Text(if (editingId == null) "Yeni Ürün" else "Ürünü Düzenle") },
+            onDismissRequest = {
+                Log.d("LanuProductSmoke", "AlertDialog onDismissRequest")
+                editorOpen = false
+            },
+            modifier = Modifier
+                .testTag("product_editor_dialog")
+                .semantics { testTagsAsResourceId = true },
+            title = {
+                Text(
+                    if (editingId == null) "Yeni Ürün" else "Ürünü Düzenle",
+                    modifier = Modifier.testTag("product_editor_open_state"),
+                )
+            },
             text = {
                 Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 520.dp)
+                        .testTag("product_editor_content")
+                        .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     OutlinedTextField(

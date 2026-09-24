@@ -2,13 +2,23 @@ package com.lanu.globaldonuksatisradari
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.work.WorkManager
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.Until
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.ExperimentalTestApi
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
@@ -36,8 +46,29 @@ class MainActivitySmokeTest {
 
     private fun waitForTag(tag: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
         val matcher = hasTestTag(tag)
-        composeRule.waitUntilAtLeastOneExists(matcher, timeoutMs)
-        return composeRule.onNode(matcher)
+        try {
+            composeRule.waitUntil(timeoutMs) {
+                runCatching {
+                    composeRule.onNode(matcher, useUnmergedTree = true).assertExists()
+                    true
+                }.getOrDefault(false)
+            }
+        } catch (error: Throwable) {
+            throw AssertionError("Timed out waiting for test tag: $tag", error)
+        }
+        return composeRule.onNode(matcher, useUnmergedTree = true)
+    }
+
+    private fun scrollMainToText(text: String) {
+        composeRule.onNodeWithTag("main_scroll")
+            .performScrollToNode(hasText(text, substring = false))
+        composeRule.waitForIdle()
+    }
+
+    private fun scrollMainToTag(tag: String) {
+        composeRule.onNodeWithTag("main_scroll")
+            .performScrollToNode(hasTestTag(tag))
+        composeRule.waitForIdle()
     }
 
     @JvmField
@@ -46,15 +77,16 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun launch_showsCoreSalesRadarUi() {
-        waitForText("LANU Global Donuk Satış Radarı").assertIsDisplayed()
-        waitForText("Satış Radarı").assertExists()
+        waitForText("LANU Global Donuk Gıda").assertIsDisplayed()
+        waitForText("Satış & CRM Radarı").assertIsDisplayed()
+        scrollMainToText("Seçime göre gerçek verileri getir")
         waitForTag("real_search_button").assertIsDisplayed()
     }
 
     @Test(timeout = 60_000)
     fun blankSearch_keepsBroadInventoryModeAvailable() {
-        waitForText("Boş bırakırsanız seçilen şehir/ilçe için OSM işletme envanteri taranır; hedefli kategori aramalarında çiğköfte, cafe, restoran, catering, PlayStation ve daha fazlası desteklenir.").assertExists()
-        waitForText("İşletme envanteri filtreleri").assertExists()
+        scrollMainToTag("inventory_filters_card")
+        waitForTag("inventory_filters_card").assertIsDisplayed()
     }
 
     @Test(timeout = 60_000)
@@ -117,6 +149,7 @@ class MainActivitySmokeTest {
         composeRule.waitForIdle()
 
         val crmDetailTag = "crm_open_" + seededCustomer.id
+        composeRule.onNodeWithTag("main_scroll").performScrollToNode(hasTestTag(crmDetailTag))
         val crmDetailButton = waitForTag(crmDetailTag)
         crmDetailButton.performClick()
         composeRule.onNodeWithTag("crm_detail_back").assertIsDisplayed()
@@ -130,7 +163,7 @@ class MainActivitySmokeTest {
         waitForText("Manuel Nokta Kaydı").assertIsDisplayed()
 
         waitForText("← Geri").performClick()
-        waitForText("Satış Radarı").assertExists()
+        waitForText("Satış & CRM Radarı").assertExists()
 
         waitForText("İleri →").performClick()
         waitForText("Manuel Nokta Kaydı").assertExists()
@@ -143,10 +176,16 @@ class MainActivitySmokeTest {
     fun productCatalog_canOpenAndAddManualPrice() {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
-        waitForTag("product_add_button").performClick()
-        waitForTag("product_name_input").performTextInput("Smoke Donuk Ürün")
-        waitForTag("product_price_input").performTextInput("125,50")
-        waitForTag("product_save_button").performClick()
+
+        val addButton = waitForTag("product_add_button").assertIsDisplayed().assertHasClickAction()
+        addButton.performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.waitForIdle()
+
+        waitForTag("product_editor_dialog").assertIsDisplayed()
+        waitForTag("product_name_input").assertIsDisplayed().performTextInput("Smoke Donuk Ürün")
+        waitForTag("product_price_input").assertIsDisplayed().performTextInput("125,50")
+        waitForTag("product_save_button").assertIsDisplayed().performTouchInput { click() }
+
         waitForText("Smoke Donuk Ürün").assertExists()
         waitForText("125,50 TRY").assertExists()
     }
