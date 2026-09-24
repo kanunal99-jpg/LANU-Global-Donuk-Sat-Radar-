@@ -178,12 +178,22 @@ class MainActivitySmokeTest {
         val addButton = waitForTag("product_add_button")
         addButton.assertIsDisplayed()
         addButton.performTouchInput { click() }
+        composeRule.waitForIdle()
 
-        val dialog = waitForTag("product_editor_dialog")
-        dialog.assertIsDisplayed()
-        waitForTag("product_name_input").performTextInput("Smoke Donuk Ürün")
-        waitForTag("product_price_input").performTextInput("125,50")
-        waitForTag("product_save_button").performTouchInput { click() }
+        waitForTag("product_editor_dialog").assertIsDisplayed()
+        val nameInput = waitForTag("product_name_input")
+        nameInput.assertIsDisplayed()
+        nameInput.performTextInput("Smoke Donuk Ürün")
+
+        val priceInput = waitForTag("product_price_input")
+        priceInput.assertIsDisplayed()
+        priceInput.performTextInput("125,50")
+
+        val saveButton = waitForTag("product_save_button")
+        saveButton.assertIsDisplayed()
+        saveButton.performTouchInput { click() }
+        composeRule.waitForIdle()
+
         waitForText("Smoke Donuk Ürün").assertExists()
         waitForText("125,50 TRY").assertExists()
     }
