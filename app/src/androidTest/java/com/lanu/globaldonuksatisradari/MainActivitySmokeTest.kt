@@ -177,8 +177,22 @@ class MainActivitySmokeTest {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
 
-        val addButton = waitForTag("product_add_button").assertIsDisplayed().assertHasClickAction()
-        addButton.performSemanticsAction(SemanticsActions.OnClick)
+        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+        val externalClick = when {
+            device.wait(Until.hasObject(By.res("product_add_button")), 5_000) -> {
+                device.findObject(By.res("product_add_button")).click()
+                true
+            }
+            device.wait(Until.hasObject(By.desc("product_add_button")), 5_000) -> {
+                device.findObject(By.desc("product_add_button")).click()
+                true
+            }
+            else -> false
+        }
+        if (!externalClick) {
+            waitForTag("product_add_button").assertIsDisplayed().assertHasClickAction()
+                .performTouchInput { click() }
+        }
         composeRule.waitForIdle()
 
         waitForTag("product_editor_dialog").assertIsDisplayed()
