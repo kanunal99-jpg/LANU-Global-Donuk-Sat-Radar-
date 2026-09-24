@@ -174,22 +174,16 @@ class MainActivitySmokeTest {
     fun productCatalog_canOpenAndAddManualPrice() {
         waitForText("Ürün kataloğu").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
-        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-        val addButton = when {
-            device.wait(Until.hasObject(By.res("product_add_button")), 5_000) ->
-                device.findObject(By.res("product_add_button"))
-            device.wait(Until.hasObject(By.desc("product_add_button")), 5_000) ->
-                device.findObject(By.desc("product_add_button"))
-            else -> throw AssertionError("Yeni ürün button must be visible to UiAutomator by resource id or content description")
-        }
-        addButton.click()
-        assertTrue(
-            "Product editor dialog must open",
-            device.wait(Until.hasObject(By.res("product_editor_dialog")), 5_000),
-        )
-        device.findObject(By.res("product_name_input")).setText("Smoke Donuk Ürün")
-        device.findObject(By.res("product_price_input")).setText("125,50")
-        device.findObject(By.res("product_save_button")).click()
+
+        val addButton = waitForTag("product_add_button")
+        addButton.assertIsDisplayed()
+        addButton.performTouchInput { click() }
+
+        val dialog = waitForTag("product_editor_dialog")
+        dialog.assertIsDisplayed()
+        waitForTag("product_name_input").performTextInput("Smoke Donuk Ürün")
+        waitForTag("product_price_input").performTextInput("125,50")
+        waitForTag("product_save_button").performTouchInput { click() }
         waitForText("Smoke Donuk Ürün").assertExists()
         waitForText("125,50 TRY").assertExists()
     }
