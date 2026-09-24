@@ -143,9 +143,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
             }
             Button(
                 onClick = ::openNew,
-                modifier = Modifier
-                    .testTag("product_add_button")
-                    .semantics { contentDescription = "product_add_button" },
+                modifier = Modifier.testTag("product_add_button"),
             ) {
                 Text("Yeni ürün")
             }
