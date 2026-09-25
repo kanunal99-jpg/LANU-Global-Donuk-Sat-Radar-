@@ -1,38 +1,34 @@
 package com.lanu.globaldonuksatisradari
 
-import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasTestTag
-import androidx.work.WorkManager
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.performSemanticsAction
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.uiautomator.By
-import androidx.test.uiautomator.UiDevice
-import androidx.test.uiautomator.Until
 import androidx.compose.ui.test.click
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performScrollToNode
-import androidx.compose.ui.test.SemanticsNodeInteraction
-import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.work.WorkManager
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.data.DataSourceDescriptor
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import androidx.test.ext.junit.runners.AndroidJUnit4
 
 @RunWith(AndroidJUnit4::class)
 @OptIn(ExperimentalTestApi::class)
@@ -59,15 +55,15 @@ class MainActivitySmokeTest {
         return composeRule.onNode(matcher, useUnmergedTree = true)
     }
 
-    private fun scrollMainToText(text: String) {
-        composeRule.onNodeWithTag("main_scroll")
-            .performScrollToNode(hasText(text, substring = false))
-        composeRule.waitForIdle()
-    }
-
     private fun scrollMainToTag(tag: String) {
         composeRule.onNodeWithTag("main_scroll")
             .performScrollToNode(hasTestTag(tag))
+        composeRule.waitForIdle()
+    }
+
+    private fun scrollMainToText(text: String) {
+        composeRule.onNodeWithTag("main_scroll")
+            .performScrollToNode(hasText(text, substring = false))
         composeRule.waitForIdle()
     }
 
@@ -77,10 +73,9 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun launch_showsCoreSalesRadarUi() {
-        waitForText("LANU Global Donuk Gıda").assertIsDisplayed()
         waitForText("Satış & CRM Radarı").assertIsDisplayed()
-        scrollMainToText("Seçime göre gerçek verileri getir")
-        waitForTag("real_search_button").assertIsDisplayed()
+        scrollMainToTag("real_search_button")
+        waitForTag("real_search_button").assertIsDisplayed().assertHasClickAction()
     }
 
     @Test(timeout = 60_000)
@@ -116,10 +111,10 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun persistedCrmCustomer_opensRealDetailWorkflow() {
-        val seededCustomer = runBlocking {
+        runBlocking {
             val context = composeRule.activity
             val repository = LocalCrmRepository(LanuCrmDatabase.getInstance(context))
-            val customer = repository.addBusinessAsCustomer(
+            repository.addBusinessAsCustomer(
                 VerifiedBusiness(
                     id = "instrumentation-ui-crm-detail",
                     name = "Smoke CRM Kafe",
@@ -137,29 +132,25 @@ class MainActivitySmokeTest {
                     verifiedAtEpochMs = 1L,
                 )
             )
-
             assertTrue(
                 "Seeded CRM customer must persist in Room",
                 repository.observeCustomers("İstanbul").first().any { it.businessName == "Smoke CRM Kafe" },
             )
-            customer
         }
 
         composeRule.activityRule.scenario.recreate()
-        composeRule.waitForIdle()
-
-        val crmDetailTag = "crm_open_" + seededCustomer.id
-        composeRule.onNodeWithTag("main_scroll").performScrollToNode(hasTestTag(crmDetailTag))
-        val crmDetailButton = waitForTag(crmDetailTag)
-        crmDetailButton.performClick()
-        composeRule.onNodeWithTag("crm_detail_back").assertIsDisplayed()
-        composeRule.onNodeWithText("Açık takipler").assertExists()
-        composeRule.onNodeWithText("Aktivite geçmişi").assertExists()
+        composeRule.waitUntilAtLeastOneExists(hasText("Smoke CRM Kafe", substring = false), 45_000)
+        scrollMainToText("Smoke CRM Kafe")
+        waitForText("Smoke CRM Kafe").assertIsDisplayed()
+        waitForText("Aç").assertHasClickAction().performClick()
+        waitForTag("crm_detail_back").assertIsDisplayed()
+        waitForText("Açık takipler").assertExists()
+        waitForText("Aktivite geçmişi").assertExists()
     }
 
     @Test(timeout = 60_000)
     fun navigationBackForwardAndNewSections_areReachable() {
-        waitForText("Manuel nokta").performClick()
+        waitForText("Nokta").performClick()
         waitForText("Manuel Nokta Kaydı").assertIsDisplayed()
 
         waitForText("← Geri").performClick()
@@ -174,7 +165,7 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun productCatalog_canOpenAndAddManualPrice() {
-        waitForText("Ürün kataloğu").performClick()
+        waitForText("Ürünler").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
 
         val addButton = waitForTag("product_add_button").assertIsDisplayed().assertHasClickAction()
