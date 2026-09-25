@@ -1,6 +1,5 @@
 package com.lanu.globaldonuksatisradari
 
-import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,29 +17,28 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.material3.MaterialTheme
 import coil.compose.AsyncImage
-import androidx.compose.ui.layout.ContentScale
 import java.util.Locale
 
 @Composable
@@ -50,7 +48,6 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
     var editorOpen by remember { mutableStateOf(false) }
     var editingId by remember { mutableStateOf<String?>(null) }
     var deletingId by remember { mutableStateOf<String?>(null) }
-
     var name by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
     var unit by remember { mutableStateOf("Adet") }
@@ -75,7 +72,6 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         sourceUrl = "https://globaldonukgida.com/"
         editorError = null
         editorOpen = true
-        Log.d("LanuProductSmoke", "openNew invoked; editorOpen=true")
     }
 
     fun openEdit(product: CatalogProduct) {
@@ -113,39 +109,36 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
     }
 
     val normalizedQuery = query.trim().lowercase(Locale("tr", "TR"))
-    val filteredProducts = if (normalizedQuery.isEmpty()) {
-        products
-    } else {
-        products.filter {
-            it.name.lowercase(Locale("tr", "TR")).contains(normalizedQuery) ||
-                it.category.lowercase(Locale("tr", "TR")).contains(normalizedQuery) ||
-                it.unit.lowercase(Locale("tr", "TR")).contains(normalizedQuery)
-        }
+    val filteredProducts = if (normalizedQuery.isEmpty()) products else products.filter {
+        it.name.lowercase(Locale("tr", "TR")).contains(normalizedQuery) ||
+            it.category.lowercase(Locale("tr", "TR")).contains(normalizedQuery) ||
+            it.unit.lowercase(Locale("tr", "TR")).contains(normalizedQuery)
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .semantics { testTagsAsResourceId = true },
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize().padding(16.dp).semantics { testTagsAsResourceId = true },
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(
+        Card(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Ürün Kataloğu", style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    "Manuel ürün, kategori, birim ve fiyat kaydı. İnternet gerektirmez; cihazda kalıcı saklanır.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            Button(
-                onClick = ::openNew,
-                modifier = Modifier.testTag("product_add_button"),
-            ) {
-                Text("Yeni ürün")
+                Text("Fiyat, birim, görsel ve kaynak bilgilerini tek ekrandan yönetin.")
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.weight(1f)) {
+                        Text(products.size.toString(), style = MaterialTheme.typography.headlineSmall)
+                        Text("Kayıtlı ürün", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(filteredProducts.size.toString(), style = MaterialTheme.typography.headlineSmall)
+                        Text("Görünen sonuç", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                Button(onClick = ::openNew, modifier = Modifier.fillMaxWidth().testTag("product_add_button")) {
+                    Text("Yeni ürün ekle")
+                }
             }
         }
 
@@ -154,146 +147,54 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth().testTag("product_search"),
             singleLine = true,
-            label = { Text("Ürün ara") },
+            label = { Text("Ürün, kategori veya birim ara") },
         )
 
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Katalog özeti", style = MaterialTheme.typography.titleMedium)
-                Text(products.size.toString() + " ürün kayıtlı • " + filteredProducts.size + " sonuç gösteriliyor")
-                if (products.isEmpty()) {
-                    Text("Henüz ürün yok. Yeni ürün ile ilk kaydı oluşturun.", style = MaterialTheme.typography.bodySmall)
+        if (filteredProducts.isEmpty()) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(if (products.isEmpty()) "Katalog henüz boş" else "Eşleşen ürün bulunamadı", style = MaterialTheme.typography.titleMedium)
+                    Text(if (products.isEmpty()) "İlk ürünü ekleyerek fiyat kataloğunu oluşturmaya başlayın." else "Arama metnini değiştirerek tekrar deneyin.")
                 }
             }
         }
 
         LazyColumn(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
+            modifier = Modifier.weight(1f).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(filteredProducts, key = { it.id }) { product ->
-                ProductCard(
-                    product = product,
-                    onEdit = { openEdit(product) },
-                    onDelete = { deletingId = product.id },
-                )
+                ProductCard(product = product, onEdit = { openEdit(product) }, onDelete = { deletingId = product.id })
             }
         }
     }
 
-    LaunchedEffect(editorOpen) {
-        Log.d("LanuProductSmoke", "editorOpen state changed: $editorOpen")
-    }
-
     if (editorOpen) {
         AlertDialog(
-            onDismissRequest = {
-                Log.d("LanuProductSmoke", "AlertDialog onDismissRequest")
-                editorOpen = false
-            },
-            modifier = Modifier
-                .testTag("product_editor_dialog")
-                .semantics { testTagsAsResourceId = true },
-            title = {
-                Text(
-                    if (editingId == null) "Yeni Ürün" else "Ürünü Düzenle",
-                    modifier = Modifier.testTag("product_editor_open_state"),
-                )
-            },
+            onDismissRequest = { editorOpen = false },
+            modifier = Modifier.testTag("product_editor_dialog").semantics { testTagsAsResourceId = true },
+            title = { Text(if (editingId == null) "Yeni Ürün" else "Ürünü Düzenle", modifier = Modifier.testTag("product_editor_open_state")) },
             text = {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 520.dp)
-                        .testTag("product_editor_content")
-                        .verticalScroll(rememberScrollState()),
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp).testTag("product_editor_content").verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        modifier = Modifier.fillMaxWidth().testTag("product_name_input"),
-                        singleLine = true,
-                        label = { Text("Ürün adı *") },
-                    )
-                    OutlinedTextField(
-                        value = category,
-                        onValueChange = { category = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("Kategori") },
-                    )
+                    OutlinedTextField(value = name, onValueChange = { name = it }, modifier = Modifier.fillMaxWidth().testTag("product_name_input"), singleLine = true, label = { Text("Ürün adı *") })
+                    OutlinedTextField(value = category, onValueChange = { category = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Kategori") })
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = unit,
-                            onValueChange = { unit = it },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            label = { Text("Birim") },
-                        )
-                        OutlinedTextField(
-                            value = currency,
-                            onValueChange = { currency = it.uppercase(Locale.ROOT).take(3) },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            label = { Text("Para") },
-                        )
+                        OutlinedTextField(value = unit, onValueChange = { unit = it }, modifier = Modifier.weight(1f), singleLine = true, label = { Text("Birim") })
+                        OutlinedTextField(value = currency, onValueChange = { currency = it.uppercase(Locale.ROOT).take(3) }, modifier = Modifier.weight(1f), singleLine = true, label = { Text("Para") })
                     }
-                    OutlinedTextField(
-                        value = price,
-                        onValueChange = { price = it },
-                        modifier = Modifier.fillMaxWidth().testTag("product_price_input"),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        label = { Text("Birim fiyat *") },
-                        placeholder = { Text("Örn. 1250,50") },
-                    )
-                    OutlinedTextField(
-                        value = description,
-                        onValueChange = { description = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 4,
-                        label = { Text("Detaylı ürün açıklaması") },
-                    )
-                    OutlinedTextField(
-                        value = imageUrl,
-                        onValueChange = { imageUrl = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("Ürün fotoğrafı URL") },
-                        placeholder = { Text("https://.../urun-fotografi.jpg") },
-                    )
-                    OutlinedTextField(
-                        value = sourceUrl,
-                        onValueChange = { sourceUrl = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("Resmî kaynak URL") },
-                    )
-                    OutlinedTextField(
-                        value = note,
-                        onValueChange = { note = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 2,
-                        label = { Text("Not") },
-                    )
-                    editorError?.let {
-                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                    }
+                    OutlinedTextField(value = price, onValueChange = { price = it }, modifier = Modifier.fillMaxWidth().testTag("product_price_input"), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), label = { Text("Birim fiyat *") }, placeholder = { Text("Örn. 1250,50") })
+                    OutlinedTextField(value = description, onValueChange = { description = it }, modifier = Modifier.fillMaxWidth(), minLines = 3, label = { Text("Ürün açıklaması") })
+                    OutlinedTextField(value = imageUrl, onValueChange = { imageUrl = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Ürün fotoğrafı URL") })
+                    OutlinedTextField(value = sourceUrl, onValueChange = { sourceUrl = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Resmî kaynak URL") })
+                    OutlinedTextField(value = note, onValueChange = { note = it }, modifier = Modifier.fillMaxWidth(), minLines = 2, label = { Text("Not") })
+                    editorError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                 }
             },
-            confirmButton = {
-                Button(onClick = ::save, modifier = Modifier.testTag("product_save_button")) {
-                    Text("Kaydet")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { editorOpen = false }) {
-                    Text("Vazgeç")
-                }
-            },
+            confirmButton = { Button(onClick = ::save, modifier = Modifier.testTag("product_save_button")) { Text("Kaydet") } },
+            dismissButton = { TextButton(onClick = { editorOpen = false }) { Text("Vazgeç") } },
         )
     }
 
@@ -302,87 +203,35 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         AlertDialog(
             onDismissRequest = { deletingId = null },
             title = { Text("Ürünü sil") },
-            text = { Text("“" + deletingProduct.name + "” kaydı katalogdan silinsin mi?") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        repository.delete(deletingProduct.id)
-                        deletingId = null
-                    },
-                ) { Text("Sil") }
-            },
-            dismissButton = {
-                TextButton(onClick = { deletingId = null }) { Text("İptal") }
-            },
+            text = { Text("“${deletingProduct.name}” kaydı katalogdan silinsin mi?") },
+            confirmButton = { Button(onClick = { repository.delete(deletingProduct.id); deletingId = null }) { Text("Sil") } },
+            dismissButton = { TextButton(onClick = { deletingId = null }) { Text("İptal") } },
         )
     }
 }
 
 @Composable
-private fun ProductCard(
-    product: CatalogProduct,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-) {
+private fun ProductCard(product: CatalogProduct, onEdit: () -> Unit, onDelete: () -> Unit) {
     var imageFailed by remember(product.imageUrl) { mutableStateOf(false) }
-
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
+    Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             product.imageUrl?.let { url ->
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(180.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (imageFailed) {
-                        Text("Ürün fotoğrafı yüklenemedi")
-                    } else {
-                        AsyncImage(
-                            model = url,
-                            contentDescription = product.name,
-                            modifier = Modifier.fillMaxWidth().height(180.dp),
-                            contentScale = ContentScale.Crop,
-                            onError = { imageFailed = true },
-                        )
-                    }
+                Box(modifier = Modifier.fillMaxWidth().height(170.dp), contentAlignment = Alignment.Center) {
+                    if (imageFailed) Text("Ürün görseli yüklenemedi") else AsyncImage(model = url, contentDescription = product.name, modifier = Modifier.fillMaxWidth().height(170.dp), contentScale = ContentScale.Crop, onError = { imageFailed = true })
                 }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(product.name, style = MaterialTheme.typography.titleMedium)
-                    val meta = listOf(product.category, product.unit)
-                        .filter { it.isNotBlank() }
-                        .joinToString(" • ")
-                    if (meta.isNotBlank()) {
-                        Text(meta, style = MaterialTheme.typography.bodySmall)
-                    }
+                    val meta = listOf(product.category, product.unit).filter { it.isNotBlank() }.joinToString(" • ")
+                    if (meta.isNotBlank()) Text(meta, style = MaterialTheme.typography.bodySmall)
                 }
-                Text(
-                    ProductPrice.formatMinor(product.priceMinor, product.currency),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                Text(ProductPrice.formatMinor(product.priceMinor, product.currency), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             }
-            product.description?.let {
-                HorizontalDivider()
-                Text(it, style = MaterialTheme.typography.bodyMedium)
-            }
-            product.note?.let {
-                HorizontalDivider()
-                Text(it, style = MaterialTheme.typography.bodySmall)
-            }
-            product.sourceUrl?.let {
-                Text("Kaynak: $it", style = MaterialTheme.typography.labelSmall)
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
+            product.description?.let { HorizontalDivider(); Text(it, style = MaterialTheme.typography.bodyMedium) }
+            product.note?.let { HorizontalDivider(); Text(it, style = MaterialTheme.typography.bodySmall) }
+            product.sourceUrl?.let { Text("Kaynak: $it", style = MaterialTheme.typography.labelSmall) }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 OutlinedButton(onClick = onEdit) { Text("Düzenle") }
                 TextButton(onClick = onDelete) { Text("Sil") }
             }
