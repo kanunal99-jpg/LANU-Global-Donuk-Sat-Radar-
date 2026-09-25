@@ -61,10 +61,24 @@ class MainActivitySmokeTest {
         composeRule.waitForIdle()
     }
 
-    private fun scrollMainToText(text: String) {
-        composeRule.onNodeWithTag("main_scroll")
-            .performScrollToNode(hasText(text, substring = false))
-        composeRule.waitForIdle()
+    private fun scrollMainToText(text: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
+        val matcher = hasText(text, substring = false)
+        try {
+            composeRule.waitUntil(timeoutMs) {
+                runCatching {
+                    // LazyColumn items that are off-screen are not part of the active semantics tree.
+                    // Retry the lazy-list scroll itself while Room/Flow state is being collected instead
+                    // of waiting for an off-screen node to exist before scrolling to it.
+                    composeRule.onNodeWithTag("main_scroll")
+                        .performScrollToNode(matcher)
+                    composeRule.waitForIdle()
+                    true
+                }.getOrDefault(false)
+            }
+        } catch (error: Throwable) {
+            throw AssertionError("Timed out scrolling main list to text: $text", error)
+        }
+        return composeRule.onNode(matcher)
     }
 
     @JvmField
@@ -139,9 +153,7 @@ class MainActivitySmokeTest {
         }
 
         composeRule.activityRule.scenario.recreate()
-        composeRule.waitUntilAtLeastOneExists(hasText("Smoke CRM Kafe", substring = false), 45_000)
-        scrollMainToText("Smoke CRM Kafe")
-        waitForText("Smoke CRM Kafe").assertIsDisplayed()
+        scrollMainToText("Smoke CRM Kafe").assertIsDisplayed()
         waitForText("Aç").assertHasClickAction().performClick()
         waitForTag("crm_detail_back").assertIsDisplayed()
         waitForText("Açık takipler").assertExists()
