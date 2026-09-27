@@ -166,6 +166,15 @@ class MainActivitySmokeTest {
     }
 
     @Test(timeout = 60_000)
+    fun crmWorkspace_searchAndStageFilters_areReachable() {
+        waitForText("CRM").performClick()
+        waitForText("CRM Çalışma Alanı").assertIsDisplayed()
+        scrollMainToTag("crm_customer_search")
+        waitForTag("crm_customer_search").assertIsDisplayed().performTextInput("Kadıköy")
+        waitForTag("crm_stage_filter").assertHasClickAction()
+    }
+
+    @Test(timeout = 60_000)
     fun navigationBackForwardAndNewSections_areReachable() {
         waitForText("CRM").performClick()
         waitForText("CRM Çalışma Alanı").assertIsDisplayed()
