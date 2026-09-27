@@ -28,6 +28,44 @@ class RoomCrmSyncStateStore(
     }
 }
 
+/** Resolves local ownership before a queued operation may be pushed to an authenticated cloud user. */
+fun interface CrmSyncOwnershipResolver {
+    suspend fun isOwnedBy(operation: SyncOperationEntity, ownerUserId: String): Boolean
+}
+
+object AllowAllCrmSyncOwnershipResolver : CrmSyncOwnershipResolver {
+    override suspend fun isOwnedBy(operation: SyncOperationEntity, ownerUserId: String): Boolean = true
+}
+
+class RoomCrmSyncOwnershipResolver(
+    private val database: LanuCrmDatabase,
+) : CrmSyncOwnershipResolver {
+    override suspend fun isOwnedBy(operation: SyncOperationEntity, ownerUserId: String): Boolean {
+        val customer = when (operation.entityType) {
+            LocalCrmRepository.ENTITY_CUSTOMER ->
+                database.customerDao().findById(operation.entityId)
+
+            LocalCrmRepository.ENTITY_ACTIVITY ->
+                database.activityDao().findById(operation.entityId)?.customerId?.let {
+                    database.customerDao().findById(it)
+                }
+
+            LocalCrmRepository.ENTITY_NEXT_ACTION ->
+                database.nextActionDao().findById(operation.entityId)?.customerId?.let {
+                    database.customerDao().findById(it)
+                }
+
+            LocalCrmRepository.ENTITY_OPPORTUNITY ->
+                database.opportunityDao().findById(operation.entityId)?.customerId?.let {
+                    database.customerDao().findById(it)
+                }
+
+            else -> null
+        }
+        return customer?.ownerUserId == ownerUserId
+    }
+}
+
 /** Remote boundary for CRM synchronization. No concrete backend is assumed here. */
 interface RemoteCrmDataSource {
     suspend fun apply(operation: SyncOperationEntity): RemoteSyncResult
@@ -62,9 +100,17 @@ class CrmSyncEngine(
     private val remote: RemoteCrmDataSource,
     private val policy: CrmSyncRetryPolicy = CrmSyncRetryPolicy(),
     private val stateStore: CrmSyncStateStore = NoOpCrmSyncStateStore,
+    private val ownerUserId: String? = null,
+    private val ownershipResolver: CrmSyncOwnershipResolver = AllowAllCrmSyncOwnershipResolver,
 ) {
+    private suspend fun nextOperation(): SyncOperationEntity? {
+        val candidates = syncDao.pending(OWNERSHIP_SCAN_LIMIT)
+        val owner = ownerUserId ?: return candidates.firstOrNull()
+        return candidates.firstOrNull { ownershipResolver.isOwnedBy(it, owner) }
+    }
+
     suspend fun processOne(): SyncProcessResult {
-        val operation = syncDao.pending(1).firstOrNull() ?: return SyncProcessResult.NoWork
+        val operation = nextOperation() ?: return SyncProcessResult.NoWork
 
         return when (val result = remote.apply(operation)) {
             RemoteSyncResult.Success -> {
@@ -140,6 +186,7 @@ class CrmSyncEngine(
 
     companion object {
         const val DEFAULT_BATCH_SIZE = 20
+        private const val OWNERSHIP_SCAN_LIMIT = 500
     }
 }
 
