@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.lanu.globaldonuksatisradari.crm.CrmDashboardMetrics
+import com.lanu.globaldonuksatisradari.crm.CrmStage
 import com.lanu.globaldonuksatisradari.crm.CrmSyncScheduler
 import com.lanu.globaldonuksatisradari.crm.CrmValueOrigin
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
@@ -27,6 +28,7 @@ import com.lanu.globaldonuksatisradari.data.DistrictCatalogRepository
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 
 data class City(val name: String, val districts: List<String>)
@@ -118,6 +120,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var crmMessage by remember { mutableStateOf<String?>(null) }
+    var crmQuery by remember { mutableStateOf("") }
+    var crmStageMenu by remember { mutableStateOf(false) }
+    var crmStageFilter by remember { mutableStateOf<CrmStage?>(null) }
 
     BackHandler(enabled = selectedCustomerId != null || backStack.isNotEmpty()) {
         if (selectedCustomerId != null) selectedCustomerId = null else goBack()
@@ -144,6 +149,21 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
             allCrmCustomers.filter { it.ownerUserId == null }
         } else {
             allCrmCustomers.filter { it.ownerUserId == activeOwnerUserId }
+        }
+    }
+    val normalizedCrmQuery = crmQuery.trim().lowercase(Locale("tr", "TR"))
+    val visibleCrmCustomers = remember(crmCustomers, normalizedCrmQuery, crmStageFilter) {
+        crmCustomers.filter { customer ->
+            val stageMatches = crmStageFilter == null || customer.stage == crmStageFilter
+            val textMatches = normalizedCrmQuery.isEmpty() || listOfNotNull(
+                customer.businessName,
+                customer.city,
+                customer.district,
+                customer.neighborhood,
+                customer.address,
+                customer.notes,
+            ).any { it.lowercase(Locale("tr", "TR")).contains(normalizedCrmQuery) }
+            stageMatches && textMatches
         }
     }
     val pendingSyncCount by localCrmRepository.observePendingSyncCount().collectAsState(initial = 0)
@@ -529,22 +549,58 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             }
                         }
                         item {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("CRM müşterileri", style = MaterialTheme.typography.titleMedium)
-                                Text(crmCustomers.size.toString(), style = MaterialTheme.typography.titleMedium)
+                            OutlinedTextField(
+                                value = crmQuery,
+                                onValueChange = { crmQuery = it },
+                                modifier = Modifier.fillMaxWidth().testTag("crm_customer_search"),
+                                label = { Text("Müşteri ara") },
+                                placeholder = { Text("İşletme, ilçe, mahalle, adres veya not") },
+                                singleLine = true,
+                            )
+                        }
+                        item {
+                            Box {
+                                OutlinedButton(
+                                    onClick = { crmStageMenu = true },
+                                    modifier = Modifier.fillMaxWidth().testTag("crm_stage_filter"),
+                                ) {
+                                    Text(crmStageFilter?.name ?: "Tüm aşamalar")
+                                }
+                                DropdownMenu(crmStageMenu, { crmStageMenu = false }) {
+                                    DropdownMenuItem(
+                                        text = { Text("Tüm aşamalar") },
+                                        onClick = { crmStageFilter = null; crmStageMenu = false },
+                                    )
+                                    CrmStage.values().forEach { stage ->
+                                        DropdownMenuItem(
+                                            text = { Text(stage.name) },
+                                            onClick = { crmStageFilter = stage; crmStageMenu = false },
+                                        )
+                                    }
+                                }
                             }
                         }
-                        if (crmCustomers.isEmpty()) {
+                        item {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("CRM müşterileri", style = MaterialTheme.typography.titleMedium)
+                                Text("${visibleCrmCustomers.size}/${crmCustomers.size}", style = MaterialTheme.typography.titleMedium)
+                            }
+                        }
+                        if (visibleCrmCustomers.isEmpty()) {
                             item {
                                 Card(Modifier.fillMaxWidth()) {
                                     Text(
-                                        "Bu oturum kapsamında CRM müşterisi yok. Radar sonucundan CRM'e kaydedebilir veya Nokta ekranından manuel müşteri ekleyebilirsiniz.",
+                                        if (crmCustomers.isEmpty()) {
+                                            "Bu oturum kapsamında CRM müşterisi yok. Radar sonucundan CRM'e kaydedebilir veya Nokta ekranından manuel müşteri ekleyebilirsiniz."
+                                        } else {
+                                            "Arama veya aşama filtresiyle eşleşen müşteri bulunamadı."
+                                        },
                                         Modifier.padding(16.dp),
                                     )
                                 }
                             }
                         } else {
-                            items(crmCustomers, key = { it.id }) { customer ->
+                            items(visibleCrmCustomers, key = { it.id }) { customer ->
                                 Card(Modifier.fillMaxWidth()) {
                                     Row(
                                         Modifier.padding(14.dp).fillMaxWidth(),
