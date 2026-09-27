@@ -61,6 +61,32 @@ class CrmSyncEngineTest {
     }
 
     @Test
+    fun ownerScopedEngine_skipsForeignQueueEntries_andProcessesOnlyOwnedOperation() = runTest {
+        val foreign = operation(id = "op-foreign", entityId = "customer-foreign")
+        val owned = operation(id = "op-owned", entityId = "customer-owned").copy(createdAtEpochMs = 2L)
+        val dao = FakeSyncOperationDao(listOf(foreign, owned))
+        val applied = mutableListOf<String>()
+        val engine = CrmSyncEngine(
+            syncDao = dao,
+            remote = object : RemoteCrmDataSource {
+                override suspend fun apply(operation: SyncOperationEntity): RemoteSyncResult {
+                    applied += operation.id
+                    return RemoteSyncResult.Success
+                }
+            },
+            ownerUserId = "user-a",
+            ownershipResolver = CrmSyncOwnershipResolver { operation, ownerUserId ->
+                ownerUserId == "user-a" && operation.entityId == "customer-owned"
+            },
+        )
+
+        assertEquals(SyncProcessResult.Synced("op-owned"), engine.processOne())
+        assertEquals(listOf("op-owned"), applied)
+        assertTrue(dao.allOperations.any { it.id == "op-foreign" })
+        assertEquals(SyncProcessResult.NoWork, engine.processOne())
+    }
+
+    @Test
     fun conflict_parksOperation_marksEntityConflict_andDoesNotBlockQueueRuns() = runTest {
         val dao = FakeSyncOperationDao(listOf(operation()))
         val stateStore = FakeSyncStateStore()
@@ -149,6 +175,7 @@ class CrmSyncEngineTest {
         val allOperations = initial.toMutableList()
         val operation: SyncOperationEntity?
             get() = allOperations.firstOrNull { it.state == SyncOperationState.PENDING.name }
+
         fun operationById(id: String): SyncOperationEntity? =
             allOperations.firstOrNull { it.id == id }
 
