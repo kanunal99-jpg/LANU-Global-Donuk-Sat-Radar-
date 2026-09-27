@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Runs the local CRM queue only when network connectivity is available.
- * The default remote is intentionally unconfigured until an authorized backend exists.
+ * Cloud work is owner-scoped: a signed-in user can never push another local user's queue.
  */
 class CrmSyncWorker(
     appContext: Context,
@@ -22,7 +22,10 @@ class CrmSyncWorker(
 
     override suspend fun doWork(): Result {
         val database = LanuCrmDatabase.getInstance(applicationContext)
-        val remote = SupabaseCrmRemoteDataSource(SupabaseAuthClient(applicationContext))
+        val auth = SupabaseAuthClient(applicationContext)
+        val session = auth.ensureSession() ?: return Result.success()
+        val remote = SupabaseCrmRemoteDataSource(auth)
+
         val pullResult = remote.pullInto(database)
         if (pullResult is RemotePullResult.RetryableFailure) return Result.retry()
 
@@ -30,6 +33,8 @@ class CrmSyncWorker(
             syncDao = database.syncOperationDao(),
             remote = remote,
             stateStore = RoomCrmSyncStateStore(database),
+            ownerUserId = session.userId,
+            ownershipResolver = RoomCrmSyncOwnershipResolver(database),
         )
         val results = engine.processBatch()
 
@@ -41,7 +46,7 @@ class CrmSyncWorker(
     }
 }
 
-/** Safe default provider; backend integration replaces this without changing worker scheduling. */
+/** Safe default provider retained for tests and explicit fallback wiring. */
 object CrmSyncRemoteProvider {
     @Volatile
     var dataSource: RemoteCrmDataSource = UnconfiguredRemoteCrmDataSource
