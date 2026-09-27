@@ -18,6 +18,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -39,6 +40,8 @@ import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 @Composable
@@ -57,6 +60,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
     var description by remember { mutableStateOf("") }
     var imageUrl by remember { mutableStateOf("") }
     var sourceUrl by remember { mutableStateOf("https://globaldonukgida.com/") }
+    var sourceVerified by remember { mutableStateOf(false) }
     var editorError by remember { mutableStateOf<String?>(null) }
 
     fun openNew() {
@@ -70,6 +74,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         description = ""
         imageUrl = ""
         sourceUrl = "https://globaldonukgida.com/"
+        sourceVerified = false
         editorError = null
         editorOpen = true
     }
@@ -85,12 +90,16 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         description = product.description.orEmpty()
         imageUrl = product.imageUrl.orEmpty()
         sourceUrl = product.sourceUrl ?: "https://globaldonukgida.com/"
+        sourceVerified = product.sourceVerifiedAtEpochMs != null
         editorError = null
         editorOpen = true
     }
 
     fun save() {
         editorError = runCatching {
+            if (sourceVerified) {
+                require(sourceUrl.isNotBlank()) { "Doğrulanmış ürün için resmî kaynak URL zorunludur." }
+            }
             repository.upsert(
                 id = editingId,
                 name = name,
@@ -102,7 +111,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                 description = description,
                 imageUrl = imageUrl,
                 sourceUrl = sourceUrl,
-                sourceVerifiedAtEpochMs = System.currentTimeMillis(),
+                sourceVerifiedAtEpochMs = if (sourceVerified) System.currentTimeMillis() else null,
             )
             editorOpen = false
         }.exceptionOrNull()?.message
@@ -189,6 +198,17 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                     OutlinedTextField(value = description, onValueChange = { description = it }, modifier = Modifier.fillMaxWidth(), minLines = 3, label = { Text("Ürün açıklaması") })
                     OutlinedTextField(value = imageUrl, onValueChange = { imageUrl = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Ürün fotoğrafı URL") })
                     OutlinedTextField(value = sourceUrl, onValueChange = { sourceUrl = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Resmî kaynak URL") })
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = sourceVerified,
+                            onCheckedChange = { sourceVerified = it },
+                            modifier = Modifier.testTag("product_source_verified_checkbox"),
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text("Resmî kaynağı doğruladım", style = MaterialTheme.typography.bodyMedium)
+                            Text("İşaretlenmezse ürün kaydı doğrulanmış kaynak olarak etiketlenmez.", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
                     OutlinedTextField(value = note, onValueChange = { note = it }, modifier = Modifier.fillMaxWidth(), minLines = 2, label = { Text("Not") })
                     editorError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                 }
@@ -231,6 +251,12 @@ private fun ProductCard(product: CatalogProduct, onEdit: () -> Unit, onDelete: (
             product.description?.let { HorizontalDivider(); Text(it, style = MaterialTheme.typography.bodyMedium) }
             product.note?.let { HorizontalDivider(); Text(it, style = MaterialTheme.typography.bodySmall) }
             product.sourceUrl?.let { Text("Kaynak: $it", style = MaterialTheme.typography.labelSmall) }
+            if (product.sourceVerifiedAtEpochMs != null) {
+                val formatted = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale("tr", "TR")).format(Date(product.sourceVerifiedAtEpochMs))
+                Text("Kaynak doğrulandı • $formatted", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            } else {
+                Text("Kaynak doğrulanmadı", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+            }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 OutlinedButton(onClick = onEdit) { Text("Düzenle") }
                 TextButton(onClick = onDelete) { Text("Sil") }
