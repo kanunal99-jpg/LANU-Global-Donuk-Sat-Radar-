@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,9 +22,9 @@ import com.lanu.globaldonuksatisradari.crm.CrmDashboardMetrics
 fun SalesDashboard(
     selectedCity: String,
     selectedDistrict: String,
-    availableDistricts: List<String>,
+    @Suppress("UNUSED_PARAMETER") availableDistricts: List<String>,
     metrics: CrmDashboardMetrics,
-    onDistrictSelected: (String) -> Unit
+    @Suppress("UNUSED_PARAMETER") onDistrictSelected: (String) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Satış Dashboard", style = MaterialTheme.typography.headlineSmall)
@@ -33,7 +32,7 @@ fun SalesDashboard(
 
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             DashboardCard("Müşteriler", metrics.customers.toString(), "Yerel CRM")
             DashboardCard("Potansiyeller", metrics.prospects.toString(), "Prospect")
@@ -48,27 +47,13 @@ fun SalesDashboard(
         }
 
         Card(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Filtreler", style = MaterialTheme.typography.titleMedium)
-                Text("Şehir: $selectedCity")
-                Text("İlçe: $selectedDistrict")
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = selectedDistrict == "Tümü",
-                        onClick = { onDistrictSelected("Tümü") },
-                        label = { Text("Tümü") }
-                    )
-                    availableDistricts.forEach { district ->
-                        FilterChip(
-                            selected = selectedDistrict == district,
-                            onClick = { onDistrictSelected(district) },
-                            label = { Text(district) }
-                        )
-                    }
-                }
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Aktif bölge", style = MaterialTheme.typography.titleMedium)
+                Text(if (selectedDistrict == "Tümü") selectedCity else "$selectedCity • $selectedDistrict")
+                Text(
+                    "Bölge seçimi Radar'ın üst bölümünden yönetilir; dashboard yalnızca aktif kapsamı özetler.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
 
@@ -81,9 +66,9 @@ fun SalesDashboard(
                 Text("Numune: ${metrics.sampleActivities}")
                 Text("Teklif: ${metrics.proposalActivities}")
                 Text("Sipariş: ${metrics.orderActivities}")
-                Text("Açık fırsat: " + metrics.openOpportunities)
-                Text("Kazanılan fırsat: " + metrics.wonOpportunities)
-                Text("Kayıp fırsat: " + metrics.lostOpportunities)
+                Text("Açık fırsat: ${metrics.openOpportunities}")
+                Text("Kazanılan fırsat: ${metrics.wonOpportunities}")
+                Text("Kayıp fırsat: ${metrics.lostOpportunities}")
                 Text(
                     "Faaliyet sayıları yalnızca kalıcı CRM aktivite kayıtlarından hesaplanır.",
                     style = MaterialTheme.typography.bodySmall,
@@ -103,7 +88,7 @@ fun SalesDashboard(
                 FunnelRow("Aktif müşteri", metrics.activeCustomers.toString())
                 Text(
                     "Bu sayılar yalnızca cihazdaki kaydedilmiş CRM kayıtlarından hesaplanır; olmayan satış tutarı veya müşteri sayısı uydurulmaz.",
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
         }
@@ -111,8 +96,7 @@ fun SalesDashboard(
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Bölge Analizi", style = MaterialTheme.typography.titleMedium)
-                Text("Şehir → ilçe → müşteri kırılımı yerel CRM kayıtlarından genişletilebilir.")
-                Text("Seçili şehir: $selectedCity")
+                Text("Aktif kapsam: " + if (selectedDistrict == "Tümü") selectedCity else "$selectedCity → $selectedDistrict")
                 Spacer(Modifier.height(2.dp))
                 Text("Kaynak araması ile CRM kayıtları birbirinden ayrı tutulur.")
             }
