@@ -136,7 +136,16 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
 
     val localCrmRepository = remember(context) { LocalCrmRepository(LanuCrmDatabase.getInstance(context)) }
     val productCatalogRepository = remember(context) { ProductCatalogRepository(context) }
-    val crmCustomers by localCrmRepository.observeCustomers(null).collectAsState(initial = emptyList())
+    val cloudSessionState = auth?.session?.collectAsState()
+    val activeOwnerUserId = cloudSessionState?.value?.userId
+    val allCrmCustomers by localCrmRepository.observeCustomers(null).collectAsState(initial = emptyList())
+    val crmCustomers = remember(allCrmCustomers, activeOwnerUserId) {
+        if (activeOwnerUserId == null) {
+            allCrmCustomers.filter { it.ownerUserId == null }
+        } else {
+            allCrmCustomers.filter { it.ownerUserId == activeOwnerUserId }
+        }
+    }
     val pendingSyncCount by localCrmRepository.observePendingSyncCount().collectAsState(initial = 0)
     val selectedCrmCustomer = selectedCustomerId?.let { id -> crmCustomers.firstOrNull { it.id == id } }
     val selectedCustomerKey = selectedCustomerId.orEmpty()
@@ -155,15 +164,25 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
 
     val regionKey = "${selectedCity.name}|$selectedDistrict"
     val regionDistrict = selectedDistrict.takeUnless { it == "Tümü" }
-    val regionActivities by remember(regionKey) {
+    val allRegionActivities by remember(regionKey) {
         localCrmRepository.observeActivitiesForRegion(selectedCity.name, regionDistrict)
     }.collectAsState(initial = emptyList())
-    val regionNextActions by remember(regionKey) {
+    val allRegionNextActions by remember(regionKey) {
         localCrmRepository.observeOpenNextActionsForRegion(selectedCity.name, regionDistrict)
     }.collectAsState(initial = emptyList())
-    val regionOpportunities by remember(regionKey) {
+    val allRegionOpportunities by remember(regionKey) {
         localCrmRepository.observeOpportunitiesForRegion(selectedCity.name, regionDistrict)
     }.collectAsState(initial = emptyList())
+    val scopedCustomerIds = remember(crmCustomers) { crmCustomers.mapTo(mutableSetOf()) { it.id } }
+    val regionActivities = remember(allRegionActivities, scopedCustomerIds) {
+        allRegionActivities.filter { it.customerId in scopedCustomerIds }
+    }
+    val regionNextActions = remember(allRegionNextActions, scopedCustomerIds) {
+        allRegionNextActions.filter { it.customerId in scopedCustomerIds }
+    }
+    val regionOpportunities = remember(allRegionOpportunities, scopedCustomerIds) {
+        allRegionOpportunities.filter { it.customerId in scopedCustomerIds }
+    }
 
     val presenceOptions = listOf("Tümü", "Var", "Yok")
     val categoryOptions = remember(results) {
@@ -459,8 +478,12 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         items(visibleResults, key = { it.id }) { business ->
                             BusinessResultCard(business, { selectedBusiness = business }) {
                                 scope.launch {
-                                    runCatching { localCrmRepository.addBusinessAsCustomer(business) }
-                                        .onSuccess { crmMessage = "${it.businessName} CRM'e kaydedildi." }
+                                    runCatching {
+                                        localCrmRepository.addBusinessAsCustomer(
+                                            business,
+                                            ownerUserId = activeOwnerUserId,
+                                        )
+                                    }.onSuccess { crmMessage = "${it.businessName} CRM'e kaydedildi." }
                                         .onFailure { crmMessage = "CRM kaydı yapılamadı: ${it.message.orEmpty()}" }
                                 }
                             }
@@ -493,13 +516,13 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     Text("Senkronizasyon", style = MaterialTheme.typography.titleMedium)
                                     Text(
                                         if (pendingSyncCount == 0) {
-                                            "Tüm yerel değişiklikler işlendi."
+                                            "Cihaz senkronizasyon kuyruğu boş."
                                         } else {
-                                            "$pendingSyncCount değişiklik bağlantı bekliyor."
+                                            "Cihazda $pendingSyncCount bekleyen değişiklik var."
                                         },
                                     )
                                     Text(
-                                        "Bağlantı yoksa CRM Room üzerinde çalışmaya devam eder; kuyruk WorkManager ile yeniden denenir.",
+                                        "Bulut aktarımı oturum sahibine göre izole edilir. Bağlantı yoksa CRM Room üzerinde çalışmaya devam eder.",
                                         style = MaterialTheme.typography.bodySmall,
                                     )
                                 }
@@ -515,7 +538,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             item {
                                 Card(Modifier.fillMaxWidth()) {
                                     Text(
-                                        "Henüz CRM müşterisi yok. Radar sonucundan CRM'e kaydedebilir veya Nokta ekranından manuel müşteri ekleyebilirsiniz.",
+                                        "Bu oturum kapsamında CRM müşterisi yok. Radar sonucundan CRM'e kaydedebilir veya Nokta ekranından manuel müşteri ekleyebilirsiniz.",
                                         Modifier.padding(16.dp),
                                     )
                                 }
@@ -545,7 +568,11 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                     }
 
                     AppSection.PRODUCT_CATALOG -> ProductCatalogScreen(productCatalogRepository)
-                    AppSection.MANUAL_POINT -> ManualPointScreen(localCrmRepository, selectedCity.name) {
+                    AppSection.MANUAL_POINT -> ManualPointScreen(
+                        repository = localCrmRepository,
+                        defaultCity = selectedCity.name,
+                        ownerUserId = activeOwnerUserId,
+                    ) {
                         navigateTo(AppSection.ROUTINE)
                     }
                     AppSection.ROUTINE -> RoutineScreen(crmCustomers, selectedCity.name, selectedDistrict)
@@ -561,29 +588,52 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         onBack = { selectedCustomerId = null },
                         onStageChange = { target, note ->
                             scope.launch {
-                                runCatching { localCrmRepository.transitionStage(customer.id, target, null, note) }
-                                    .onSuccess { crmMessage = "Aşama güncellendi." }
+                                runCatching {
+                                    localCrmRepository.transitionStage(
+                                        customer.id,
+                                        target,
+                                        changedByUserId = activeOwnerUserId,
+                                        note = note,
+                                    )
+                                }.onSuccess { crmMessage = "Aşama güncellendi." }
                                     .onFailure { crmMessage = "Aşama değiştirilemedi: ${it.message.orEmpty()}" }
                             }
                         },
                         onRecordActivity = { type, note ->
                             scope.launch {
-                                runCatching { localCrmRepository.recordActivity(customer.id, type, note = note) }
-                                    .onSuccess { crmMessage = "Aktivite kaydedildi." }
+                                runCatching {
+                                    localCrmRepository.recordActivity(
+                                        customer.id,
+                                        type,
+                                        note = note,
+                                        createdByUserId = activeOwnerUserId,
+                                    )
+                                }.onSuccess { crmMessage = "Aktivite kaydedildi." }
                                     .onFailure { crmMessage = "Aktivite kaydedilemedi: ${it.message.orEmpty()}" }
                             }
                         },
                         onCreateNextAction = { type, dueAt, note ->
                             scope.launch {
-                                runCatching { localCrmRepository.createNextAction(customer.id, type, dueAt, note) }
-                                    .onSuccess { crmMessage = "Takip planlandı." }
+                                runCatching {
+                                    localCrmRepository.createNextAction(
+                                        customer.id,
+                                        type,
+                                        dueAt,
+                                        note,
+                                        createdByUserId = activeOwnerUserId,
+                                    )
+                                }.onSuccess { crmMessage = "Takip planlandı." }
                                     .onFailure { crmMessage = "Takip planlanamadı: ${it.message.orEmpty()}" }
                             }
                         },
                         onCompleteNextAction = { actionId ->
                             scope.launch {
-                                runCatching { localCrmRepository.completeNextAction(actionId) }
-                                    .onSuccess { crmMessage = "Takip tamamlandı." }
+                                runCatching {
+                                    localCrmRepository.completeNextAction(
+                                        actionId,
+                                        completedByUserId = activeOwnerUserId,
+                                    )
+                                }.onSuccess { crmMessage = "Takip tamamlandı." }
                                     .onFailure { crmMessage = "Takip tamamlanamadı: ${it.message.orEmpty()}" }
                             }
                         },
@@ -597,6 +647,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         estimatedValueMinor,
                                         currency,
                                         if (estimatedValueMinor == null) CrmValueOrigin.UNKNOWN else CrmValueOrigin.USER_ENTERED,
+                                        createdByUserId = activeOwnerUserId,
                                     )
                                 }.onSuccess { crmMessage = "Satış fırsatı kaydedildi." }
                                     .onFailure { crmMessage = "Fırsat kaydedilemedi: ${it.message.orEmpty()}" }
