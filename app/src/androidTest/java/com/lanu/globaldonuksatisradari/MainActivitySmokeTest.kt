@@ -1,23 +1,22 @@
 package com.lanu.globaldonuksatisradari
 
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.click
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.performSemanticsAction
-import androidx.work.WorkManager
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.work.WorkManager
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.data.DataSourceDescriptor
@@ -66,9 +65,6 @@ class MainActivitySmokeTest {
         try {
             composeRule.waitUntil(timeoutMs) {
                 runCatching {
-                    // LazyColumn items that are off-screen are not part of the active semantics tree.
-                    // Retry the lazy-list scroll itself while Room/Flow state is being collected instead
-                    // of waiting for an off-screen node to exist before scrolling to it.
                     composeRule.onNodeWithTag("main_scroll")
                         .performScrollToNode(matcher)
                     composeRule.waitForIdle()
@@ -87,15 +83,22 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun launch_showsCoreSalesRadarUi() {
-        waitForText("Satış & CRM Radarı").assertIsDisplayed()
+        waitForText("Satış Radarı").assertIsDisplayed()
         scrollMainToTag("real_search_button")
         waitForTag("real_search_button").assertIsDisplayed().assertHasClickAction()
     }
 
     @Test(timeout = 60_000)
-    fun blankSearch_keepsBroadInventoryModeAvailable() {
+    fun advancedFilters_areCollapsedButReachable() {
         scrollMainToTag("inventory_filters_card")
         waitForTag("inventory_filters_card").assertIsDisplayed()
+        waitForTag("advanced_filters_toggle").assertHasClickAction().performClick()
+        waitForText("Telefon").assertExists()
+        waitForText("Web sitesi").assertExists()
+        waitForText("Menü").assertExists()
+        waitForText("Çalışma saati").assertExists()
+        waitForText("Adres").assertExists()
+        waitForText("Koordinat").assertExists()
     }
 
     @Test(timeout = 60_000)
@@ -144,7 +147,7 @@ class MainActivitySmokeTest {
                         lastVerifiedAtEpochMs = 1L,
                     ),
                     verifiedAtEpochMs = 1L,
-                )
+                ),
             )
             assertTrue(
                 "Seeded CRM customer must persist in Room",
@@ -153,6 +156,8 @@ class MainActivitySmokeTest {
         }
 
         composeRule.activityRule.scenario.recreate()
+        waitForText("CRM").assertHasClickAction().performClick()
+        waitForText("CRM Çalışma Alanı").assertIsDisplayed()
         scrollMainToText("Smoke CRM Kafe").assertIsDisplayed()
         waitForText("Aç").assertHasClickAction().performClick()
         waitForTag("crm_detail_back").assertIsDisplayed()
@@ -162,11 +167,14 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun navigationBackForwardAndNewSections_areReachable() {
+        waitForText("CRM").performClick()
+        waitForText("CRM Çalışma Alanı").assertIsDisplayed()
+
         waitForText("Nokta").performClick()
         waitForText("Manuel Nokta Kaydı").assertIsDisplayed()
 
         waitForText("← Geri").performClick()
-        waitForText("Satış & CRM Radarı").assertExists()
+        waitForText("CRM Çalışma Alanı").assertExists()
 
         waitForText("İleri →").performClick()
         waitForText("Manuel Nokta Kaydı").assertExists()
@@ -191,5 +199,6 @@ class MainActivitySmokeTest {
 
         waitForText("Smoke Donuk Ürün").assertExists()
         waitForText("125,50 TRY").assertExists()
+        waitForText("Kaynak doğrulanmadı").assertExists()
     }
 }
