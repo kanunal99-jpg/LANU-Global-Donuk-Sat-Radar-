@@ -66,20 +66,48 @@ class ContactCrmRepository(
         toDomain(entity)
     }
 
+    suspend fun updateContact(
+        contactId: String,
+        fullName: String,
+        role: String? = null,
+        phone: String? = null,
+        email: String? = null,
+    ): CrmContact = database.withTransaction {
+        val current = database.contactDao().findById(contactId)
+            ?: error("Yetkili kişi bulunamadı: $contactId")
+        requireOwnedCustomer(current.customerId)
+        val timestamp = now()
+        val updated = current.copy(
+            fullName = CrmContactValidator.normalizeName(fullName),
+            role = CrmContactValidator.normalizeOptionalText(role),
+            phone = CrmContactValidator.normalizePhone(phone),
+            email = CrmContactValidator.normalizeEmail(email),
+            updatedAtEpochMs = timestamp,
+            version = current.version + 1L,
+            syncState = SyncState.LOCAL_ONLY.name,
+        )
+        database.contactDao().upsert(updated)
+        toDomain(updated)
+    }
+
     suspend fun makePrimary(contactId: String): CrmContact = database.withTransaction {
         val current = database.contactDao().findById(contactId)
             ?: error("Yetkili kişi bulunamadı: $contactId")
         requireOwnedCustomer(current.customerId)
+        if (current.isPrimary) return@withTransaction toDomain(current)
+
         val timestamp = now()
         database.contactDao().clearPrimary(
             customerId = current.customerId,
             updatedAtEpochMs = timestamp,
             state = SyncState.LOCAL_ONLY.name,
         )
-        val updated = current.copy(
+        val refreshed = database.contactDao().findById(contactId)
+            ?: error("Yetkili kişi güncelleme sırasında bulunamadı: $contactId")
+        val updated = refreshed.copy(
             isPrimary = true,
             updatedAtEpochMs = timestamp,
-            version = current.version + 1L,
+            version = refreshed.version + 1L,
             syncState = SyncState.LOCAL_ONLY.name,
         )
         database.contactDao().upsert(updated)
