@@ -20,6 +20,12 @@ data class CrmNextActionEntity(@PrimaryKey val id: String, val customerId: Strin
 @Entity(tableName = "crm_opportunity", indices = [Index(value = ["customerId", "updatedAtEpochMs"]), Index(value = ["status"]), Index(value = ["syncState"])])
 data class CrmOpportunityEntity(@PrimaryKey val id: String, val customerId: String, val title: String, val status: String, val notes: String?, val estimatedValueMinor: Long?, val currency: String?, val valueOrigin: String, val createdAtEpochMs: Long, val updatedAtEpochMs: Long, val version: Long, val syncState: String)
 
+@Entity(tableName = "crm_quote", indices = [Index(value = ["customerId", "updatedAtEpochMs"]), Index(value = ["status"]), Index(value = ["syncState"])])
+data class CrmQuoteEntity(@PrimaryKey val id: String, val customerId: String, val opportunityId: String?, val quoteNumber: String, val status: String, val currency: String, val totalMinor: Long, val validUntilEpochMs: Long?, val notes: String?, val createdAtEpochMs: Long, val updatedAtEpochMs: Long, val version: Long, val syncState: String)
+
+@Entity(tableName = "crm_order", indices = [Index(value = ["customerId", "updatedAtEpochMs"]), Index(value = ["quoteId"]), Index(value = ["status"]), Index(value = ["syncState"])])
+data class CrmOrderEntity(@PrimaryKey val id: String, val customerId: String, val quoteId: String?, val orderNumber: String, val status: String, val currency: String, val totalMinor: Long, val notes: String?, val createdAtEpochMs: Long, val updatedAtEpochMs: Long, val version: Long, val syncState: String)
+
 @Entity(tableName = "crm_stage_transition", indices = [Index(value = ["customerId", "changedAtEpochMs"])])
 data class CrmStageTransitionEntity(@PrimaryKey val id: String, val customerId: String, val fromStage: String?, val toStage: String, val changedAtEpochMs: Long, val changedByUserId: String?, val clientVersion: Long)
 
