@@ -11,7 +11,8 @@ class CrmContactValidatorTest {
         assertEquals("Ayşe Yılmaz", CrmContactValidator.normalizeName("  Ayşe   Yılmaz  "))
         assertEquals("satın alma", CrmContactValidator.normalizeOptionalText("  satın   alma "))
         assertEquals("ayse@example.com", CrmContactValidator.normalizeEmail(" AYSE@Example.COM "))
-        assertEquals("+90 532 123 45 67", CrmContactValidator.normalizePhone(" +90 532 123 45 67 "))
+        assertEquals("+905321234567", CrmContactValidator.normalizePhone(" +90 532 123 45 67 "))
+        assertEquals("02161234567", CrmContactValidator.normalizePhone("(0216) 123 45 67"))
         assertNull(CrmContactValidator.normalizeOptionalText("  "))
     }
 
@@ -20,7 +21,7 @@ class CrmContactValidatorTest {
         assertEquals("Ayşe Yılmaz", CrmContactValidator.normalizeName("Ayşe\u0000  Yılmaz"))
         assertEquals("Satın Alma", CrmContactValidator.normalizeOptionalText("Satın\nAlma"))
         assertEquals("ayse@example.com", CrmContactValidator.normalizeEmail("ayse\u0000@example.com"))
-        assertEquals("+90 532 123 45 67", CrmContactValidator.normalizePhone("+90 532 123 45 67\u0000"))
+        assertEquals("+905321234567", CrmContactValidator.normalizePhone("+90 532 123 45 67\u0000"))
     }
 
     @Test
@@ -35,10 +36,28 @@ class CrmContactValidatorTest {
             CrmContactValidator.normalizeEmail("ayse @example.com")
         }
         assertThrows(IllegalArgumentException::class.java) {
+            CrmContactValidator.normalizeEmail("ayse@@example.com")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CrmContactValidator.normalizeEmail(".ayse@example.com")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CrmContactValidator.normalizeEmail("ayse@example..com")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CrmContactValidator.normalizeEmail("ayse@-example.com")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
             CrmContactValidator.normalizePhone("123")
         }
         assertThrows(IllegalArgumentException::class.java) {
             CrmContactValidator.normalizePhone("+90 532 123 45 67 ext")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CrmContactValidator.normalizePhone("90+5321234567")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CrmContactValidator.normalizePhone("++905321234567")
         }
     }
 
@@ -52,6 +71,9 @@ class CrmContactValidatorTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             CrmContactValidator.normalizeEmail("a".repeat(245) + "@example.com")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CrmContactValidator.normalizeEmail("a".repeat(65) + "@example.com")
         }
     }
 }
