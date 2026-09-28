@@ -8,47 +8,26 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CrmCustomerDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(customer: CrmCustomerEntity)
-
-    @Query("SELECT * FROM crm_customer WHERE id = :id LIMIT 1")
-    suspend fun findById(id: String): CrmCustomerEntity?
-
-    @Query("SELECT * FROM crm_customer WHERE businessSourceId = :businessSourceId LIMIT 1")
-    suspend fun findByBusinessSourceId(businessSourceId: String): CrmCustomerEntity?
-
-    @Query("SELECT * FROM crm_customer WHERE city = :city ORDER BY updatedAtEpochMs DESC")
-    fun observeByCity(city: String): Flow<List<CrmCustomerEntity>>
-
-    @Query("SELECT * FROM crm_customer ORDER BY updatedAtEpochMs DESC")
-    fun observeAll(): Flow<List<CrmCustomerEntity>>
-
-    @Query("UPDATE crm_customer SET syncState = :state WHERE id = :id")
-    suspend fun updateSyncState(id: String, state: String)
-
-    @Query("UPDATE crm_customer SET notes = :notes, updatedAtEpochMs = :updatedAtEpochMs, version = :version, syncState = :state WHERE id = :id")
-    suspend fun updateNotes(id: String, notes: String?, updatedAtEpochMs: Long, version: Long, state: String): Int
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(customer: CrmCustomerEntity)
+    @Query("SELECT * FROM crm_customer WHERE id = :id LIMIT 1") suspend fun findById(id: String): CrmCustomerEntity?
+    @Query("SELECT * FROM crm_customer WHERE businessSourceId = :businessSourceId LIMIT 1") suspend fun findByBusinessSourceId(businessSourceId: String): CrmCustomerEntity?
+    @Query("SELECT * FROM crm_customer WHERE city = :city ORDER BY updatedAtEpochMs DESC") fun observeByCity(city: String): Flow<List<CrmCustomerEntity>>
+    @Query("SELECT * FROM crm_customer ORDER BY updatedAtEpochMs DESC") fun observeAll(): Flow<List<CrmCustomerEntity>>
+    @Query("UPDATE crm_customer SET syncState = :state WHERE id = :id") suspend fun updateSyncState(id: String, state: String)
+    @Query("UPDATE crm_customer SET notes = :notes, updatedAtEpochMs = :updatedAtEpochMs, version = :version, syncState = :state WHERE id = :id") suspend fun updateNotes(id: String, notes: String?, updatedAtEpochMs: Long, version: Long, state: String): Int
 }
 
 @Dao
 interface CrmContactDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(contact: CrmContactEntity)
-
-    @Query("SELECT * FROM crm_contact WHERE id = :id LIMIT 1")
-    suspend fun findById(id: String): CrmContactEntity?
-
-    @Query("SELECT * FROM crm_contact WHERE customerId = :customerId ORDER BY isPrimary DESC, fullName COLLATE NOCASE ASC")
-    fun observeForCustomer(customerId: String): Flow<List<CrmContactEntity>>
-
-    @Query("UPDATE crm_contact SET syncState = :state WHERE id = :id")
-    suspend fun updateSyncState(id: String, state: String): Int
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(contact: CrmContactEntity)
+    @Query("SELECT * FROM crm_contact WHERE id = :id LIMIT 1") suspend fun findById(id: String): CrmContactEntity?
+    @Query("SELECT * FROM crm_contact WHERE customerId = :customerId ORDER BY isPrimary DESC, fullName COLLATE NOCASE ASC") fun observeForCustomer(customerId: String): Flow<List<CrmContactEntity>>
+    @Query("UPDATE crm_contact SET syncState = :state WHERE id = :id") suspend fun updateSyncState(id: String, state: String): Int
 }
 
 @Dao
 interface CrmActivityDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(activity: CrmActivityEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(activity: CrmActivityEntity)
     @Query("SELECT * FROM crm_activity WHERE id = :id LIMIT 1") suspend fun findById(id: String): CrmActivityEntity?
     @Query("SELECT * FROM crm_activity WHERE customerId = :customerId ORDER BY occurredAtEpochMs DESC") suspend fun findForCustomer(customerId: String): List<CrmActivityEntity>
     @Query("SELECT * FROM crm_activity WHERE customerId = :customerId ORDER BY occurredAtEpochMs DESC") fun observeForCustomer(customerId: String): Flow<List<CrmActivityEntity>>
@@ -77,6 +56,24 @@ interface CrmOpportunityDao {
     @Query("SELECT o.* FROM crm_opportunity o INNER JOIN crm_customer c ON c.id = o.customerId WHERE c.city = :city AND (:district IS NULL OR c.district = :district) ORDER BY o.updatedAtEpochMs DESC") fun observeForRegion(city: String, district: String?): Flow<List<CrmOpportunityEntity>>
     @Query("UPDATE crm_opportunity SET status = :status, updatedAtEpochMs = :updatedAtEpochMs, version = version + 1, syncState = :syncState WHERE id = :id") suspend fun updateStatus(id: String, status: String, updatedAtEpochMs: Long, syncState: String): Int
     @Query("UPDATE crm_opportunity SET syncState = :state WHERE id = :id") suspend fun updateSyncState(id: String, state: String): Int
+}
+
+@Dao
+interface CrmQuoteDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(quote: CrmQuoteEntity)
+    @Query("SELECT * FROM crm_quote WHERE id = :id LIMIT 1") suspend fun findById(id: String): CrmQuoteEntity?
+    @Query("SELECT * FROM crm_quote WHERE customerId = :customerId ORDER BY updatedAtEpochMs DESC") fun observeForCustomer(customerId: String): Flow<List<CrmQuoteEntity>>
+    @Query("UPDATE crm_quote SET status = :status, updatedAtEpochMs = :updatedAtEpochMs, version = version + 1, syncState = :syncState WHERE id = :id") suspend fun updateStatus(id: String, status: String, updatedAtEpochMs: Long, syncState: String): Int
+    @Query("UPDATE crm_quote SET syncState = :state WHERE id = :id") suspend fun updateSyncState(id: String, state: String): Int
+}
+
+@Dao
+interface CrmOrderDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(order: CrmOrderEntity)
+    @Query("SELECT * FROM crm_order WHERE id = :id LIMIT 1") suspend fun findById(id: String): CrmOrderEntity?
+    @Query("SELECT * FROM crm_order WHERE customerId = :customerId ORDER BY updatedAtEpochMs DESC") fun observeForCustomer(customerId: String): Flow<List<CrmOrderEntity>>
+    @Query("UPDATE crm_order SET status = :status, updatedAtEpochMs = :updatedAtEpochMs, version = version + 1, syncState = :syncState WHERE id = :id") suspend fun updateStatus(id: String, status: String, updatedAtEpochMs: Long, syncState: String): Int
+    @Query("UPDATE crm_order SET syncState = :state WHERE id = :id") suspend fun updateSyncState(id: String, state: String): Int
 }
 
 @Dao
