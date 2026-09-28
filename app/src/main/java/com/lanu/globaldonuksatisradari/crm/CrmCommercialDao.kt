@@ -17,6 +17,12 @@ interface CrmQuoteLineDao {
     @Query("SELECT * FROM crm_quote_line WHERE quoteId = :quoteId ORDER BY createdAtEpochMs ASC, id ASC")
     fun observeForQuote(quoteId: String): Flow<List<CrmQuoteLineEntity>>
 
+    @Query("SELECT * FROM crm_quote_line WHERE quoteId = :quoteId ORDER BY createdAtEpochMs ASC, id ASC")
+    suspend fun listForQuote(quoteId: String): List<CrmQuoteLineEntity>
+
+    @Query("SELECT COALESCE(SUM(lineTotalMinor), 0) FROM crm_quote_line WHERE quoteId = :quoteId")
+    suspend fun totalForQuote(quoteId: String): Long
+
     @Query("DELETE FROM crm_quote_line WHERE quoteId = :quoteId")
     suspend fun deleteForQuote(quoteId: String)
 
@@ -34,6 +40,12 @@ interface CrmOrderLineDao {
 
     @Query("SELECT * FROM crm_order_line WHERE orderId = :orderId ORDER BY createdAtEpochMs ASC, id ASC")
     fun observeForOrder(orderId: String): Flow<List<CrmOrderLineEntity>>
+
+    @Query("SELECT * FROM crm_order_line WHERE orderId = :orderId ORDER BY createdAtEpochMs ASC, id ASC")
+    suspend fun listForOrder(orderId: String): List<CrmOrderLineEntity>
+
+    @Query("SELECT COALESCE(SUM(lineTotalMinor), 0) FROM crm_order_line WHERE orderId = :orderId")
+    suspend fun totalForOrder(orderId: String): Long
 
     @Query("DELETE FROM crm_order_line WHERE orderId = :orderId")
     suspend fun deleteForOrder(orderId: String)
