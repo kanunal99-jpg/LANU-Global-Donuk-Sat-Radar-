@@ -96,10 +96,20 @@ fun CrmContactsCard(
             formError?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("contact_form_error"))
             }
-            if (editingId == null && !makePrimary) {
-                OutlinedButton(onClick = { makePrimary = true }, Modifier.fillMaxWidth()) { Text("Birincil kişi olarak ekle") }
-            } else if (editingId == null && makePrimary) {
-                Text("Birincil kişi olarak eklenecek.", style = MaterialTheme.typography.bodySmall)
+            if (editingId == null) {
+                OutlinedButton(
+                    onClick = { makePrimary = !makePrimary },
+                    modifier = Modifier.fillMaxWidth().testTag("contact_primary_toggle"),
+                    enabled = contacts.isNotEmpty(),
+                ) {
+                    Text(
+                        when {
+                            contacts.isEmpty() -> "İlk yetkili otomatik olarak birincil olur"
+                            makePrimary -> "✓ Birincil kişi olarak eklenecek — vazgeç"
+                            else -> "Birincil kişi olarak ekle"
+                        },
+                    )
+                }
             }
             Button(
                 onClick = {
