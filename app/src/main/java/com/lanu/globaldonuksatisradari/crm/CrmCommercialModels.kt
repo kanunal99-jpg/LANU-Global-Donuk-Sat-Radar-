@@ -97,6 +97,11 @@ object CrmCommercialRules {
 }
 
 object CrmCommercialMath {
+    private const val MAX_PRODUCT_NAME_LENGTH = 180
+    private const val MAX_UNIT_LENGTH = 40
+    private val controlCharacters = Regex("[\\p{Cc}\\p{Cf}]")
+    private val repeatedWhitespace = Regex("\\s+")
+
     /**
      * Calculates a line total in currency minor units.
      * quantityMilli is fixed-point thousandths and discountBasisPoints is 0..10000.
@@ -121,8 +126,24 @@ object CrmCommercialMath {
             .longValueExact()
     }
 
+    fun normalizeSnapshotText(value: String, fieldName: String, maxLength: Int): String {
+        val normalized = value
+            .replace(controlCharacters, " ")
+            .replace(repeatedWhitespace, " ")
+            .trim()
+        require(normalized.isNotEmpty()) { "$fieldName boş olamaz." }
+        require(normalized.length <= maxLength) { "$fieldName en fazla $maxLength karakter olabilir." }
+        return normalized
+    }
+
+    fun normalizeProductName(productName: String): String =
+        normalizeSnapshotText(productName, "Ürün adı", MAX_PRODUCT_NAME_LENGTH)
+
+    fun normalizeUnit(unit: String): String =
+        normalizeSnapshotText(unit, "Birim", MAX_UNIT_LENGTH)
+
     fun validateSnapshot(productName: String, unit: String) {
-        require(productName.trim().isNotEmpty()) { "Ürün adı boş olamaz." }
-        require(unit.trim().isNotEmpty()) { "Birim boş olamaz." }
+        normalizeProductName(productName)
+        normalizeUnit(unit)
     }
 }
