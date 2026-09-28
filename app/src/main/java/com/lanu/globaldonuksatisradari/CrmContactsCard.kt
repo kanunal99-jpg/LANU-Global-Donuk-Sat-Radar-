@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.lanu.globaldonuksatisradari.crm.CrmContact
+import com.lanu.globaldonuksatisradari.crm.CrmContactValidator
 
 @Composable
 fun CrmContactsCard(
@@ -35,6 +36,7 @@ fun CrmContactsCard(
     var phone by remember(customerId) { mutableStateOf("") }
     var email by remember(customerId) { mutableStateOf("") }
     var makePrimary by remember(customerId) { mutableStateOf(contacts.isEmpty()) }
+    var formError by remember(customerId) { mutableStateOf<String?>(null) }
 
     fun clearForm() {
         editingId = null
@@ -43,6 +45,7 @@ fun CrmContactsCard(
         phone = ""
         email = ""
         makePrimary = contacts.isEmpty()
+        formError = null
     }
 
     Card(Modifier.fillMaxWidth().testTag("crm_contacts_card")) {
@@ -74,6 +77,7 @@ fun CrmContactsCard(
                                     phone = contact.phone.orEmpty()
                                     email = contact.email.orEmpty()
                                     makePrimary = contact.isPrimary
+                                    formError = null
                                 }) { Text("Düzenle") }
                                 if (!contact.isPrimary) {
                                     OutlinedButton(onClick = { onMakePrimary(contact.id) }) { Text("Birincil yap") }
@@ -85,10 +89,13 @@ fun CrmContactsCard(
             }
 
             Text(if (editingId == null) "Yeni yetkili" else "Yetkiliyi düzenle", style = MaterialTheme.typography.titleSmall)
-            OutlinedTextField(fullName, { fullName = it }, Modifier.fillMaxWidth().testTag("contact_name"), label = { Text("Ad soyad") }, singleLine = true)
-            OutlinedTextField(role, { role = it }, Modifier.fillMaxWidth(), label = { Text("Görev / rol") }, singleLine = true)
-            OutlinedTextField(phone, { phone = it }, Modifier.fillMaxWidth(), label = { Text("Telefon") }, singleLine = true)
-            OutlinedTextField(email, { email = it }, Modifier.fillMaxWidth(), label = { Text("E-posta") }, singleLine = true)
+            OutlinedTextField(fullName, { fullName = it; formError = null }, Modifier.fillMaxWidth().testTag("contact_name"), label = { Text("Ad soyad") }, singleLine = true)
+            OutlinedTextField(role, { role = it; formError = null }, Modifier.fillMaxWidth(), label = { Text("Görev / rol") }, singleLine = true)
+            OutlinedTextField(phone, { phone = it; formError = null }, Modifier.fillMaxWidth(), label = { Text("Telefon") }, singleLine = true)
+            OutlinedTextField(email, { email = it; formError = null }, Modifier.fillMaxWidth(), label = { Text("E-posta") }, singleLine = true)
+            formError?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("contact_form_error"))
+            }
             if (editingId == null && !makePrimary) {
                 OutlinedButton(onClick = { makePrimary = true }, Modifier.fillMaxWidth()) { Text("Birincil kişi olarak ekle") }
             } else if (editingId == null && makePrimary) {
@@ -96,11 +103,20 @@ fun CrmContactsCard(
             }
             Button(
                 onClick = {
+                    val validated = runCatching {
+                        ContactFormInput(
+                            name = CrmContactValidator.normalizeName(fullName),
+                            role = CrmContactValidator.normalizeOptionalText(role),
+                            phone = CrmContactValidator.normalizePhone(phone),
+                            email = CrmContactValidator.normalizeEmail(email),
+                        )
+                    }.onFailure { formError = it.message ?: "Yetkili bilgilerini kontrol edin." }.getOrNull()
+                        ?: return@Button
                     val id = editingId
                     if (id == null) {
-                        onCreate(fullName, role.takeIf(String::isNotBlank), phone.takeIf(String::isNotBlank), email.takeIf(String::isNotBlank), makePrimary)
+                        onCreate(validated.name, validated.role, validated.phone, validated.email, makePrimary)
                     } else {
-                        onUpdate(id, fullName, role.takeIf(String::isNotBlank), phone.takeIf(String::isNotBlank), email.takeIf(String::isNotBlank))
+                        onUpdate(id, validated.name, validated.role, validated.phone, validated.email)
                     }
                     clearForm()
                 },
@@ -113,3 +129,10 @@ fun CrmContactsCard(
         }
     }
 }
+
+private data class ContactFormInput(
+    val name: String,
+    val role: String?,
+    val phone: String?,
+    val email: String?,
+)
