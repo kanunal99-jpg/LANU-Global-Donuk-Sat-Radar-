@@ -12,6 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @TypeConverters(CrmRoomConverters::class)
 abstract class LanuCrmDatabase : RoomDatabase() {
     abstract fun customerDao(): CrmCustomerDao
+    abstract fun contactDao(): CrmContactDao
     abstract fun activityDao(): CrmActivityDao
     abstract fun stageTransitionDao(): CrmStageTransitionDao
     abstract fun syncOperationDao(): SyncOperationDao
