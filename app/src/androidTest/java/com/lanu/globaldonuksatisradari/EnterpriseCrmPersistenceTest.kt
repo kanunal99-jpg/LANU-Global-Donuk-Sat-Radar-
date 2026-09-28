@@ -8,6 +8,7 @@ import com.lanu.globaldonuksatisradari.crm.CrmOrderStatus
 import com.lanu.globaldonuksatisradari.crm.CrmQuoteStatus
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
+import com.lanu.globaldonuksatisradari.crm.SyncState
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -48,6 +49,26 @@ class EnterpriseCrmPersistenceTest {
         assertEquals("Ayşe Yılmaz", firstContact.fullName)
         assertEquals("ayse@example.com", firstContact.email)
 
+        val editedContact = contacts.updateContact(
+            contactId = firstContact.id,
+            fullName = "  Ayşe   Demir  ",
+            role = " Satın   Alma   Müdürü ",
+            phone = "+90 532 765 43 21",
+            email = "AYSE.DEMIR@EXAMPLE.COM",
+        )
+        assertEquals("Ayşe Demir", editedContact.fullName)
+        assertEquals("Satın Alma Müdürü", editedContact.role)
+        assertEquals("ayse.demir@example.com", editedContact.email)
+        assertEquals(firstContact.version + 1L, editedContact.version)
+        assertEquals(SyncState.LOCAL_ONLY, editedContact.syncState)
+
+        val primaryAgain = contacts.makePrimary(editedContact.id)
+        assertEquals(
+            "Selecting the existing primary contact must be idempotent",
+            editedContact.version,
+            primaryAgain.version,
+        )
+
         val secondContact = contacts.createContact(
             customerId = customer.id,
             fullName = "Mehmet Kaya",
@@ -57,6 +78,10 @@ class EnterpriseCrmPersistenceTest {
         val persistedContacts = contacts.observeContacts(customer.id).first()
         assertTrue(persistedContacts.first { it.id == secondContact.id }.isPrimary)
         assertFalse(persistedContacts.first { it.id == firstContact.id }.isPrimary)
+        assertEquals(
+            editedContact.version + 1L,
+            persistedContacts.first { it.id == firstContact.id }.version,
+        )
 
         val quote = commercial.createQuote(
             customerId = customer.id,
