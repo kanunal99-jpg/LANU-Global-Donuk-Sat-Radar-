@@ -41,4 +41,23 @@ class CrmCommercialModelsTest {
         }
         CrmCommercialMath.validateSnapshot("Doğrulanmış Ürün", "Koli")
     }
+
+    @Test
+    fun productSnapshot_sanitizesControlCharactersAndWhitespace() {
+        assertEquals(
+            "Global Mantı 500 g",
+            CrmCommercialMath.normalizeProductName("  Global\u0000 Mantı\n500 g  "),
+        )
+        assertEquals("Koli 12", CrmCommercialMath.normalizeUnit("Koli\t12"))
+    }
+
+    @Test
+    fun productSnapshot_rejectsOversizedFields() {
+        assertThrows(IllegalArgumentException::class.java) {
+            CrmCommercialMath.normalizeProductName("Ü".repeat(181))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CrmCommercialMath.normalizeUnit("B".repeat(41))
+        }
+    }
 }
