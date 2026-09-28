@@ -44,11 +44,26 @@ object CrmContactValidator {
             ?: return null
         require(normalized.length <= MAX_EMAIL_LENGTH) { "E-posta adresi en fazla $MAX_EMAIL_LENGTH karakter olabilir." }
         require(normalized.none(Char::isWhitespace)) { "E-posta adresi boşluk içeremez." }
-        val local = normalized.substringBefore('@', missingDelimiterValue = "")
-        val domain = normalized.substringAfter('@', missingDelimiterValue = "")
-        require(local.isNotEmpty() && domain.contains('.') && !domain.startsWith('.') && !domain.endsWith('.')) {
-            "Geçerli bir e-posta adresi girin."
-        }
+        require(normalized.count { it == '@' } == 1) { "Geçerli bir e-posta adresi girin." }
+        val local = normalized.substringBefore('@')
+        val domain = normalized.substringAfter('@')
+        require(
+            local.isNotEmpty() &&
+                local.length <= 64 &&
+                !local.startsWith('.') &&
+                !local.endsWith('.') &&
+                ".." !in local &&
+                domain.contains('.') &&
+                !domain.startsWith('.') &&
+                !domain.endsWith('.') &&
+                ".." !in domain &&
+                domain.split('.').all { label ->
+                    label.isNotEmpty() &&
+                        !label.startsWith('-') &&
+                        !label.endsWith('-') &&
+                        label.all { it.isLetterOrDigit() || it == '-' }
+                }
+        ) { "Geçerli bir e-posta adresi girin." }
         return normalized
     }
 
@@ -58,11 +73,14 @@ object CrmContactValidator {
             ?.trim()
             ?.takeIf(String::isNotEmpty)
             ?: return null
-        val digits = sanitized.filter(Char::isDigit)
-        require(digits.length in 7..15) { "Telefon numarası 7-15 rakam içermelidir." }
         require(sanitized.all { it.isDigit() || it in "+()-. /" }) {
             "Telefon numarası geçersiz karakter içeriyor."
         }
-        return sanitized
+        require(sanitized.count { it == '+' } <= 1 && (!sanitized.contains('+') || sanitized.startsWith('+'))) {
+            "Telefon numarasında + yalnızca başta kullanılabilir."
+        }
+        val digits = sanitized.filter(Char::isDigit)
+        require(digits.length in 7..15) { "Telefon numarası 7-15 rakam içermelidir." }
+        return if (sanitized.startsWith('+')) "+$digits" else digits
     }
 }
