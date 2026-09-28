@@ -5,14 +5,25 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 
-/** Local-first customer-contact workflow. Cloud sync is enabled only after LANU backend tables/RLS are verified. */
+/**
+ * Local-first customer-contact workflow.
+ *
+ * Contacts are owner-scoped at the repository boundary: an authenticated repository may only
+ * read/mutate contacts whose parent customer belongs to that user, while a local repository may
+ * only access anonymous/local customers. Cloud sync stays disabled until LANU backend tables/RLS
+ * are verified.
+ */
 class ContactCrmRepository(
     private val database: LanuCrmDatabase,
+    private val ownerUserId: String? = null,
     private val now: () -> Long = { System.currentTimeMillis() },
     private val idGenerator: () -> String = { UUID.randomUUID().toString() },
 ) {
     fun observeContacts(customerId: String): Flow<List<CrmContact>> =
-        database.contactDao().observeForCustomer(customerId).map { rows -> rows.map(::toDomain) }
+        database.contactDao().observeForCustomer(customerId).map { rows ->
+            val customer = database.customerDao().findById(customerId)
+            if (customer?.ownerUserId == ownerUserId) rows.map(::toDomain) else emptyList()
+        }
 
     suspend fun createContact(
         customerId: String,
@@ -22,9 +33,7 @@ class ContactCrmRepository(
         email: String? = null,
         makePrimary: Boolean = false,
     ): CrmContact = database.withTransaction {
-        require(database.customerDao().findById(customerId) != null) {
-            "Yetkili kişi için CRM müşterisi bulunamadı: $customerId"
-        }
+        requireOwnedCustomer(customerId)
         val normalizedName = CrmContactValidator.normalizeName(fullName)
         val normalizedRole = CrmContactValidator.normalizeOptionalText(role)
         val normalizedPhone = CrmContactValidator.normalizePhone(phone)
@@ -60,6 +69,7 @@ class ContactCrmRepository(
     suspend fun makePrimary(contactId: String): CrmContact = database.withTransaction {
         val current = database.contactDao().findById(contactId)
             ?: error("Yetkili kişi bulunamadı: $contactId")
+        requireOwnedCustomer(current.customerId)
         val timestamp = now()
         database.contactDao().clearPrimary(
             customerId = current.customerId,
@@ -74,6 +84,15 @@ class ContactCrmRepository(
         )
         database.contactDao().upsert(updated)
         toDomain(updated)
+    }
+
+    private suspend fun requireOwnedCustomer(customerId: String): CrmCustomerEntity {
+        val customer = database.customerDao().findById(customerId)
+            ?: error("Yetkili kişi için CRM müşterisi bulunamadı: $customerId")
+        require(customer.ownerUserId == ownerUserId) {
+            "CRM müşterisi aktif kullanıcı kapsamına ait değil: $customerId"
+        }
+        return customer
     }
 
     private fun toDomain(entity: CrmContactEntity) = CrmContact(
