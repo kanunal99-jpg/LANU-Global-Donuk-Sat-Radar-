@@ -5,6 +5,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.lanu.globaldonuksatisradari.crm.CommercialCrmRepository
 import com.lanu.globaldonuksatisradari.crm.CommercialCrmSync
 import com.lanu.globaldonuksatisradari.crm.ContactCrmRepository
+import com.lanu.globaldonuksatisradari.crm.CrmActivityType
+import com.lanu.globaldonuksatisradari.crm.CrmNextActionType
 import com.lanu.globaldonuksatisradari.crm.CrmOrderStatus
 import com.lanu.globaldonuksatisradari.crm.CrmQuoteStatus
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
@@ -123,6 +125,69 @@ class EnterpriseCrmPersistenceTest {
     }
 
     @Test(timeout = 60_000)
+    fun ownerlessCoreMutations_stayLocalOnlyAndNeverEnterCloudQueue() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val database = LanuCrmDatabase.getInstance(context)
+        val crm = LocalCrmRepository(database)
+        val suffix = System.nanoTime().toString()
+
+        val customer = crm.addManualCustomerPoint(
+            businessName = "Local Only Smoke $suffix",
+            address = "Test adresi",
+            city = "İstanbul",
+            district = "Kadıköy",
+            neighborhood = "Caferağa",
+            latitude = 40.9900,
+            longitude = 29.0300,
+        )
+        assertEquals(SyncState.LOCAL_ONLY, customer.syncState)
+        assertEquals(
+            0,
+            database.syncOperationDao().countForEntity(LocalCrmRepository.ENTITY_CUSTOMER, customer.id),
+        )
+
+        val notesUpdated = crm.updateCustomerNotes(customer.id, "yalnız cihazda")
+        assertEquals(SyncState.LOCAL_ONLY, notesUpdated.syncState)
+        assertEquals(
+            0,
+            database.syncOperationDao().countForEntity(LocalCrmRepository.ENTITY_CUSTOMER, customer.id),
+        )
+
+        val activity = crm.recordActivity(
+            customerId = customer.id,
+            type = CrmActivityType.NOTE,
+            note = "yerel aktivite",
+        )
+        assertEquals(SyncState.LOCAL_ONLY, activity.syncState)
+        assertEquals(
+            0,
+            database.syncOperationDao().countForEntity(LocalCrmRepository.ENTITY_ACTIVITY, activity.id),
+        )
+
+        val opportunity = crm.createOpportunity(
+            customerId = customer.id,
+            title = "Yerel fırsat $suffix",
+        )
+        assertEquals(SyncState.LOCAL_ONLY, opportunity.syncState)
+        assertEquals(
+            0,
+            database.syncOperationDao().countForEntity(LocalCrmRepository.ENTITY_OPPORTUNITY, opportunity.id),
+        )
+
+        val nextAction = crm.createNextAction(
+            customerId = customer.id,
+            type = CrmNextActionType.NOTE,
+            dueAtEpochMs = System.currentTimeMillis() + 60_000L,
+            note = "yerel takip",
+        )
+        assertEquals(SyncState.LOCAL_ONLY, nextAction.syncState)
+        assertEquals(
+            0,
+            database.syncOperationDao().countForEntity(LocalCrmRepository.ENTITY_NEXT_ACTION, nextAction.id),
+        )
+    }
+
+    @Test(timeout = 60_000)
     fun authenticatedOwner_commercialMutationsAreQueuedForCloudSync() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val database = LanuCrmDatabase.getInstance(context)
@@ -173,11 +238,17 @@ class EnterpriseCrmPersistenceTest {
         assertEquals(SyncState.PENDING_UPLOAD, order.syncState)
         assertTrue(orderLines.all { it.syncState == SyncState.PENDING_UPLOAD })
 
-        val entityTypes = crm.pendingSync(100).map { it.entityType }.toSet()
-        assertTrue(CommercialCrmSync.ENTITY_CONTACT in entityTypes)
-        assertTrue(CommercialCrmSync.ENTITY_QUOTE in entityTypes)
-        assertTrue(CommercialCrmSync.ENTITY_QUOTE_LINE in entityTypes)
-        assertTrue(CommercialCrmSync.ENTITY_ORDER in entityTypes)
-        assertTrue(CommercialCrmSync.ENTITY_ORDER_LINE in entityTypes)
+        val pending = crm.pendingSync(1_000)
+        assertTrue(pending.any { it.entityType == CommercialCrmSync.ENTITY_CONTACT && it.entityId == contact.id })
+        assertTrue(pending.any { it.entityType == CommercialCrmSync.ENTITY_QUOTE && it.entityId == quote.id })
+        assertTrue(pending.any { it.entityType == CommercialCrmSync.ENTITY_QUOTE_LINE && it.entityId == line.id })
+        assertTrue(pending.any { it.entityType == CommercialCrmSync.ENTITY_ORDER && it.entityId == order.id })
+        orderLines.forEach { orderLine ->
+            assertTrue(
+                pending.any {
+                    it.entityType == CommercialCrmSync.ENTITY_ORDER_LINE && it.entityId == orderLine.id
+                },
+            )
+        }
     }
 }
