@@ -144,9 +144,20 @@ class CrmSyncEngine(
     private val ownershipResolver: CrmSyncOwnershipResolver = AllowAllCrmSyncOwnershipResolver,
 ) {
     private suspend fun nextOperation(): SyncOperationEntity? {
-        val candidates = syncDao.pending(OWNERSHIP_SCAN_LIMIT)
-        val owner = ownerUserId ?: return candidates.firstOrNull()
-        return candidates.firstOrNull { ownershipResolver.isOwnedBy(it, owner) }
+        val owner = ownerUserId
+        val candidates = if (owner == null) {
+            syncDao.pending(OWNERSHIP_SCAN_LIMIT)
+        } else {
+            // Owner filtering happens in SQLite before LIMIT. Another user's large offline queue can
+            // therefore never hide/starve this session's work behind the scan limit.
+            syncDao.pendingForOwner(owner, OWNERSHIP_SCAN_LIMIT)
+        }
+        return if (owner == null) {
+            candidates.firstOrNull()
+        } else {
+            // Keep the resolver as a second independent boundary in case a future DAO query regresses.
+            candidates.firstOrNull { ownershipResolver.isOwnedBy(it, owner) }
+        }
     }
 
     suspend fun processOne(): SyncProcessResult {
