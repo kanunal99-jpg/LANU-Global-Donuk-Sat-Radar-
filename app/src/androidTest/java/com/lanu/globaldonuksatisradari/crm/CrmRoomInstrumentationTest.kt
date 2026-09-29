@@ -2,6 +2,7 @@ package com.lanu.globaldonuksatisradari.crm
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.lanu.globaldonuksatisradari.data.DataSourceDescriptor
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import com.lanu.globaldonuksatisradari.data.VerifiedBusinessValidator
@@ -11,7 +12,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import androidx.test.ext.junit.runners.AndroidJUnit4
 
 @RunWith(AndroidJUnit4::class)
 class CrmRoomInstrumentationTest {
@@ -154,4 +154,87 @@ class CrmRoomInstrumentationTest {
             database.close()
         }
     }
+
+    @Test
+    fun ownerScopedSync_isNotStarvedByMoreThanScanLimitOfAnotherUsersQueue() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, LanuCrmDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            database.customerDao().upsert(customerEntity("customer-b", "owner-b"))
+            database.customerDao().upsert(customerEntity("customer-a", "owner-a"))
+
+            repeat(501) { index ->
+                database.syncOperationDao().insert(
+                    SyncOperationEntity(
+                        id = "b-$index",
+                        entityType = LocalCrmRepository.ENTITY_CUSTOMER,
+                        entityId = "customer-b",
+                        operation = LocalCrmRepository.OP_UPDATE,
+                        payloadVersion = index + 1L,
+                        payloadJson = "{}",
+                        createdAtEpochMs = index.toLong(),
+                        attemptCount = 0,
+                        lastError = null,
+                    ),
+                )
+            }
+            database.syncOperationDao().insert(
+                SyncOperationEntity(
+                    id = "a-own-operation",
+                    entityType = LocalCrmRepository.ENTITY_CUSTOMER,
+                    entityId = "customer-a",
+                    operation = LocalCrmRepository.OP_UPDATE,
+                    payloadVersion = 2L,
+                    payloadJson = "{}",
+                    createdAtEpochMs = 10_000L,
+                    attemptCount = 0,
+                    lastError = null,
+                ),
+            )
+
+            val applied = mutableListOf<String>()
+            val remote = object : RemoteCrmDataSource {
+                override suspend fun apply(operation: SyncOperationEntity): RemoteSyncResult {
+                    applied += operation.id
+                    return RemoteSyncResult.Success
+                }
+            }
+            val engine = CrmSyncEngine(
+                syncDao = database.syncOperationDao(),
+                remote = remote,
+                ownerUserId = "owner-a",
+                ownershipResolver = RoomCrmSyncOwnershipResolver(database),
+            )
+
+            val result = engine.processOne()
+
+            assertEquals(SyncProcessResult.Synced("a-own-operation"), result)
+            assertEquals(listOf("a-own-operation"), applied)
+            assertEquals(501, database.syncOperationDao().pending(1_000).size)
+        } finally {
+            database.close()
+        }
+    }
+
+    private fun customerEntity(id: String, ownerUserId: String) = CrmCustomerEntity(
+        id = id,
+        businessSourceId = "source-$id",
+        businessName = "Customer $id",
+        city = "İstanbul",
+        district = "Kadıköy",
+        neighborhood = null,
+        address = null,
+        latitude = null,
+        longitude = null,
+        dataQuality = DataQuality.USER_ENTERED.name,
+        stage = CrmStage.PROSPECT.name,
+        ownerUserId = ownerUserId,
+        notes = null,
+        createdAtEpochMs = 1L,
+        updatedAtEpochMs = 1L,
+        version = 1L,
+        syncState = SyncState.PENDING_UPLOAD.name,
+    )
 }
