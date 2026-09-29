@@ -25,6 +25,7 @@ import com.lanu.globaldonuksatisradari.crm.SupabaseAuthClient
 import com.lanu.globaldonuksatisradari.data.BusinessQualityEvaluator
 import com.lanu.globaldonuksatisradari.data.CoverageBusinessRepository
 import com.lanu.globaldonuksatisradari.data.DistrictCatalogRepository
+import com.lanu.globaldonuksatisradari.data.NeighborhoodCatalogRepository
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,7 +36,9 @@ data class City(val name: String, val districts: List<String>)
 
 enum class AppSection { RADAR, CRM, PRODUCT_CATALOG, MANUAL_POINT, ROUTINE }
 
-private val cities = TurkeyCityCatalog.ALL.map { entry -> City(entry.name, entry.fallbackDistricts) }
+private val cities = IstanbulRegionCatalog.withTurkeyCities(
+    TurkeyCityCatalog.ALL.map { entry -> City(entry.name, entry.fallbackDistricts) },
+)
 
 private fun matchesInventoryPresence(value: String?, filter: String): Boolean = when (filter) {
     "Tümü" -> true
@@ -103,6 +106,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var availableDistricts by remember { mutableStateOf(selectedCity.districts) }
     var districtLoading by remember { mutableStateOf(false) }
     var neighborhoodMenu by remember { mutableStateOf(false) }
+    var availableNeighborhoods by remember { mutableStateOf<List<String>>(emptyList()) }
+    var neighborhoodLoading by remember { mutableStateOf(false) }
+    var neighborhoodCatalogMessage by remember { mutableStateOf<String?>(null) }
     var selectedDistrict by remember { mutableStateOf("Tümü") }
     var selectedNeighborhood by remember { mutableStateOf("Tümü") }
     var categoryFilter by remember { mutableStateOf("Tümü") }
@@ -132,11 +138,37 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val context = LocalContext.current
     val repository = remember(context) { CoverageBusinessRepository(context) }
     val districtRepository = remember(context) { DistrictCatalogRepository(context) }
+    val neighborhoodRepository = remember(context) { NeighborhoodCatalogRepository(context) }
+    val queryCityName = IstanbulRegionCatalog.queryCity(selectedCity.name)
 
     LaunchedEffect(selectedCity.name) {
         districtLoading = true
-        availableDistricts = districtRepository.getDistricts(selectedCity.name, selectedCity.districts)
+        availableDistricts = when (selectedCity.name) {
+            IstanbulRegionCatalog.ANATOLIA, IstanbulRegionCatalog.EUROPE -> selectedCity.districts
+            else -> districtRepository.getDistricts(queryCityName, selectedCity.districts)
+        }
         districtLoading = false
+    }
+
+    LaunchedEffect(selectedCity.name, selectedDistrict) {
+        selectedNeighborhood = "Tümü"
+        availableNeighborhoods = emptyList()
+        neighborhoodCatalogMessage = null
+        if (selectedDistrict != "Tümü") {
+            neighborhoodLoading = true
+            val loaded = runCatching {
+                neighborhoodRepository.getNeighborhoods(queryCityName, selectedDistrict)
+            }.getOrDefault(emptyList())
+            availableNeighborhoods = loaded
+            neighborhoodCatalogMessage = if (loaded.isEmpty()) {
+                "Mahalle kataloğu şu anda alınamadı; ilçe kapsamında arama yapabilirsiniz."
+            } else {
+                null
+            }
+            neighborhoodLoading = false
+        } else {
+            neighborhoodLoading = false
+        }
     }
 
     val localCrmRepository = remember(context) { LocalCrmRepository(LanuCrmDatabase.getInstance(context)) }
@@ -182,16 +214,16 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         localCrmRepository.observeOpportunities(selectedCustomerKey)
     }.collectAsState(initial = emptyList())
 
-    val regionKey = "${selectedCity.name}|$selectedDistrict"
+    val regionKey = "$queryCityName|$selectedDistrict"
     val regionDistrict = selectedDistrict.takeUnless { it == "Tümü" }
     val allRegionActivities by remember(regionKey) {
-        localCrmRepository.observeActivitiesForRegion(selectedCity.name, regionDistrict)
+        localCrmRepository.observeActivitiesForRegion(queryCityName, regionDistrict)
     }.collectAsState(initial = emptyList())
     val allRegionNextActions by remember(regionKey) {
-        localCrmRepository.observeOpenNextActionsForRegion(selectedCity.name, regionDistrict)
+        localCrmRepository.observeOpenNextActionsForRegion(queryCityName, regionDistrict)
     }.collectAsState(initial = emptyList())
     val allRegionOpportunities by remember(regionKey) {
-        localCrmRepository.observeOpportunitiesForRegion(selectedCity.name, regionDistrict)
+        localCrmRepository.observeOpportunitiesForRegion(queryCityName, regionDistrict)
     }.collectAsState(initial = emptyList())
     val scopedCustomerIds = remember(crmCustomers) { crmCustomers.mapTo(mutableSetOf()) { it.id } }
     val regionActivities = remember(allRegionActivities, scopedCustomerIds) {
@@ -338,7 +370,10 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         item {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                 Box(Modifier.weight(1f)) {
-                                    OutlinedButton(onClick = { cityMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedButton(
+                                        onClick = { cityMenu = true },
+                                        modifier = Modifier.fillMaxWidth().testTag("city_filter"),
+                                    ) {
                                         Text(selectedCity.name)
                                     }
                                     DropdownMenu(cityMenu, { cityMenu = false }) {
@@ -387,22 +422,33 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             }
                         }
                         item {
-                            val neighborhoods = listOf("Tümü") + results.mapNotNull { it.neighborhood }.distinct().sorted()
-                            Box {
-                                OutlinedButton(
-                                    onClick = { if (neighborhoods.size > 1) neighborhoodMenu = true },
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) { Text("Mahalle: $selectedNeighborhood") }
-                                DropdownMenu(neighborhoodMenu && neighborhoods.size > 1, { neighborhoodMenu = false }) {
-                                    neighborhoods.forEach { neighborhood ->
-                                        DropdownMenuItem(
-                                            { Text(neighborhood) },
-                                            onClick = {
-                                                selectedNeighborhood = neighborhood
-                                                neighborhoodMenu = false
-                                            },
+                            val neighborhoods = listOf("Tümü") + availableNeighborhoods
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Box {
+                                    OutlinedButton(
+                                        onClick = { if (neighborhoods.size > 1) neighborhoodMenu = true },
+                                        enabled = selectedDistrict != "Tümü" && !neighborhoodLoading,
+                                        modifier = Modifier.fillMaxWidth().testTag("neighborhood_filter"),
+                                    ) {
+                                        Text(
+                                            if (neighborhoodLoading) "Mahalleler yükleniyor…"
+                                            else "Mahalle: $selectedNeighborhood",
                                         )
                                     }
+                                    DropdownMenu(neighborhoodMenu && neighborhoods.size > 1, { neighborhoodMenu = false }) {
+                                        neighborhoods.forEach { neighborhood ->
+                                            DropdownMenuItem(
+                                                { Text(neighborhood) },
+                                                onClick = {
+                                                    selectedNeighborhood = neighborhood
+                                                    neighborhoodMenu = false
+                                                },
+                                            )
+                                        }
+                                    }
+                                }
+                                neighborhoodCatalogMessage?.let { message ->
+                                    Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                                 }
                             }
                         }
@@ -451,15 +497,23 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         runCatching {
                                             repository.search(
                                                 query.trim(),
-                                                selectedCity.name,
+                                                queryCityName,
                                                 selectedDistrict.takeUnless { it == "Tümü" },
                                             )
                                         }.onSuccess { records ->
                                             results = records
-                                            if (records.isEmpty()) {
-                                                error = "Seçilen kapsamda kayıt bulunamadı."
+                                            val scopedCount = records.count { business ->
+                                                selectedNeighborhood == "Tümü" ||
+                                                    business.neighborhood?.equals(selectedNeighborhood, true) == true
+                                            }
+                                            if (scopedCount == 0) {
+                                                error = if (selectedNeighborhood != "Tümü") {
+                                                    "Seçilen mahallede işletme kaydı bulunamadı."
+                                                } else {
+                                                    "Seçilen kapsamda kayıt bulunamadı."
+                                                }
                                             } else {
-                                                crmMessage = "${records.size} gerçek işletme kaydı getirildi."
+                                                crmMessage = "$scopedCount gerçek işletme kaydı getirildi."
                                             }
                                         }.onFailure { throwable ->
                                             error = if (results.isNotEmpty()) {
@@ -626,12 +680,12 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                     AppSection.PRODUCT_CATALOG -> ProductCatalogScreen(productCatalogRepository)
                     AppSection.MANUAL_POINT -> ManualPointScreen(
                         repository = localCrmRepository,
-                        defaultCity = selectedCity.name,
+                        defaultCity = queryCityName,
                         ownerUserId = activeOwnerUserId,
                     ) {
                         navigateTo(AppSection.ROUTINE)
                     }
-                    AppSection.ROUTINE -> RoutineScreen(crmCustomers, selectedCity.name, selectedDistrict)
+                    AppSection.ROUTINE -> RoutineScreen(crmCustomers, queryCityName, selectedDistrict)
                 }
             } else {
                 selectedCrmCustomer?.let { customer ->
