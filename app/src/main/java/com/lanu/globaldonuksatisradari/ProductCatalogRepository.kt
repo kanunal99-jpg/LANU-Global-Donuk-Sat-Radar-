@@ -8,6 +8,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.net.URI
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.util.Locale
@@ -36,15 +37,47 @@ data class CatalogProduct(
 )
 
 object ProductMediaValidation {
+    fun isWebUrl(value: String?): Boolean {
+        val scheme = runCatching { URI(value?.trim().orEmpty()).scheme?.lowercase(Locale.ROOT) }.getOrNull()
+        return scheme == "http" || scheme == "https"
+    }
+
+    fun normalizeImageUrl(value: String?): String? =
+        normalizeWebUrl(value, "Ürün fotoğrafı URL", allowHttp = true)
+
+    fun normalizeSourceUrl(value: String?): String? =
+        normalizeWebUrl(value, "Kaynak URL", allowHttp = false)
+
     fun requireHttpsUrl(value: String?, field: String) {
-        value?.trim()?.takeIf { it.isNotEmpty() }?.let {
-            require(it.startsWith("https://")) { "$field yalnızca HTTPS olmalıdır." }
-        }
+        normalizeWebUrl(value, field, allowHttp = false)
     }
 
     fun requireLocalImageReference(value: String?, field: String) {
         val normalized = value?.trim().orEmpty()
         require(normalized.startsWith("file:")) { "$field güvenli yerel uygulama dosyası olmalıdır." }
+    }
+
+    private fun normalizeWebUrl(value: String?, field: String, allowHttp: Boolean): String? {
+        val raw = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val uri = runCatching { URI(raw) }.getOrElse {
+            throw IllegalArgumentException("$field geçerli bir URL olmalıdır.")
+        }
+        val scheme = uri.scheme?.lowercase(Locale.ROOT)
+        val allowed = scheme == "https" || (allowHttp && scheme == "http")
+        require(allowed) {
+            if (allowHttp) "$field yalnızca HTTP/HTTPS olmalıdır." else "$field yalnızca HTTPS olmalıdır."
+        }
+        require(!uri.host.isNullOrBlank()) { "$field geçerli bir alan adı içermelidir." }
+        require(uri.userInfo == null) { "$field kullanıcı bilgisi içeremez." }
+        return URI(
+            scheme,
+            null,
+            uri.host.lowercase(Locale.ROOT),
+            uri.port,
+            uri.path,
+            uri.query,
+            uri.fragment,
+        ).normalize().toASCIIString()
     }
 }
 
@@ -107,22 +140,26 @@ class ProductCatalogRepository(context: Context) {
         require(normalizedName.isNotEmpty()) { "Ürün adı boş olamaz." }
         require(priceMinor >= 0L) { "Fiyat negatif olamaz." }
 
-        val normalizedImageRef = imageUrl?.trim()?.takeIf { it.isNotEmpty() }
+        val rawImageRef = imageUrl?.trim()?.takeIf { it.isNotEmpty() }
         val normalizedImageSource = when {
-            normalizedImageRef == null -> null
+            rawImageRef == null -> null
             imageSource != null -> imageSource
-            normalizedImageRef.startsWith("https://") -> ProductImageSource.URL
+            ProductMediaValidation.isWebUrl(rawImageRef) -> ProductImageSource.URL
             else -> null
         }
-        if (normalizedImageRef != null) {
-            require(normalizedImageSource != null) { "Ürün fotoğrafı kaynağı bilinmiyor." }
-            when (normalizedImageSource) {
-                ProductImageSource.URL -> ProductMediaValidation.requireHttpsUrl(normalizedImageRef, "Ürün fotoğrafı URL")
-                ProductImageSource.GALLERY,
-                ProductImageSource.CAMERA -> ProductMediaValidation.requireLocalImageReference(normalizedImageRef, "Ürün fotoğrafı")
+        val normalizedImageRef = when (normalizedImageSource) {
+            null -> {
+                require(rawImageRef == null) { "Ürün fotoğrafı kaynağı bilinmiyor." }
+                null
+            }
+            ProductImageSource.URL -> ProductMediaValidation.normalizeImageUrl(rawImageRef)
+            ProductImageSource.GALLERY,
+            ProductImageSource.CAMERA -> {
+                ProductMediaValidation.requireLocalImageReference(rawImageRef, "Ürün fotoğrafı")
+                rawImageRef
             }
         }
-        ProductMediaValidation.requireHttpsUrl(sourceUrl, "Kaynak URL")
+        val normalizedSourceUrl = ProductMediaValidation.normalizeSourceUrl(sourceUrl)
 
         val normalizedCurrency = currency.trim().uppercase(Locale.ROOT)
         require(normalizedCurrency.length == 3) { "Para birimi 3 harf olmalıdır. Örnek: TRY" }
@@ -137,7 +174,7 @@ class ProductCatalogRepository(context: Context) {
             note = note?.trim()?.takeIf { it.isNotEmpty() },
             description = description?.trim()?.takeIf { it.isNotEmpty() },
             imageUrl = normalizedImageRef,
-            sourceUrl = sourceUrl?.trim()?.takeIf { it.isNotEmpty() },
+            sourceUrl = normalizedSourceUrl,
             sourceVerifiedAtEpochMs = sourceVerifiedAtEpochMs,
             updatedAtEpochMs = System.currentTimeMillis(),
             imageSource = normalizedImageSource,
@@ -191,7 +228,7 @@ class ProductCatalogRepository(context: Context) {
                             sourceVerifiedAtEpochMs = item.optLong("sourceVerifiedAtEpochMs", 0L).takeIf { it > 0L },
                             updatedAtEpochMs = item.optLong("updatedAtEpochMs", 0L),
                             imageSource = persistedSource ?: imageRef
-                                ?.takeIf { it.startsWith("https://") }
+                                ?.takeIf(ProductMediaValidation::isWebUrl)
                                 ?.let { ProductImageSource.URL },
                         ),
                     )
