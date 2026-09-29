@@ -210,4 +210,41 @@ class MainActivitySmokeTest {
         waitForText("125,50 TRY").assertExists()
         waitForText("Kaynak doğrulanmadı").assertExists()
     }
+
+    @Test(timeout = 60_000)
+    fun productCatalog_photoSources_areReachable() {
+        waitForText("Ürünler").performClick()
+        waitForText("Ürün Kataloğu").assertIsDisplayed()
+        waitForTag("product_add_button").assertIsDisplayed().performClick()
+        waitForTag("product_editor_dialog").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("product_editor_content", useUnmergedTree = true)
+            .performScrollToNode(hasTestTag("product_image_gallery_button"))
+        waitForTag("product_image_gallery_button").assertIsDisplayed().assertHasClickAction()
+
+        composeRule.onNodeWithTag("product_editor_content", useUnmergedTree = true)
+            .performScrollToNode(hasTestTag("product_image_camera_button"))
+        waitForTag("product_image_camera_button").assertIsDisplayed().assertHasClickAction()
+        waitForTag("product_image_url_input").assertExists()
+    }
+
+    @Test(timeout = 60_000)
+    fun productImageStorage_pickerAndCameraCopies_arePrivateAndPersistent() {
+        val storage = ProductImageStorage(composeRule.activity)
+
+        val pickerSource = storage.createCameraCapture()
+        pickerSource.file.writeBytes(byteArrayOf(0x01, 0x02, 0x03, 0x04))
+        val imported = storage.importFromPicker(pickerSource.uri)
+        assertTrue("Picker copy must move into app-owned persistent storage", storage.isOwned(imported))
+        storage.deleteOwned(imported)
+        storage.discardCameraCapture(pickerSource)
+        assertFalse("Deleted picker copy must not remain app-owned", storage.isOwned(imported))
+
+        val cameraCapture = storage.createCameraCapture()
+        cameraCapture.file.writeBytes(byteArrayOf(0x11, 0x22, 0x33, 0x44))
+        val cameraImage = storage.finalizeCameraCapture(cameraCapture)
+        assertTrue("Camera finalization must move into app-owned persistent storage", storage.isOwned(cameraImage))
+        storage.deleteOwned(cameraImage)
+        assertFalse("Deleted camera copy must not remain app-owned", storage.isOwned(cameraImage))
+    }
 }
