@@ -23,7 +23,6 @@ import com.lanu.globaldonuksatisradari.crm.CrmCommercialLine
 import com.lanu.globaldonuksatisradari.crm.CrmOrder
 import com.lanu.globaldonuksatisradari.crm.CrmQuote
 import com.lanu.globaldonuksatisradari.crm.CrmQuoteStatus
-import java.math.BigDecimal
 import java.math.RoundingMode
 
 /**
@@ -57,8 +56,20 @@ fun CrmCommercialSection(
             Text("Teklif ve sipariş", style = MaterialTheme.typography.titleMedium)
             Text("Ticari kayıtlar cihazda güvenli şekilde saklanır; doğrulanmamış bulut kaydı senkronize gösterilmez.", style = MaterialTheme.typography.bodySmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(quoteNumber, { quoteNumber = it }, Modifier.weight(1f), label = { Text("Teklif no") }, singleLine = true)
-                OutlinedTextField(currency, { currency = it.uppercase().filter(Char::isLetter).take(3) }, label = { Text("Para") }, singleLine = true)
+                OutlinedTextField(
+                    quoteNumber,
+                    { quoteNumber = it },
+                    Modifier.weight(1f).testTag("crm_quote_number_input"),
+                    label = { Text("Teklif no") },
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    currency,
+                    { currency = it.uppercase().filter(Char::isLetter).take(3) },
+                    modifier = Modifier.testTag("crm_quote_currency_input"),
+                    label = { Text("Para") },
+                    singleLine = true,
+                )
             }
             Button(
                 onClick = {
@@ -81,11 +92,16 @@ fun CrmCommercialSection(
                         Text("${quote.quoteNumber} • ${quote.status.name} • ${quote.currency}")
                         lines.forEach { line -> Text("• ${line.productName} — ${line.quantityMilli / 1000.0} ${line.unit}") }
                         if (quote.status == CrmQuoteStatus.DRAFT) {
-                            OutlinedTextField(productName, { productName = it }, Modifier.fillMaxWidth(), label = { Text("Ürün adı") })
+                            OutlinedTextField(
+                                productName,
+                                { productName = it },
+                                Modifier.fillMaxWidth().testTag("crm_quote_product_input"),
+                                label = { Text("Ürün adı") },
+                            )
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedTextField(unit, { unit = it }, Modifier.weight(1f), label = { Text("Birim") })
-                                OutlinedTextField(quantity, { quantity = it }, Modifier.weight(1f), label = { Text("Miktar") })
-                                OutlinedTextField(price, { price = it }, Modifier.weight(1f), label = { Text("Birim fiyat") })
+                                OutlinedTextField(unit, { unit = it }, Modifier.weight(1f).testTag("crm_quote_unit_input"), label = { Text("Birim") })
+                                OutlinedTextField(quantity, { quantity = it }, Modifier.weight(1f).testTag("crm_quote_quantity_input"), label = { Text("Miktar") })
+                                OutlinedTextField(price, { price = it }, Modifier.weight(1f).testTag("crm_quote_price_input"), label = { Text("Birim fiyat") })
                             }
                             Button(
                                 onClick = {
@@ -120,7 +136,12 @@ fun CrmCommercialSection(
                             }
                         }
                         if (quote.status == CrmQuoteStatus.ACCEPTED) {
-                            OutlinedTextField(orderNumber, { orderNumber = it }, Modifier.fillMaxWidth(), label = { Text("Sipariş no") })
+                            OutlinedTextField(
+                                orderNumber,
+                                { orderNumber = it },
+                                Modifier.fillMaxWidth().testTag("crm_order_number_input"),
+                                label = { Text("Sipariş no") },
+                            )
                             Button(
                                 onClick = {
                                     if (orderNumber.isNotBlank()) {
