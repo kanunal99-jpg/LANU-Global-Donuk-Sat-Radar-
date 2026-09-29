@@ -12,6 +12,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +38,16 @@ fun CrmContactsCard(
     var email by remember(customerId) { mutableStateOf("") }
     var makePrimary by remember(customerId) { mutableStateOf(contacts.isEmpty()) }
     var formError by remember(customerId) { mutableStateOf<String?>(null) }
+
+    // The first contact is forced primary by the repository. The create callback is asynchronous,
+    // so clearForm() can run while contacts is still empty. Reset the toggle when Room publishes
+    // the first persisted contact; otherwise the second contact would accidentally default to
+    // primary and silently replace the first decision maker.
+    LaunchedEffect(customerId, contacts.isEmpty(), editingId) {
+        if (editingId == null) {
+            makePrimary = contacts.isEmpty()
+        }
+    }
 
     fun clearForm() {
         editingId = null
