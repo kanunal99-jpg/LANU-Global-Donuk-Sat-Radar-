@@ -74,7 +74,7 @@ jobs:
             "platforms;android-35" \
             "system-images;android-35;google_apis;x86_64"
 
-      - name: Android emulator smoke tests
+      - name: Android instrumentation and emulator smoke tests
         timeout-minutes: 18
         run: |
           set -euo pipefail
@@ -185,16 +185,13 @@ jobs:
           adb -s "$SERIAL" shell input keyevent 82 || true
 
           set +e
-          TEST_CLASSES="com.lanu.globaldonuksatisradari.MainActivitySmokeTest,com.lanu.globaldonuksatisradari.EnterpriseCrmPersistenceTest,com.lanu.globaldonuksatisradari.CrmCommercialUiSmokeTest"
-          echo "===== RUNNING SMOKE TEST CLASSES: $TEST_CLASSES ====="
-          timeout 600s gradle connectedDebugAndroidTest \
-            --no-daemon --stacktrace \
-            "-Pandroid.testInstrumentationRunnerArguments.class=$TEST_CLASSES"
+          echo "===== RUNNING ALL ANDROID INSTRUMENTATION TESTS ====="
+          timeout 900s gradle connectedDebugAndroidTest --no-daemon --stacktrace
           TEST_EXIT="$?"
           set -e
 
           if [ "$TEST_EXIT" -ne 0 ]; then
-            echo "===== SMOKE TEST CLASSES FAILED (exit $TEST_EXIT) ====="
+            echo "===== ANDROID INSTRUMENTATION TESTS FAILED (exit $TEST_EXIT) ====="
             echo "===== ADB/JUNIT DIAGNOSTICS ====="
             adb devices -l || true
             adb -s "$SERIAL" shell getprop ro.build.version.release || true
