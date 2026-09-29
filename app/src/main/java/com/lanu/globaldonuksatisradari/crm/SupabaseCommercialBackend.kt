@@ -314,7 +314,7 @@ class SupabaseCommercialRemoteDataSource(
     }
 
     private fun acceptRemote(localVersion: Long?, localSyncState: String?, remoteVersion: Long): Boolean =
-        localVersion == null || remoteVersion > localVersion || localSyncState == SyncState.SYNCED.name
+        CommercialPullConflictPolicy.acceptRemote(localVersion, localSyncState, remoteVersion)
 
     private fun mapFailure(error: Throwable): RemoteSyncResult = when (error) {
         is SupabaseHttpException -> when {
