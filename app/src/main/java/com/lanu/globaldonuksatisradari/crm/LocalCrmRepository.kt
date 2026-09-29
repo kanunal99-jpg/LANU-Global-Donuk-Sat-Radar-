@@ -3,6 +3,7 @@ package com.lanu.globaldonuksatisradari.crm
 import androidx.room.withTransaction
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import org.json.JSONObject
 import java.util.UUID
@@ -540,6 +541,13 @@ class LocalCrmRepository(
 
     fun observePendingSyncCount(): Flow<Int> =
         database.syncOperationDao().observePendingCount()
+
+    fun observePendingSyncCount(ownerUserId: String?): Flow<Int> =
+        if (ownerUserId.isNullOrBlank()) {
+            flowOf(0)
+        } else {
+            database.syncOperationDao().observePendingCountForOwner(ownerUserId)
+        }
 
     suspend fun pendingSync(limit: Int = 100): List<SyncOperation> =
         database.syncOperationDao().pending(limit).map(CrmMappings::toDomain)
