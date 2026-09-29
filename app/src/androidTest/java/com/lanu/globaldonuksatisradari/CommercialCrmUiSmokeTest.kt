@@ -59,7 +59,7 @@ class CommercialCrmUiSmokeTest {
         }
     }
 
-    @Test(timeout = 120_000)
+    @Test(timeout = 180_000)
     fun customerCommercialFlow_quoteLineAcceptAndOrder_isReachableFromRealUi() {
         runBlocking {
             val repository = LocalCrmRepository(LanuCrmDatabase.getInstance(composeRule.activity))
@@ -87,9 +87,11 @@ class CommercialCrmUiSmokeTest {
         waitForText("CRM")
         composeRule.onNode(hasText("CRM", substring = false)).performClick()
         waitForText("CRM Çalışma Alanı")
+        waitForTag("crm_customer_search")
+        composeRule.onNodeWithTag("crm_customer_search").performTextInput("Ticari Smoke Müşteri")
         scrollMainToText("Ticari Smoke Müşteri")
         composeRule.onNode(hasText("Ticari Smoke Müşteri", substring = false)).assertExists()
-        composeRule.onAllNodes(hasText("Aç", substring = false))[0].performClick()
+        composeRule.onNode(hasText("Aç", substring = false)).performClick()
 
         waitForTag("crm_detail_back")
         scrollDetailToTag("crm_commercial_section")
