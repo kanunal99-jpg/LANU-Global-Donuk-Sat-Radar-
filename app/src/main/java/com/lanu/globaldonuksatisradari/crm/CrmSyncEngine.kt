@@ -154,8 +154,10 @@ class CrmSyncEngine(
 
         return when (val result = remote.apply(operation)) {
             RemoteSyncResult.Success -> {
-                stateStore.mark(operation.entityType, operation.entityId, SyncState.SYNCED)
                 syncDao.delete(operation.id)
+                if (syncDao.countForEntity(operation.entityType, operation.entityId) == 0) {
+                    stateStore.mark(operation.entityType, operation.entityId, SyncState.SYNCED)
+                }
                 SyncProcessResult.Synced(operation.id)
             }
             RemoteSyncResult.NotConfigured -> SyncProcessResult.RemoteNotConfigured
