@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   live-cloud-e2e:
@@ -17,11 +18,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Run live Supabase acceptance
-        env:
-          LANU_COMMIT_MESSAGE: ${{ github.event.pull_request.title }} ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          export LANU_COMMIT_MESSAGE="$(git log -1 --pretty=%B)"
           python3 scripts/live_cloud_e2e.py
 
       - name: Upload cloud acceptance evidence
