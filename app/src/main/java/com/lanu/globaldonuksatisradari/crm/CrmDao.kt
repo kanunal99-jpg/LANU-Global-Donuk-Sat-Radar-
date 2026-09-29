@@ -90,6 +90,7 @@ interface SyncOperationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insert(operation: SyncOperationEntity)
     @Query("SELECT * FROM crm_sync_operation WHERE state = 'PENDING' ORDER BY createdAtEpochMs ASC, id ASC LIMIT :limit") suspend fun pending(limit: Int): List<SyncOperationEntity>
     @Query("SELECT MAX(createdAtEpochMs) FROM crm_sync_operation") suspend fun maxCreatedAtEpochMs(): Long?
+    @Query("SELECT COUNT(*) FROM crm_sync_operation WHERE entityType = :entityType AND entityId = :entityId") suspend fun countForEntity(entityType: String, entityId: String): Int
     @Query("SELECT COUNT(*) FROM crm_sync_operation WHERE state = 'PENDING'") fun observePendingCount(): Flow<Int>
     @Query("UPDATE crm_sync_operation SET attemptCount = :attemptCount, lastError = :lastError, state = :state WHERE id = :id") suspend fun updateAttemptAndState(id: String, attemptCount: Int, lastError: String?, state: String)
     @Query("UPDATE crm_sync_operation SET state = :state, lastError = :lastError WHERE id = :id") suspend fun updateState(id: String, state: String, lastError: String?)
