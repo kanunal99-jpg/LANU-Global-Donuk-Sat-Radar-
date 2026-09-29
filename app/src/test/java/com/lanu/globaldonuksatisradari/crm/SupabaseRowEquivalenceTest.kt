@@ -23,6 +23,14 @@ class SupabaseRowEquivalenceTest {
     }
 
     @Test
+    fun `numeric looking string identifiers stay distinct`() {
+        val remote = JSONObject().apply { put("product_id", "001") }
+        val outgoing = JSONObject().apply { put("product_id", "1") }
+
+        assertFalse(SupabaseRowEquivalence.matchesOutgoing(remote, outgoing))
+    }
+
+    @Test
     fun `same version retry with different business content is not equivalent`() {
         val remote = JSONObject().apply {
             put("id", "row-1")
