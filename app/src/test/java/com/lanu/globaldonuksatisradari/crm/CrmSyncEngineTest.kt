@@ -215,8 +215,11 @@ class CrmSyncEngineTest {
         override suspend fun pending(limit: Int): List<SyncOperationEntity> =
             allOperations
                 .filter { it.state == SyncOperationState.PENDING.name }
-                .sortedBy { it.createdAtEpochMs }
+                .sortedWith(compareBy<SyncOperationEntity> { it.createdAtEpochMs }.thenBy { it.id })
                 .take(limit)
+
+        override suspend fun maxCreatedAtEpochMs(): Long? =
+            allOperations.maxOfOrNull { it.createdAtEpochMs }
 
         override fun observePendingCount() = flowOf(
             allOperations.count { it.state == SyncOperationState.PENDING.name },
