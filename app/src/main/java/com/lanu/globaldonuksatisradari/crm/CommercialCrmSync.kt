@@ -95,6 +95,13 @@ object CommercialCrmSync {
         payloadJson: String,
         createdAtEpochMs: Long,
     ) {
+        val previous = database.syncOperationDao().maxCreatedAtEpochMs()
+        val nextAfterPrevious = when (previous) {
+            null -> createdAtEpochMs
+            Long.MAX_VALUE -> Long.MAX_VALUE
+            else -> previous + 1L
+        }
+        val queueTimestamp = maxOf(createdAtEpochMs, nextAfterPrevious)
         database.syncOperationDao().insert(
             SyncOperationEntity(
                 id = operationId,
@@ -103,7 +110,7 @@ object CommercialCrmSync {
                 operation = operation,
                 payloadVersion = payloadVersion,
                 payloadJson = payloadJson,
-                createdAtEpochMs = createdAtEpochMs,
+                createdAtEpochMs = queueTimestamp,
                 attemptCount = 0,
                 lastError = null,
             ),
