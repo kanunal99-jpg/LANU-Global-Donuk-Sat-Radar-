@@ -198,7 +198,10 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
             stageMatches && textMatches
         }
     }
-    val pendingSyncCount by localCrmRepository.observePendingSyncCount().collectAsState(initial = 0)
+    val pendingSyncFlow = remember(localCrmRepository, activeOwnerUserId) {
+        localCrmRepository.observePendingSyncCount(activeOwnerUserId)
+    }
+    val pendingSyncCount by pendingSyncFlow.collectAsState(initial = 0)
     val selectedCrmCustomer = selectedCustomerId?.let { id -> crmCustomers.firstOrNull { it.id == id } }
     val selectedCustomerKey = selectedCustomerId.orEmpty()
     val selectedCustomerActivities by remember(selectedCustomerKey) {
