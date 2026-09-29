@@ -249,6 +249,9 @@ class CrmSyncEngineTest {
                 .sortedWith(compareBy<SyncOperationEntity> { it.createdAtEpochMs }.thenBy { it.id })
                 .take(limit)
 
+        override suspend fun pendingForOwner(ownerUserId: String, limit: Int): List<SyncOperationEntity> =
+            pending(limit)
+
         override suspend fun maxCreatedAtEpochMs(): Long? =
             allOperations.maxOfOrNull { it.createdAtEpochMs }
 
