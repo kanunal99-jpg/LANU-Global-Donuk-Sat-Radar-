@@ -154,7 +154,7 @@ RPC özellikleri:
 
 **Kural:** Uydurma SKU, fiyat, stok, gramaj veya ürün özelliği production katalog verisi olarak yazılamaz.
 
-**Mevcut güvenli davranış:** `ProductCatalogRepository` boş başlar; kullanıcı tarafından eklenen kayıt doğrulanmış kaynak gösterilmedikçe `sourceVerified=false` olarak kalır. Public kaynak yalnız işletmenin donuk hazır yemek / hızlı dondurma / -18°C modelini doğrular; doğrulanmamış alanlar gerçek katalog gibi seed edilmez.
+**Mevcut güvenli davranış:** `ProductCatalogRepository` boş başlar; kullanıcı tarafından eklenen kayıt doğrulanmış kaynak gösterilmedikçe doğrulanmış resmî katalog verisi sayılmaz. Public kaynak yalnız işletmenin donuk hazır yemek / hızlı dondurma / -18°C modelini doğrular; doğrulanmamış alanlar gerçek katalog gibi seed edilmez.
 
 **Gerekli dış kaynak:** Yetkili Global Donuk CSV/XLSX/PDF/API veya doğrudan doğrulanabilir katalog kaynağı geldiğinde source + verification timestamp ile import edilir.
 
@@ -162,19 +162,75 @@ RPC özellikleri:
 
 ---
 
+## P-010 — Ürün provenance alanının herhangi bir HTTPS alan adını “doğrulanmış resmî kaynak” sayabilmesi
+
+**Problem:** `sourceVerifiedAtEpochMs` dolu bir ürün kaydı için yalnız HTTPS kontrolü yapılıyordu; `example.com` gibi üçüncü taraf bir URL teorik olarak doğrulanmış Global Donuk kaynağı gibi saklanabilirdi. Eski SharedPreferences kayıtları da bu metadata'yı taşıyabiliyordu.
+
+**Kök neden:** Web URL güvenliği ile iş kaynağı provenance doğrulaması aynı kavram gibi ele alınmıştı.
+
+**Çözüm:** Doğrulanmış ürün kaynağı yalnız `globaldonukgida.com` veya gerçek alt alan adlarında kabul edilir. Benzer/aldatıcı `globaldonukgida.com.example.org` alan adları reddedilir. Eski persisted kayıtta resmî alan adı doğrulanamıyorsa URL korunur fakat `sourceVerifiedAtEpochMs` düşürülür; kayıt doğrulanmış sayılmaz.
+
+**Test:** Unit testler resmî domain/subdomain kabulünü ve spoof-domain reddini; Android instrumentation testi legacy third-party verified metadata'nın downgrade edilmesini ve resmî Global Donuk kaynağının doğrulamasının korunmasını kapsar.
+
+**Durum:** KODLANDI; exact-current-HEAD Android CI/instrumentation ile doğrulanacak.
+
+---
+
+## P-011 — Çok kullanıcılı offline sync kuyruğunda 500 kayıtlık starvation sınırı
+
+**Problem:** `CrmSyncEngine`, aktif kullanıcı için work seçmeden önce global pending queue'dan ilk 500 kaydı alıyor ve ownership resolver ile sonradan filtreliyordu. Başka bir kullanıcıya ait 500+ eski pending işlem, aktif kullanıcının kendi kuyruğunu sürekli scan limitinin arkasında bırakabiliyordu.
+
+**Kök neden:** Ownership filtresi SQL `LIMIT` işleminden sonra uygulama katmanında yapılıyordu.
+
+**Çözüm:** `SyncOperationDao.pendingForOwner` eklendi. Customer/activity/next_action/opportunity/contact/quote/quote_line/order/order_line sahipliği customer lineage üzerinden SQLite içinde filtrelenir; `LIMIT` owner filtresinden sonra uygulanır. `RoomCrmSyncOwnershipResolver` ikinci bağımsız savunma katmanı olarak korunur.
+
+**Test:** Room instrumentation testi, owner-B'ye ait 501 eski pending işlem önünde owner-A'nın daha yeni tek işlemini kuyruğa koyar; owner-A engine'in yine kendi işlemini seçip sync etmesi ve B'nin 501 kaydını tüketmemesi doğrulanır.
+
+**Durum:** KODLANDI; exact-current-HEAD Android CI/instrumentation ile doğrulanacak.
+
+---
+
+## P-012 — Aynı cihazda `businessSourceId` dedupe'ın kullanıcılar arasında veri karıştırması
+
+**Problem:** `addBusinessAsCustomer`, mevcut müşteriyi yalnız `businessSourceId` ile arıyordu. Aynı cihazda kullanıcı A aynı OSM işletmesini daha önce CRM'e aldıysa kullanıcı B ekleme yaptığında A'nın yerel customer kaydı döndürülebiliyordu.
+
+**Kök neden:** İşletme kaynak dedupe'ı tenant/owner kapsamına alınmamıştı; cloud RLS doğru olsa da yerel Room dedupe sınırı kullanıcı kimliğini hesaba katmıyordu.
+
+**Çözüm:** `CrmCustomerDao.findByBusinessSourceIdForOwner` eklendi. Eşleşme `businessSourceId + ownerUserId` üzerinden yapılır; `NULL` owner için de yalnız aynı local-only kapsam eşleşir. `LocalCrmRepository.addBusinessAsCustomer` bu owner-scoped sorguya geçirildi.
+
+**Test:** Yeni Room instrumentation testi aynı verified business kaynağını önce owner-A, sonra owner-B, sonra tekrar owner-A için ekler. A ve B'nin customer ID'leri farklı; owner-A tekrarı aynı ID; toplam iki müşteri ve iki cloud queue create işlemi beklenir.
+
+**Durum:** KODLANDI; exact-current-HEAD Android CI/instrumentation ile doğrulanacak.
+
+---
+
+## P-013 — Android CI yalnız seçili smoke sınıfını çalıştırıyordu
+
+**Problem:** Emulator CI yalnız `MainActivitySmokeTest` sınıfını hedefleyebildiği için Room/commercial/product-persistence gibi diğer instrumentation testlerinin repository'de bulunması onların kabul kapısında gerçekten koştuğunu kanıtlamıyordu.
+
+**Çözüm:** Android workflow emulator üzerinde `connectedDebugAndroidTest` ile tüm androidTest paketini çalıştıracak şekilde değiştirildi. Başarısızlıkta ADB/JUnit/emulator log tanılaması korunur; ardından artifact hazırlama ancak tam instrumentation başarıyla geçerse çalışır.
+
+**Durum:** KODLANDI; exact-current-HEAD Android CI sonucu bekleniyor.
+
+---
+
 ## AUDIT_CHECKPOINT
 
-`app/src/main/java/com/lanu/globaldonuksatisradari/crm` cloud-sync zinciri incelendi:
+`app/src/main/java/com/lanu/globaldonuksatisradari/crm` cloud-sync ve yerel tenant zinciri incelendi:
 
-`Room mutation → durable sync queue → CrmSyncWorker → HardenedSupabaseFullCrmRemoteDataSource → dirty-safe pull / atomic versioned push → RLS → idempotent mutation ledger → CrmSyncEngine state transition`.
+`Room mutation → owner-scoped durable sync queue → CrmSyncWorker → HardenedSupabaseFullCrmRemoteDataSource → dirty-safe pull / atomic versioned push → RLS → idempotent mutation ledger → CrmSyncEngine state transition`.
 
-Son doğrulanan noktalar:
+Son doğrulanan/kodlanan noktalar:
 - dirty pull preservation
 - deterministic queue / parent-child ordering
+- owner-before-limit queue selection; cross-user starvation koruması
+- owner-scoped business-source dedupe
 - atomik version conflict
 - retry idempotency
 - append-only activity equivalence fallback
 - production two-user RLS isolation
 - RLS advisor performance fix
+- Global Donuk verified-source domain provenance
+- full Android instrumentation workflow gate
 
-**Sonraki audit:** exact-current-HEAD Android CI → sync unit tests / worker integration → UI offline/reconnect state görünürlüğü → release öncesi gerçek cihaz blokajı → main/release zinciri.
+**Sonraki audit:** exact-current-HEAD Android CI → full instrumentation sonuçları → UI pending-sync metadata owner kapsamı → fiziksel cihaz UX kabul blokajı → main/release zinciri.
