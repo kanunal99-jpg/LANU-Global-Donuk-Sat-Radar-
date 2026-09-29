@@ -11,9 +11,10 @@ class CrmSyncEngineTest {
         id: String = "op-1",
         attemptCount: Int = 0,
         entityId: String = "customer-1",
+        entityType: String = LocalCrmRepository.ENTITY_CUSTOMER,
     ) = SyncOperationEntity(
         id = id,
-        entityType = "customer",
+        entityType = entityType,
         entityId = entityId,
         operation = "UPDATE",
         payloadVersion = 1,
@@ -40,6 +41,31 @@ class CrmSyncEngineTest {
         assertEquals(1, dao.operation?.attemptCount)
         assertEquals("network", dao.operation?.lastError)
         assertEquals(SyncOperationState.PENDING.name, dao.operation?.state)
+    }
+
+    @Test
+    fun offlineThenReconnect_preservesCommercialQueue_andSyncsOnNextRun() = runTest {
+        val queued = operation(
+            entityId = "quote-1",
+            entityType = CommercialCrmSync.ENTITY_QUOTE,
+        )
+        val dao = FakeSyncOperationDao(listOf(queued))
+        val stateStore = FakeSyncStateStore()
+        var online = false
+        val remote = object : RemoteCrmDataSource {
+            override suspend fun apply(operation: SyncOperationEntity): RemoteSyncResult =
+                if (online) RemoteSyncResult.Success else RemoteSyncResult.RetryableFailure("offline")
+        }
+        val engine = CrmSyncEngine(dao, remote, stateStore = stateStore)
+
+        assertEquals(SyncProcessResult.Deferred("op-1", 1, "offline"), engine.processOne())
+        assertEquals(SyncOperationState.PENDING.name, dao.operationById("op-1")?.state)
+        assertEquals(1, dao.operationById("op-1")?.attemptCount)
+
+        online = true
+        assertEquals(SyncProcessResult.Synced("op-1"), engine.processOne())
+        assertEquals(null, dao.operationById("op-1"))
+        assertEquals(SyncState.SYNCED, stateStore.syncStates["quote-1"])
     }
 
     @Test
@@ -87,8 +113,10 @@ class CrmSyncEngineTest {
     }
 
     @Test
-    fun conflict_parksOperation_marksEntityConflict_andDoesNotBlockQueueRuns() = runTest {
-        val dao = FakeSyncOperationDao(listOf(operation()))
+    fun conflict_parksCommercialOperation_marksEntityConflict_andDoesNotBlockQueueRuns() = runTest {
+        val dao = FakeSyncOperationDao(
+            listOf(operation(entityId = "order-1", entityType = CommercialCrmSync.ENTITY_ORDER)),
+        )
         val stateStore = FakeSyncStateStore()
         val engine = CrmSyncEngine(
             dao,
@@ -101,7 +129,7 @@ class CrmSyncEngineTest {
 
         assertEquals(SyncProcessResult.Conflict("op-1", "version mismatch"), engine.processOne())
         assertEquals(SyncOperationState.CONFLICT.name, dao.allOperations.single().state)
-        assertEquals(SyncState.CONFLICT, stateStore.syncStates["customer-1"])
+        assertEquals(SyncState.CONFLICT, stateStore.syncStates["order-1"])
         assertEquals(SyncProcessResult.NoWork, engine.processOne())
     }
 
