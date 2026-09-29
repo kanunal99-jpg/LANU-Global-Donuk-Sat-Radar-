@@ -78,7 +78,10 @@ class LocalCrmRepository(
         business: VerifiedBusiness,
         ownerUserId: String? = null,
     ): CrmCustomer = database.withTransaction {
-        val existing = database.customerDao().findByBusinessSourceId(business.id)
+        val existing = database.customerDao().findByBusinessSourceIdForOwner(
+            businessSourceId = business.id,
+            ownerUserId = ownerUserId,
+        )
         if (existing != null) return@withTransaction CrmMappings.toDomain(existing)
 
         val timestamp = now()
