@@ -9,6 +9,7 @@ import com.lanu.globaldonuksatisradari.data.VerifiedBusinessValidator
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -24,25 +25,7 @@ class CrmRoomInstrumentationTest {
             .build()
 
         try {
-            val business = VerifiedBusiness(
-                id = "osm-node-123",
-                name = "Smoke Test Kafe",
-                city = "İstanbul",
-                district = "Kadıköy",
-                neighborhood = "Caferağa",
-                source = DataSourceDescriptor(
-                    id = "osm-nominatim",
-                    name = "OpenStreetMap Nominatim",
-                    publisher = "OpenStreetMap",
-                    licenseOrTerms = "ODbL",
-                    sourceUrl = "https://nominatim.openstreetmap.org/",
-                    lastVerifiedAtEpochMs = 1L,
-                ),
-                verifiedAtEpochMs = 1L,
-                latitude = 40.99,
-                longitude = 29.03,
-                category = "cafe",
-            )
+            val business = verifiedBusiness("osm-node-123")
             assertTrue(VerifiedBusinessValidator.validate(business).isSuccess)
 
             var idIndex = 0
@@ -116,6 +99,36 @@ class CrmRoomInstrumentationTest {
             val won = repository.transitionOpportunity(opportunity.id, CrmOpportunityStatus.WON)
             assertEquals(CrmOpportunityStatus.WON, won.status)
             assertEquals(6, repository.pendingSync().size)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun sameBusinessSource_isDeduplicatedPerOwner_notAcrossOwners() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, LanuCrmDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            var idIndex = 0
+            val repository = LocalCrmRepository(
+                database = database,
+                now = { 2_000L },
+                idGenerator = { "owner-dedupe-${idIndex++}" },
+            )
+            val business = verifiedBusiness("osm-same-source")
+
+            val ownerA = repository.addBusinessAsCustomer(business, ownerUserId = "owner-a")
+            val ownerB = repository.addBusinessAsCustomer(business, ownerUserId = "owner-b")
+            val ownerARepeat = repository.addBusinessAsCustomer(business, ownerUserId = "owner-a")
+
+            assertNotEquals(ownerA.id, ownerB.id)
+            assertEquals(ownerA.id, ownerARepeat.id)
+            assertEquals("owner-a", ownerA.ownerUserId)
+            assertEquals("owner-b", ownerB.ownerUserId)
+            assertEquals(2, repository.observeCustomers("İstanbul").first().size)
+            assertEquals(2, repository.pendingSync().size)
         } finally {
             database.close()
         }
@@ -217,6 +230,26 @@ class CrmRoomInstrumentationTest {
             database.close()
         }
     }
+
+    private fun verifiedBusiness(id: String) = VerifiedBusiness(
+        id = id,
+        name = "Smoke Test Kafe",
+        city = "İstanbul",
+        district = "Kadıköy",
+        neighborhood = "Caferağa",
+        source = DataSourceDescriptor(
+            id = "osm-nominatim",
+            name = "OpenStreetMap Nominatim",
+            publisher = "OpenStreetMap",
+            licenseOrTerms = "ODbL",
+            sourceUrl = "https://nominatim.openstreetmap.org/",
+            lastVerifiedAtEpochMs = 1L,
+        ),
+        verifiedAtEpochMs = 1L,
+        latitude = 40.99,
+        longitude = 29.03,
+        category = "cafe",
+    )
 
     private fun customerEntity(id: String, ownerUserId: String) = CrmCustomerEntity(
         id = id,
