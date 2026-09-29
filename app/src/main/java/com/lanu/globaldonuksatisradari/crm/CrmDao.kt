@@ -22,6 +22,7 @@ interface CrmContactDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(contact: CrmContactEntity)
     @Query("SELECT * FROM crm_contact WHERE id = :id LIMIT 1") suspend fun findById(id: String): CrmContactEntity?
     @Query("SELECT * FROM crm_contact WHERE customerId = :customerId ORDER BY isPrimary DESC, fullName COLLATE NOCASE ASC") fun observeForCustomer(customerId: String): Flow<List<CrmContactEntity>>
+    @Query("SELECT * FROM crm_contact WHERE customerId = :customerId ORDER BY isPrimary DESC, fullName COLLATE NOCASE ASC") suspend fun listForCustomer(customerId: String): List<CrmContactEntity>
     @Query("SELECT COUNT(*) FROM crm_contact WHERE customerId = :customerId") suspend fun countForCustomer(customerId: String): Int
     @Query("UPDATE crm_contact SET isPrimary = 0, updatedAtEpochMs = :updatedAtEpochMs, version = version + 1, syncState = :state WHERE customerId = :customerId AND isPrimary = 1") suspend fun clearPrimary(customerId: String, updatedAtEpochMs: Long, state: String): Int
     @Query("UPDATE crm_contact SET syncState = :state WHERE id = :id") suspend fun updateSyncState(id: String, state: String): Int
