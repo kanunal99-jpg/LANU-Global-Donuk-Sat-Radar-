@@ -6,12 +6,10 @@ import kotlinx.coroutines.flow.map
 import java.util.UUID
 
 /**
- * Local-first customer-contact workflow.
+ * Local-first customer-contact workflow with owner-scoped cloud queueing.
  *
- * Contacts are owner-scoped at the repository boundary: an authenticated repository may only
- * read/mutate contacts whose parent customer belongs to that user, while a local repository may
- * only access anonymous/local customers. Cloud sync stays disabled until LANU backend tables/RLS
- * are verified.
+ * A contact is always persisted locally first. Authenticated-owner records are queued in the same
+ * Room transaction as the local mutation; anonymous/local-only customers remain LOCAL_ONLY.
  */
 class ContactCrmRepository(
     private val database: LanuCrmDatabase,
@@ -40,13 +38,10 @@ class ContactCrmRepository(
         val normalizedEmail = CrmContactValidator.normalizeEmail(email)
         val shouldBePrimary = makePrimary || database.contactDao().countForCustomer(customerId) == 0
         val timestamp = now()
+        val syncState = CommercialCrmSync.stateFor(ownerUserId)
 
         if (shouldBePrimary) {
-            database.contactDao().clearPrimary(
-                customerId = customerId,
-                updatedAtEpochMs = timestamp,
-                state = SyncState.LOCAL_ONLY.name,
-            )
+            clearAndQueuePreviousPrimary(customerId, timestamp, syncState)
         }
 
         val entity = CrmContactEntity(
@@ -60,9 +55,10 @@ class ContactCrmRepository(
             createdAtEpochMs = timestamp,
             updatedAtEpochMs = timestamp,
             version = 1L,
-            syncState = SyncState.LOCAL_ONLY.name,
+            syncState = syncState,
         )
         database.contactDao().upsert(entity)
+        enqueueIfCloudOwned(entity, LocalCrmRepository.OP_CREATE, timestamp)
         toDomain(entity)
     }
 
@@ -84,9 +80,10 @@ class ContactCrmRepository(
             email = CrmContactValidator.normalizeEmail(email),
             updatedAtEpochMs = timestamp,
             version = current.version + 1L,
-            syncState = SyncState.LOCAL_ONLY.name,
+            syncState = CommercialCrmSync.stateFor(ownerUserId),
         )
         database.contactDao().upsert(updated)
+        enqueueIfCloudOwned(updated, LocalCrmRepository.OP_UPDATE, timestamp)
         toDomain(updated)
     }
 
@@ -97,21 +94,68 @@ class ContactCrmRepository(
         if (current.isPrimary) return@withTransaction toDomain(current)
 
         val timestamp = now()
-        database.contactDao().clearPrimary(
-            customerId = current.customerId,
-            updatedAtEpochMs = timestamp,
-            state = SyncState.LOCAL_ONLY.name,
-        )
+        val syncState = CommercialCrmSync.stateFor(ownerUserId)
+        clearAndQueuePreviousPrimary(current.customerId, timestamp, syncState)
+
         val refreshed = database.contactDao().findById(contactId)
             ?: error("Yetkili kişi güncelleme sırasında bulunamadı: $contactId")
         val updated = refreshed.copy(
             isPrimary = true,
             updatedAtEpochMs = timestamp,
             version = refreshed.version + 1L,
-            syncState = SyncState.LOCAL_ONLY.name,
+            syncState = syncState,
         )
         database.contactDao().upsert(updated)
+        enqueueIfCloudOwned(updated, LocalCrmRepository.OP_UPDATE, timestamp)
         toDomain(updated)
+    }
+
+    private suspend fun clearAndQueuePreviousPrimary(
+        customerId: String,
+        timestamp: Long,
+        syncState: String,
+    ) {
+        val previousPrimaries = database.contactDao().listForCustomer(customerId).filter { it.isPrimary }
+        if (previousPrimaries.isEmpty()) return
+
+        database.contactDao().clearPrimary(
+            customerId = customerId,
+            updatedAtEpochMs = timestamp,
+            state = syncState,
+        )
+        if (ownerUserId.isNullOrBlank()) return
+
+        previousPrimaries.forEach { previous ->
+            val cleared = database.contactDao().findById(previous.id) ?: return@forEach
+            CommercialCrmSync.enqueue(
+                database = database,
+                operationId = idGenerator(),
+                entityType = CommercialCrmSync.ENTITY_CONTACT,
+                entityId = cleared.id,
+                operation = LocalCrmRepository.OP_UPDATE,
+                payloadVersion = cleared.version,
+                payloadJson = CommercialCrmSync.contactPayload(cleared),
+                createdAtEpochMs = timestamp,
+            )
+        }
+    }
+
+    private suspend fun enqueueIfCloudOwned(
+        entity: CrmContactEntity,
+        operation: String,
+        timestamp: Long,
+    ) {
+        if (ownerUserId.isNullOrBlank()) return
+        CommercialCrmSync.enqueue(
+            database = database,
+            operationId = idGenerator(),
+            entityType = CommercialCrmSync.ENTITY_CONTACT,
+            entityId = entity.id,
+            operation = operation,
+            payloadVersion = entity.version,
+            payloadJson = CommercialCrmSync.contactPayload(entity),
+            createdAtEpochMs = timestamp,
+        )
     }
 
     private suspend fun requireOwnedCustomer(customerId: String): CrmCustomerEntity {
