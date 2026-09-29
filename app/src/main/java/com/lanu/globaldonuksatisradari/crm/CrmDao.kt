@@ -45,7 +45,7 @@ interface CrmNextActionDao {
     @Query("SELECT * FROM crm_next_action WHERE completedAtEpochMs IS NULL ORDER BY dueAtEpochMs ASC LIMIT :limit") fun observeOpen(limit: Int): Flow<List<CrmNextActionEntity>>
     @Query("SELECT a.* FROM crm_next_action a INNER JOIN crm_customer c ON c.id = a.customerId WHERE a.completedAtEpochMs IS NULL AND c.city = :city AND (:district IS NULL OR c.district = :district) ORDER BY a.dueAtEpochMs ASC") fun observeOpenForRegion(city: String, district: String?): Flow<List<CrmNextActionEntity>>
     @Query("SELECT a.* FROM crm_next_action a INNER JOIN crm_customer c ON c.id = a.customerId WHERE a.completedAtEpochMs IS NULL AND a.dueAtEpochMs <= :nowEpochMs AND c.city = :city AND (:district IS NULL OR c.district = :district) ORDER BY a.dueAtEpochMs ASC") fun observeDueForRegion(city: String, district: String?, nowEpochMs: Long): Flow<List<CrmNextActionEntity>>
-    @Query("SELECT * FROM crm_next_action WHERE completedAtEpochMs IS NULL AND dueAtEpochMs <= :nowEpochMs ORDER BY dueAtEpochMs ASC LIMIT :limit") fun observeDue(nowEpochMs: Long, limit: Int): Flow<List<CrmNextActionEntity>>
+    @Query("SELECT * FROM crm_next_action WHERE completedAtEpochMs IS NULL ORDER BY dueAtEpochMs ASC LIMIT :limit") fun observeDue(nowEpochMs: Long, limit: Int): Flow<List<CrmNextActionEntity>>
     @Query("SELECT * FROM crm_next_action WHERE id = :id LIMIT 1") suspend fun findById(id: String): CrmNextActionEntity?
     @Query("UPDATE crm_next_action SET syncState = :state WHERE id = :id") suspend fun updateSyncState(id: String, state: String): Int
     @Query("UPDATE crm_next_action SET completedAtEpochMs = :completedAtEpochMs, completedByUserId = :completedByUserId, version = version + 1, syncState = :syncState WHERE id = :id AND completedAtEpochMs IS NULL") suspend fun complete(id: String, completedAtEpochMs: Long, completedByUserId: String?, syncState: String): Int
@@ -89,6 +89,64 @@ interface CrmStageTransitionDao {
 interface SyncOperationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insert(operation: SyncOperationEntity)
     @Query("SELECT * FROM crm_sync_operation WHERE state = 'PENDING' ORDER BY createdAtEpochMs ASC, id ASC LIMIT :limit") suspend fun pending(limit: Int): List<SyncOperationEntity>
+
+    @Query(
+        """
+        SELECT s.* FROM crm_sync_operation s
+        WHERE s.state = 'PENDING' AND (
+            (s.entityType = 'customer' AND EXISTS (
+                SELECT 1 FROM crm_customer c
+                WHERE c.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'activity' AND EXISTS (
+                SELECT 1 FROM crm_activity a
+                INNER JOIN crm_customer c ON c.id = a.customerId
+                WHERE a.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'next_action' AND EXISTS (
+                SELECT 1 FROM crm_next_action n
+                INNER JOIN crm_customer c ON c.id = n.customerId
+                WHERE n.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'opportunity' AND EXISTS (
+                SELECT 1 FROM crm_opportunity o
+                INNER JOIN crm_customer c ON c.id = o.customerId
+                WHERE o.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'contact' AND EXISTS (
+                SELECT 1 FROM crm_contact ct
+                INNER JOIN crm_customer c ON c.id = ct.customerId
+                WHERE ct.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'quote' AND EXISTS (
+                SELECT 1 FROM crm_quote q
+                INNER JOIN crm_customer c ON c.id = q.customerId
+                WHERE q.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'quote_line' AND EXISTS (
+                SELECT 1 FROM crm_quote_line ql
+                INNER JOIN crm_quote q ON q.id = ql.quoteId
+                INNER JOIN crm_customer c ON c.id = q.customerId
+                WHERE ql.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'order' AND EXISTS (
+                SELECT 1 FROM crm_order o
+                INNER JOIN crm_customer c ON c.id = o.customerId
+                WHERE o.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'order_line' AND EXISTS (
+                SELECT 1 FROM crm_order_line ol
+                INNER JOIN crm_order o ON o.id = ol.orderId
+                INNER JOIN crm_customer c ON c.id = o.customerId
+                WHERE ol.id = s.entityId AND c.ownerUserId = :ownerUserId
+            ))
+        )
+        ORDER BY s.createdAtEpochMs ASC, s.id ASC
+        LIMIT :limit
+        """,
+    )
+    suspend fun pendingForOwner(ownerUserId: String, limit: Int): List<SyncOperationEntity>
+
     @Query("SELECT MAX(createdAtEpochMs) FROM crm_sync_operation") suspend fun maxCreatedAtEpochMs(): Long?
     @Query("SELECT COUNT(*) FROM crm_sync_operation WHERE entityType = :entityType AND entityId = :entityId") suspend fun countForEntity(entityType: String, entityId: String): Int
     @Query("SELECT COUNT(*) FROM crm_sync_operation WHERE state = 'PENDING'") fun observePendingCount(): Flow<Int>
