@@ -37,6 +37,8 @@ data class CatalogProduct(
 )
 
 object ProductMediaValidation {
+    private const val GLOBAL_DONUK_HOST = "globaldonukgida.com"
+
     fun isWebUrl(value: String?): Boolean {
         val scheme = runCatching { URI(value?.trim().orEmpty()).scheme?.lowercase(Locale.ROOT) }.getOrNull()
         return scheme == "http" || scheme == "https"
@@ -47,6 +49,16 @@ object ProductMediaValidation {
 
     fun normalizeSourceUrl(value: String?): String? =
         normalizeWebUrl(value, "Kaynak URL", allowHttp = false)
+
+    fun normalizeVerifiedGlobalDonukSourceUrl(value: String?): String {
+        val normalized = normalizeSourceUrl(value)
+            ?: throw IllegalArgumentException("Doğrulanmış ürün için resmî Global Donuk kaynak URL zorunludur.")
+        val host = URI(normalized).host?.lowercase(Locale.ROOT).orEmpty()
+        require(host == GLOBAL_DONUK_HOST || host.endsWith(".$GLOBAL_DONUK_HOST")) {
+            "Doğrulanmış kaynak globaldonukgida.com alan adında olmalıdır."
+        }
+        return normalized
+    }
 
     fun requireHttpsUrl(value: String?, field: String) {
         normalizeWebUrl(value, field, allowHttp = false)
@@ -159,7 +171,11 @@ class ProductCatalogRepository(context: Context) {
                 rawImageRef
             }
         }
-        val normalizedSourceUrl = ProductMediaValidation.normalizeSourceUrl(sourceUrl)
+        val normalizedSourceUrl = if (sourceVerifiedAtEpochMs != null) {
+            ProductMediaValidation.normalizeVerifiedGlobalDonukSourceUrl(sourceUrl)
+        } else {
+            ProductMediaValidation.normalizeSourceUrl(sourceUrl)
+        }
 
         val normalizedCurrency = currency.trim().uppercase(Locale.ROOT)
         require(normalizedCurrency.length == 3) { "Para birimi 3 harf olmalıdır. Örnek: TRY" }
