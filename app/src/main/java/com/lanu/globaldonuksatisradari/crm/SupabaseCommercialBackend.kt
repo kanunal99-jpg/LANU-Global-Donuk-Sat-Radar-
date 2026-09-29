@@ -13,6 +13,7 @@ class SupabaseFullCrmRemoteDataSource(
     private val auth: SupabaseAuthClient,
 ) : RemoteCrmDataSource {
     private val core = SupabaseCrmRemoteDataSource(auth)
+    private val safeCorePull = SupabaseSafeCorePull(auth)
     private val commercial = SupabaseCommercialRemoteDataSource(auth)
 
     override suspend fun apply(operation: SyncOperationEntity): RemoteSyncResult =
@@ -23,7 +24,7 @@ class SupabaseFullCrmRemoteDataSource(
         }
 
     override suspend fun pullInto(database: LanuCrmDatabase): RemotePullResult {
-        return when (val coreResult = core.pullInto(database)) {
+        return when (val coreResult = safeCorePull.pullInto(database)) {
             RemotePullResult.Success -> commercial.pullInto(database)
             RemotePullResult.NotConfigured -> RemotePullResult.NotConfigured
             is RemotePullResult.RetryableFailure -> coreResult
