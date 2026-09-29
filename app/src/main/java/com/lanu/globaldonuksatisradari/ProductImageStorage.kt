@@ -2,6 +2,7 @@ package com.lanu.globaldonuksatisradari
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.InputStream
@@ -17,7 +18,7 @@ class ProductImageStorage(context: Context) {
     private val imageDir = File(appContext.filesDir, "product_images").apply { mkdirs() }
     private val cameraDir = File(appContext.cacheDir, "product_camera").apply { mkdirs() }
 
-    fun importFromPicker(uri: Uri): String {
+    fun importFromPicker(uri: Uri): String = try {
         val resolver = appContext.contentResolver
         val mime = resolver.getType(uri)?.lowercase()
         require(mime in SUPPORTED_MIME_TYPES) { "Desteklenmeyen görsel türü: ${mime ?: "bilinmiyor"}" }
@@ -25,25 +26,34 @@ class ProductImageStorage(context: Context) {
         val destination = newDestination(extension)
         val stream = resolver.openInputStream(uri) ?: throw IllegalArgumentException("Seçilen görsel açılamadı.")
         stream.use { copyChecked(it, destination) }
-        return Uri.fromFile(destination).toString()
+        Uri.fromFile(destination).toString()
+    } catch (error: Throwable) {
+        logRejected("picker_import", error)
+        throw error
     }
 
-    fun createCameraCapture(): PendingProductCameraCapture {
+    fun createCameraCapture(): PendingProductCameraCapture = try {
         val file = File.createTempFile("capture_", ".jpg", cameraDir)
         val uri = FileProvider.getUriForFile(
             appContext,
             appContext.packageName + ".fileprovider",
             file,
         )
-        return PendingProductCameraCapture(file, uri)
+        PendingProductCameraCapture(file, uri)
+    } catch (error: Throwable) {
+        logRejected("camera_prepare", error)
+        throw error
     }
 
-    fun finalizeCameraCapture(capture: PendingProductCameraCapture): String {
+    fun finalizeCameraCapture(capture: PendingProductCameraCapture): String = try {
         require(capture.file.exists() && capture.file.length() > 0L) { "Kamera görsel üretmedi." }
         val destination = newDestination("jpg")
         capture.file.inputStream().use { copyChecked(it, destination) }
         capture.file.delete()
-        return Uri.fromFile(destination).toString()
+        Uri.fromFile(destination).toString()
+    } catch (error: Throwable) {
+        logRejected("camera_finalize", error)
+        throw error
     }
 
     fun discardCameraCapture(capture: PendingProductCameraCapture?) {
@@ -102,7 +112,13 @@ class ProductImageStorage(context: Context) {
         else -> error("Desteklenmeyen görsel türü")
     }
 
+    private fun logRejected(operation: String, error: Throwable) {
+        // Intentionally do not log external URI/path values; they may contain user or provider data.
+        Log.w(TAG, "Product image operation rejected: $operation (${error::class.java.simpleName})")
+    }
+
     companion object {
+        private const val TAG = "LanuProductImage"
         const val MAX_IMAGE_BYTES = 12L * 1024L * 1024L
         private val SUPPORTED_MIME_TYPES = setOf(
             "image/jpeg",
