@@ -60,6 +60,9 @@ object ProductMediaValidation {
         return normalized
     }
 
+    fun isVerifiedGlobalDonukSource(value: String?): Boolean =
+        runCatching { normalizeVerifiedGlobalDonukSourceUrl(value) }.isSuccess
+
     fun requireHttpsUrl(value: String?, field: String) {
         normalizeWebUrl(value, field, allowHttp = false)
     }
@@ -172,6 +175,7 @@ class ProductCatalogRepository(context: Context) {
             }
         }
         val normalizedSourceUrl = if (sourceVerifiedAtEpochMs != null) {
+            require(sourceVerifiedAtEpochMs > 0L) { "Kaynak doğrulama zamanı geçerli olmalıdır." }
             ProductMediaValidation.normalizeVerifiedGlobalDonukSourceUrl(sourceUrl)
         } else {
             ProductMediaValidation.normalizeSourceUrl(sourceUrl)
@@ -229,6 +233,14 @@ class ProductCatalogRepository(context: Context) {
                     val persistedSource = item.optString("imageSource").takeIf { it.isNotBlank() }?.let { value ->
                         runCatching { ProductImageSource.valueOf(value) }.getOrNull()
                     }
+                    val rawSourceUrl = item.optString("sourceUrl").takeIf { it.isNotBlank() }
+                    val normalizedSourceUrl = runCatching {
+                        ProductMediaValidation.normalizeSourceUrl(rawSourceUrl)
+                    }.getOrNull()
+                    val persistedVerifiedAt = item.optLong("sourceVerifiedAtEpochMs", 0L).takeIf { it > 0L }
+                    val trustedVerifiedAt = persistedVerifiedAt?.takeIf {
+                        ProductMediaValidation.isVerifiedGlobalDonukSource(normalizedSourceUrl)
+                    }
                     add(
                         CatalogProduct(
                             id = item.getString("id"),
@@ -240,8 +252,8 @@ class ProductCatalogRepository(context: Context) {
                             note = item.optString("note").takeIf { it.isNotBlank() },
                             description = item.optString("description").takeIf { it.isNotBlank() },
                             imageUrl = imageRef,
-                            sourceUrl = item.optString("sourceUrl").takeIf { it.isNotBlank() },
-                            sourceVerifiedAtEpochMs = item.optLong("sourceVerifiedAtEpochMs", 0L).takeIf { it > 0L },
+                            sourceUrl = normalizedSourceUrl,
+                            sourceVerifiedAtEpochMs = trustedVerifiedAt,
                             updatedAtEpochMs = item.optLong("updatedAtEpochMs", 0L),
                             imageSource = persistedSource ?: imageRef
                                 ?.takeIf(ProductMediaValidation::isWebUrl)
