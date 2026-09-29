@@ -2,6 +2,22 @@
 
 > Bu belge LANU Global Donuk Satış Radarı projesinin kalıcı teknik ve teslim kurallarının tek referansıdır. Kod, PR, Issue, CI/CD, Supabase, Android ve Release kararları bu kurallara göre yürütülür. Çelişki halinde daha güvenli ve doğrulanabilir yaklaşım tercih edilir.
 
+## 0. ANAYASA UYGULAMA ZORUNLULUĞU — İSTİSNASIZ
+
+**Her zaman, her işlem bu anayasaya yazılacak ve anayasa esas alınacaktır.**
+
+Her geliştirme oturumunda veya önemli işlem öncesinde bu belge **baştan sona tek tek okunacak**; uygulanacak işlem mevcut kurallarla karşılaştırılacaktır.
+
+Her problem kayda alınacaktır. Her problemin kök nedeni, araştırması, ayıklanan seçenekleri, uygulanan çözümü, test/onay/doğrulama sonucu ve kanıtı bu anayasada veya anayasanın açıkça referans verdiği kalıcı proje kaydında tutulacaktır. Kritik kararlar yalnız sohbet geçmişine bırakılamaz.
+
+Zorunlu problem çözme döngüsü:
+
+**ARAŞTIR → AYIKLA → DÜZELT → ONAYLA → DOĞRULA → KANITLA**
+
+Bir teknik problem ortaya çıktığında çözüm için **en az 20 farklı bağımsız site/domain ve toplam en az 40 ilgili teknik forum/tartışma/dokümantasyon kaynağı** araştırılacaktır. Sırf sayıyı doldurmak için alakasız, kopya veya düşük kaliteli sayfalar kanıt sayılmaz. Kaynaklar probleme gerçekten uygulanabilir olmalıdır. Resmî dokümantasyon, issue/discussion, teknik forum ve güvenilir topluluk kayıtları birlikte değerlendirilir.
+
+**Bu anayasadaki her kural tek tek uygulanacak ve istisnasız uyulacaktır.** Bir kural teknik olarak uygulanamıyorsa sessizce atlanmaz; engel, nedeni, güvenli fallback ve gerekli kullanıcı müdahalesi açıkça kayda alınır.
+
 ## 1. Ana çalışma ilkesi — @Düşün
 
 **Ürün çıktı tam hazır hale gelene kadar çalış.**
@@ -45,7 +61,7 @@ Her önemli değişiklikte uygun kapsamda:
 - Gerçek Android emulator smoke
 - Kritik kullanıcı akışı smoke testleri
 
-çalıştırılır. CI kırılırsa merge yapılmaz; önce kök neden bulunur ve düzeltilir. Çözüm belirsizse veya hata sürüyorsa en az 5 bağımsız güvenilir teknik forum/dokümantasyon kaynağıyla araştırma yapılır.
+çalıştırılır. CI kırılırsa merge yapılmaz; önce kök neden bulunur ve düzeltilir. Problem çözümü Bölüm 0'daki **20 farklı site / 40 ilgili kaynak** araştırma standardına tabidir.
 
 ## 6. GitHub / PR / main politikası
 
@@ -158,18 +174,7 @@ Gerçek Global Donuk ürün kataloğu yalnız doğrulanmış kaynaklardan alın�
 
 ## 14. UX kabul kriteri
 
-Emulator testine ek olarak yayın öncesi gerçek cihaz UX kontrolü hedeflenir. Özellikle:
-
-- küçük ekran ve farklı yoğunluklar
-- klavye/form davranışı
-- scroll ve modal/dialog kullanımı
-- hata mesajları
-- loading/empty/error/offline durumları
-- dokunma hedefleri
-- filtrelerin anlaşılabilirliği
-- saha kullanım hızı
-
-kontrol edilir.
+Emulator testine ek olarak yayın öncesi gerçek cihaz UX kontrolü hedeflenir. Özellikle küçük ekran/farklı yoğunluk, klavye/form, scroll/dialog, hata mesajları, loading/empty/error/offline durumları, dokunma hedefleri, filtre anlaşılabilirliği ve saha kullanım hızı kontrol edilir.
 
 ## 15. Loglama ve hata yönetimi
 
@@ -202,3 +207,49 @@ Herhangi bir kritik madde eksikse ürün “tam hazır” değildir.
 ## 17. Değişiklik yönetimi
 
 Bu anayasa proje boyunca yaşayan dokümandır. Mimari veya teslim standardında kalıcı bir karar alındığında bu dosya güncellenmelidir. Özellikle backend kimliği, güvenlik modeli, release politikası ve kabul kriterlerindeki değişiklikler sözlü varsayıma bırakılmamalıdır.
+
+## 18. PROBLEM KAYDI — Supabase kimliği ve offline/cloud sync mimarisi
+
+### Problem
+
+LANU için hangi Supabase projesinin production backend olduğu başlangıçta doğrulanamıyordu. Bağlı hesapta `jolfbmwxmsamzqtxassg` projesi `Willy-Kilo-Takip` adıyla ve INACTIVE durumda görünüyordu. Bu nedenle yanlış backend'e migration/RLS uygulama ve başka uygulamanın verisini bozma riski nedeniyle cloud E2E doğrulaması durduruldu. İkinci teknik soru, Supabase mobil istemcisinde LANU'nun ihtiyaç duyduğu offline queue/cache/conflict çözümünün hazır bir katman olarak bulunup bulunmadığıydı.
+
+### Çözüm / kullanıcı kararı
+
+Kullanıcı kesin olarak `Willy-Kilo-Takip` projesinin LANU Global Donuk Satış Radarı için kullanılacağını belirledi. Kanonik teknik kimlik artık `jolfbmwxmsamzqtxassg` olarak sabittir. Proje başka backend sanılarak terk edilmeyecek, durdurulmayacak veya silinmeyecektir.
+
+### Yapılan araştırma — önceki tur
+
+Önceki araştırma turunda toplam 30 ilgili teknik tartışma/kaynak ve 10+ farklı topluluk/domain tarandı. İncelenen topluluk/kaynak türleri arasında Stack Overflow, Reddit AndroidDev, Reddit Supabase, GitHub Discussions/Issues, Answer Overflow/Supabase topluluğu, Kotlin Slack arşivi, DBA StackExchange, DEV Community, WeWeb Community, FlutterFlow Community, Bubble Forum, Google Groups ve resmî Android/Supabase dokümantasyonu yer aldı.
+
+**Not:** Bu araştırma yeni Bölüm 0 standardından önce yapılmıştır ve 20 farklı domain / 40 kaynak eşiğini karşılamaz. Dolayısıyla yeni bir problem çözümünde bu eski araştırma tek başına yeterli kanıt kabul edilmeyecektir; gerektiğinde yeni standarda göre genişletilecektir.
+
+### Araştırmadan ayıklanan sonuçlar
+
+1. Android'de Room cihazdaki güvenilir source-of-truth olarak kalmalıdır.
+2. Kullanıcı işlemleri önce yerel transaction ile güvenli kaydedilmeli; cloud gönderimi kalıcı outbox/queue üzerinden yapılmalıdır.
+3. WorkManager kalıcı sync/retry yürütücüsü olarak kullanılabilir; her kayıt için kontrolsüz ayrı worker üretmek yerine pending kayıtları kontrollü/batch işleyen yapı tercih edilmelidir.
+4. Supabase mobil istemcisi LANU'nun bütün offline cache + durable write queue + otomatik conflict çözümü ihtiyacını tek başına karşılayan bir katman olarak kabul edilmemelidir; uygulama repository/sync katmanı bunu yönetmelidir.
+5. Realtime tek başına güvenilir reconciliation değildir. Uzun offline döneminden sonra reconnect olduğunda server pull/reconciliation yapılmalıdır.
+6. RLS kapatılarak bağlantı/senkronizasyon problemi çözülmüş sayılmaz.
+7. Gerçek veri izolasyonu için `TO authenticated` tek başına yeterli değildir; ownership/tenant predicate gereklidir.
+8. RLS gerçek en az iki kullanıcıyla negatif olarak test edilmelidir: kullanıcı B, kullanıcı A'nın customer/contact/activity/quote/order kayıtlarını okuyamamalı veya değiştirememelidir.
+9. Nested CRM tablolarında ownership zinciri child tablolara da güvenli biçimde uygulanmalıdır.
+10. UPDATE politikalarında hem `USING` hem `WITH CHECK`; INSERT'te uygun `WITH CHECK` uygulanmalıdır.
+11. Android APK içinde `service_role`/secret anahtar bulunmayacaktır. Mobil istemci publishable/anon istemci anahtarı + kullanıcı JWT + RLS kullanacaktır.
+12. Basit CRM alanlarında version/updated_at tabanlı conflict stratejisi uygulanabilir; kabul edilmiş teklif/sipariş gibi ticari belgelerde kör last-write-wins kullanılmayacak, immutable/versioned/idempotent yaklaşım tercih edilecektir.
+13. Sync durumları doğrulanmadan kayıt `SYNCED` sayılmayacaktır; güvenli durum LOCAL_ONLY/PENDING olacaktır.
+14. Hedef sync zinciri: `Compose UI → Repository → Room transaction → durable outbox → WorkManager → authenticated Supabase → RLS → idempotent push → reconciliation pull → conflict resolver → Room → UI`.
+15. Offline zinciri: `UI → Room → LOCAL_ONLY/PENDING → outbox`; bağlantı dönünce `outbox → retry/backoff → Supabase → doğrulama → reconciliation → SYNCED`.
+
+### Onay / doğrulama durumu
+
+- Backend kimliği: **ÇÖZÜLDÜ / kullanıcı tarafından doğrulandı** — `jolfbmwxmsamzqtxassg`.
+- Offline-first mimari yönü: **ARAŞTIRMA İLE DESTEKLENDİ**.
+- Gerçek Supabase RLS + iki kullanıcı negatif testleri: **HENÜZ E2E DOĞRULANMADI**.
+- Offline queue → reconnect → cloud sync → reconciliation/conflict testleri: **HENÜZ E2E DOĞRULANMADI**.
+- Bu nedenle cloud katmanı henüz “tam hazır” değildir.
+
+### Kanıt ilkesi
+
+Cloud katmanı ancak kanonik Supabase üzerinde şema/RLS incelemesi, migration güvenliği, iki kullanıcı izolasyon testleri, offline/reconnect senaryoları, log kontrolü ve Android instrumentation/emulator smoke ile kanıtlandıktan sonra tamamlanmış sayılacaktır.
