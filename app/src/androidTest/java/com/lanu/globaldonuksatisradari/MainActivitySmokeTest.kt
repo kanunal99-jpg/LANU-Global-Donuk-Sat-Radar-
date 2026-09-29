@@ -89,6 +89,22 @@ class MainActivitySmokeTest {
     }
 
     @Test(timeout = 60_000)
+    fun istanbulRegionDistrictChain_isWiredIntoRealUi() {
+        waitForTag("city_filter").assertIsDisplayed().assertHasClickAction()
+
+        waitForTag("district_filter").performClick()
+        waitForText("Kadıköy").assertExists()
+        waitForText("Pendik").assertExists()
+        waitForText("Kadıköy").performClick()
+
+        waitForTag("city_filter").performClick()
+        waitForText("İstanbul Avrupa").assertExists().performClick()
+        waitForTag("district_filter").performClick()
+        waitForText("Şişli").assertExists()
+        waitForText("Bakırköy").assertExists()
+    }
+
+    @Test(timeout = 60_000)
     fun advancedFilters_areCollapsedButReachable() {
         scrollMainToTag("inventory_filters_card")
         waitForTag("inventory_filters_card").assertIsDisplayed()
