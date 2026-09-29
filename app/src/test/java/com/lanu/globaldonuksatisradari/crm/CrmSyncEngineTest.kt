@@ -252,6 +252,8 @@ class CrmSyncEngineTest {
         override suspend fun pendingForOwner(ownerUserId: String, limit: Int): List<SyncOperationEntity> =
             pending(limit)
 
+        override fun observePendingCountForOwner(ownerUserId: String) = observePendingCount()
+
         override suspend fun maxCreatedAtEpochMs(): Long? =
             allOperations.maxOfOrNull { it.createdAtEpochMs }
 
