@@ -70,6 +70,25 @@ Kurallar:
 13. Her bekleme penceresinde kontrol edilen araştırma maddesi ve kalan sonraki adım mümkün olduğunda şu formatta kaydedilir: `RESEARCH_VERIFY_CHECKPOINT: <bulgu> — <kanıt> — <durum> — <sonraki doğrulama>`.
 14. Kullanıcı ayrıca “devam” demese bile, test bekleme süresi boyunca bu doğrulama/düzeltme döngüsü sürdürülür; gerçek blokaj yoksa çalışma durmaz.
 
+### DERİN ARAŞTIRMA SONUÇLARININ ANAYASAYA OTOMATİK YAZILMASI — KOMUT BEKLEMEK YASAK
+
+Derin Araştırma tamamlandığında veya yeni doğrulanmış teknik sonuç ürettiğinde, kullanıcıdan ayrıca **“anayasaya yaz”, “ekle”, “kaydet”, “devam” veya benzeri bir prompt beklenmez**.
+
+Zorunlu akış:
+
+**DERİN ARAŞTIRMA SONUCU → GÜNCEL EXACT HEAD/PRODUCTION İLE DOĞRULA → ÇELİŞKİLERİ AYIKLA → KALICI DERS/KARAR/KÖK NEDENİ ÇIKAR → ANAYASAYA OTOMATİK YAZ → GEREKİRSE KODU DÜZELT/UYGULA → YENİDEN TEST ET → KANITLA**
+
+Kurallar:
+
+1. Derin Araştırma sonucu çıkar çıkmaz, sonuç güncel repository, CI, artifact/log, Supabase/production ve gerçek call-site kanıtlarıyla doğrulanır.
+2. Doğrulanan kalıcı teknik bulgular, mimari kararlar, kök nedenler, güvenlik dersleri, kabul kapıları ve uygulanacak çalışma kuralları **aynı çalışma turunda otomatik olarak bu anayasaya yazılır**.
+3. Kullanıcının ayrıca “yaz”, “ekle” veya “anayasaya işle” demesi beklenmez; böyle bir ek komut gereksinimi bu anayasanın ihlalidir.
+4. Araştırma sonucu geçici, spekülatif veya henüz kanıtlanmamışsa kesin kural olarak yazılmaz; `DOĞRULANACAK` veya eşdeğer açık durum etiketiyle kaydedilir.
+5. Daha sonra yeni kanıt eski araştırma sonucunu geçersiz kılarsa anayasa sessizce eski bilgiyi korumaz; kayıt güncellenir, değişimin nedeni ve yeni kanıtı belirtilir.
+6. Derin Araştırma doğrudan hata veya eksik ortaya çıkarırsa yalnız dokümantasyon yapılmaz. Güvenli ve yetki kapsamındaki düzeltme aynı döngüde uygulanır ve yeni HEAD üzerinde tekrar test edilir.
+7. Her otomatik araştırma kaydı mümkün olduğunda tarih, ilgili problem/özellik, exact HEAD, kanıt türü, sonuç ve sonraki doğrulama adımını içerir.
+8. Bu kural yeni sohbet/oturumlarda da geçerlidir; derin araştırma sonucu sohbet geçmişinde bırakılıp anayasa güncellemesi ertelenmez.
+
 #### 29 Eylül 2026 doğrulanmış Live Cloud E2E örneği — kalıcı ders
 
 Önceki Live Cloud E2E başarısızlığında görülen `HTTP 422 / Anonymous sign-ins are disabled` semptomu gerçek log ve artifact ile doğrulandı. Doğru çözüm production anonymous auth'u açmak olmadı. Güncel yaklaşımda GitHub Actions OIDC token'ı ile yetkilendirilen `lanu-ci-auth-broker` üzerinden iki geçici doğrulanmış kullanıcı/session oluşturulmakta; test sonunda geçici kullanıcılar silinmektedir.
