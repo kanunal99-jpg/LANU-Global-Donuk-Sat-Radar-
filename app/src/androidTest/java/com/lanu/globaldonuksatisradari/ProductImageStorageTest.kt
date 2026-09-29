@@ -1,5 +1,6 @@
 package com.lanu.globaldonuksatisradari
 
+import androidx.core.content.FileProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertFalse
@@ -39,5 +40,49 @@ class ProductImageStorageTest {
         assertTrue(storage.isOwned(persisted))
         storage.deleteOwned(persisted)
         assertFalse(storage.isOwned(persisted))
+    }
+
+    @Test
+    fun cameraCancellationDiscardsTemporaryCapture() {
+        val storage = ProductImageStorage(context)
+        val capture = storage.createCameraCapture()
+        assertTrue(capture.file.exists())
+
+        storage.discardCameraCapture(capture)
+
+        assertFalse(capture.file.exists())
+    }
+
+    @Test
+    fun unsupportedMimeIsRejectedWithoutPersistentCopy() {
+        val storage = ProductImageStorage(context)
+        val cameraDir = File(context.cacheDir, "product_camera").apply { mkdirs() }
+        val unsupported = File(cameraDir, "unsupported.txt").apply { writeText("not-an-image") }
+        val uri = FileProvider.getUriForFile(
+            context,
+            context.packageName + ".fileprovider",
+            unsupported,
+        )
+
+        val rejected = runCatching { storage.importFromPicker(uri) }.exceptionOrNull()
+
+        assertTrue(rejected is IllegalArgumentException)
+        unsupported.delete()
+    }
+
+    @Test
+    fun oversizedCameraImageIsRejectedAndDoesNotCreateOwnedFile() {
+        val storage = ProductImageStorage(context)
+        val capture = storage.createCameraCapture()
+        capture.file.outputStream().use { output ->
+            val chunk = ByteArray(1024 * 1024)
+            repeat(13) { output.write(chunk) }
+        }
+
+        val rejected = runCatching { storage.finalizeCameraCapture(capture) }.exceptionOrNull()
+
+        assertTrue(rejected is IllegalArgumentException)
+        assertFalse(storage.isOwned(android.net.Uri.fromFile(capture.file).toString()))
+        storage.discardCameraCapture(capture)
     }
 }
