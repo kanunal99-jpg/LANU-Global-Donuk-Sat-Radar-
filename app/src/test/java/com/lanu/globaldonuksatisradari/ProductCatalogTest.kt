@@ -59,6 +59,34 @@ class ProductCatalogTest {
     }
 
     @Test
+    fun acceptsOfficialGlobalDonukVerifiedSource() {
+        assertEquals(
+            "https://globaldonukgida.com/urunler",
+            ProductMediaValidation.normalizeVerifiedGlobalDonukSourceUrl(
+                "https://GLOBALDONUKGIDA.COM/urunler",
+            ),
+        )
+        assertEquals(
+            "https://www.globaldonukgida.com/katalog",
+            ProductMediaValidation.normalizeVerifiedGlobalDonukSourceUrl(
+                "https://www.globaldonukgida.com/katalog",
+            ),
+        )
+    }
+
+    @Test
+    fun rejectsNonGlobalDonukVerifiedSource() {
+        assertThrows(IllegalArgumentException::class.java) {
+            ProductMediaValidation.normalizeVerifiedGlobalDonukSourceUrl("https://example.com/urunler")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            ProductMediaValidation.normalizeVerifiedGlobalDonukSourceUrl(
+                "https://globaldonukgida.com.example.org/urunler",
+            )
+        }
+    }
+
+    @Test
     fun rejectsNonWebProductImageUrl() {
         assertThrows(IllegalArgumentException::class.java) {
             ProductMediaValidation.normalizeImageUrl("ftp://example.com/image.jpg")
