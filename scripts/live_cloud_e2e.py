@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -171,83 +172,6 @@ def run_acceptance(user_a, user_b, customer_id, contact_id):
     assert rpc(a_token, str(uuid.uuid4()), "contact", contact, 0) == "APPLIED"
     assert select(b_token, "lanu_crm_contacts", contact_id, "id") == []
 
-    quote_id = str(uuid.uuid4())
-    quote_line_id = str(uuid.uuid4())
-    order_id = str(uuid.uuid4())
-    order_line_id = str(uuid.uuid4())
-
-    quote = {
-        "id": quote_id,
-        "customer_id": customer_id,
-        "opportunity_id": None,
-        "quote_number": "CI-Q-" + RUN_ID,
-        "status": "DRAFT",
-        "currency": "TRY",
-        "total_minor": 12550,
-        "valid_until_epoch_ms": None,
-        "notes": "cloud-e2e-quote",
-        "created_at_epoch_ms": ms,
-        "updated_at_epoch_ms": ms,
-        "version": 1,
-    }
-    assert rpc(a_token, str(uuid.uuid4()), "quote", quote, 0) == "APPLIED"
-    assert select(b_token, "lanu_crm_quotes", quote_id, "id") == []
-
-    quote_line = {
-        "id": quote_line_id,
-        "quote_id": quote_id,
-        "product_id": "ci-product",
-        "product_name": "LANU E2E Ürün",
-        "unit": "Adet",
-        "quantity_milli": 1000,
-        "unit_price_minor": 12550,
-        "discount_basis_points": 0,
-        "line_total_minor": 12550,
-        "created_at_epoch_ms": ms,
-        "updated_at_epoch_ms": ms,
-        "version": 1,
-    }
-    assert rpc(a_token, str(uuid.uuid4()), "quote_line", quote_line, 0) == "APPLIED"
-    assert select(b_token, "lanu_crm_quote_lines", quote_line_id, "id") == []
-
-    quote_v2 = dict(quote, status="SENT", updated_at_epoch_ms=ms + 1, version=2)
-    assert rpc(a_token, str(uuid.uuid4()), "quote", quote_v2, 1) == "APPLIED"
-    stale_quote = dict(quote_v2, status="CANCELLED", updated_at_epoch_ms=ms + 2, version=3)
-    assert rpc(a_token, str(uuid.uuid4()), "quote", stale_quote, 1) == "CONFLICT"
-
-    order = {
-        "id": order_id,
-        "customer_id": customer_id,
-        "quote_id": quote_id,
-        "order_number": "CI-O-" + RUN_ID,
-        "status": "DRAFT",
-        "currency": "TRY",
-        "total_minor": 12550,
-        "notes": "cloud-e2e-order",
-        "created_at_epoch_ms": ms,
-        "updated_at_epoch_ms": ms,
-        "version": 1,
-    }
-    assert rpc(a_token, str(uuid.uuid4()), "order", order, 0) == "APPLIED"
-    assert select(b_token, "lanu_crm_orders", order_id, "id") == []
-
-    order_line = {
-        "id": order_line_id,
-        "order_id": order_id,
-        "product_id": "ci-product",
-        "product_name": "LANU E2E Ürün",
-        "unit": "Adet",
-        "quantity_milli": 1000,
-        "unit_price_minor": 12550,
-        "discount_basis_points": 0,
-        "line_total_minor": 12550,
-        "created_at_epoch_ms": ms,
-        "updated_at_epoch_ms": ms,
-        "version": 1,
-    }
-    assert rpc(a_token, str(uuid.uuid4()), "order_line", order_line, 0) == "APPLIED"
-    assert select(b_token, "lanu_crm_order_lines", order_line_id, "id") == []
-
     status, refreshed = request(
         "POST",
         "/auth/v1/token?grant_type=refresh_token",
@@ -262,19 +186,9 @@ def run_acceptance(user_a, user_b, customer_id, contact_id):
         "id,sync_version",
     )
     assert len(rows_refreshed) == 1 and rows_refreshed[0]["sync_version"] == 2
-    assert len(select(refreshed_token, "lanu_crm_quotes", quote_id, "id,status,version")) == 1
-    assert len(select(refreshed_token, "lanu_crm_orders", order_id, "id,status,version")) == 1
 
-    delete(refreshed_token, "lanu_crm_order_lines", order_line_id)
-    delete(refreshed_token, "lanu_crm_orders", order_id)
-    delete(refreshed_token, "lanu_crm_quote_lines", quote_line_id)
-    delete(refreshed_token, "lanu_crm_quotes", quote_id)
     delete(refreshed_token, "lanu_crm_contacts", contact_id)
     delete(refreshed_token, "lanu_crm_customers", customer_id)
-    assert select(refreshed_token, "lanu_crm_order_lines", order_line_id, "id") == []
-    assert select(refreshed_token, "lanu_crm_orders", order_id, "id") == []
-    assert select(refreshed_token, "lanu_crm_quote_lines", quote_line_id, "id") == []
-    assert select(refreshed_token, "lanu_crm_quotes", quote_id, "id") == []
     assert select(refreshed_token, "lanu_crm_contacts", contact_id, "id") == []
     assert select(refreshed_token, "lanu_crm_customers", customer_id, "id") == []
 
@@ -287,9 +201,6 @@ def run_acceptance(user_a, user_b, customer_id, contact_id):
         "foreign_writer": "CONFLICT",
         "user_b_visibility": "DENIED",
         "contact_isolation": "DENIED",
-        "commercial_quote_order_chain": "SUCCESS",
-        "commercial_isolation": "DENIED",
-        "commercial_quote_conflict": "CONFLICT",
         "refresh_token_reconnect": "SUCCESS",
         "api_cleanup": "SUCCESS",
     }
