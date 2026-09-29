@@ -11,6 +11,18 @@ interface CrmCustomerDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(customer: CrmCustomerEntity)
     @Query("SELECT * FROM crm_customer WHERE id = :id LIMIT 1") suspend fun findById(id: String): CrmCustomerEntity?
     @Query("SELECT * FROM crm_customer WHERE businessSourceId = :businessSourceId LIMIT 1") suspend fun findByBusinessSourceId(businessSourceId: String): CrmCustomerEntity?
+    @Query(
+        """
+        SELECT * FROM crm_customer
+        WHERE businessSourceId = :businessSourceId
+          AND ((ownerUserId = :ownerUserId) OR (ownerUserId IS NULL AND :ownerUserId IS NULL))
+        LIMIT 1
+        """,
+    )
+    suspend fun findByBusinessSourceIdForOwner(
+        businessSourceId: String,
+        ownerUserId: String?,
+    ): CrmCustomerEntity?
     @Query("SELECT * FROM crm_customer WHERE city = :city ORDER BY updatedAtEpochMs DESC") fun observeByCity(city: String): Flow<List<CrmCustomerEntity>>
     @Query("SELECT * FROM crm_customer ORDER BY updatedAtEpochMs DESC") fun observeAll(): Flow<List<CrmCustomerEntity>>
     @Query("UPDATE crm_customer SET syncState = :state WHERE id = :id") suspend fun updateSyncState(id: String, state: String)
