@@ -129,6 +129,9 @@ class CrmRoomInstrumentationTest {
             assertEquals("owner-b", ownerB.ownerUserId)
             assertEquals(2, repository.observeCustomers("İstanbul").first().size)
             assertEquals(2, repository.pendingSync().size)
+            assertEquals(1, repository.observePendingSyncCount("owner-a").first())
+            assertEquals(1, repository.observePendingSyncCount("owner-b").first())
+            assertEquals(0, repository.observePendingSyncCount(null).first())
         } finally {
             database.close()
         }
