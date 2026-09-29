@@ -114,6 +114,7 @@ class SupabaseAuthClient(context: Context) {
             JSONObject().put("email", email.trim()).put("password", password).toString(),
         )
         parseSupabaseSession(response)?.let(::saveSession)
+        Unit
     } }
 
     private suspend fun authenticate(path: String, email: String, password: String): Result<Unit> = withContext(Dispatchers.IO) { runCatching {
