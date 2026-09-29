@@ -2,7 +2,7 @@
 -- Safe-by-default: RLS is enabled and rows are reachable only through an owned customer.
 -- Production lanu_crm_customers.id and lanu_crm_opportunities.id are UUID; all cloud relational
 -- identifiers below therefore use UUID as well. Android keeps IDs as String and serializes UUIDs.
--- Apply to canonical project jolfbmwxmsamzqtxassg only after review.
+-- Canonical production project: jolfbmwxmsamzqtxassg.
 
 create table if not exists public.lanu_crm_contacts (
   id uuid primary key,
@@ -88,24 +88,271 @@ alter table public.lanu_crm_quote_lines enable row level security;
 alter table public.lanu_crm_orders enable row level security;
 alter table public.lanu_crm_order_lines enable row level security;
 
--- Parent customer ownership is the single authorization source. This avoids duplicating owner ids
--- across transactional snapshots and prevents a client from reassigning ownership on child rows.
-create policy lanu_contacts_owner_all on public.lanu_crm_contacts for all to authenticated
-using (exists (select 1 from public.lanu_crm_customers c where c.id = lanu_crm_contacts.customer_id and c.owner_user_id = auth.uid()))
-with check (exists (select 1 from public.lanu_crm_customers c where c.id = lanu_crm_contacts.customer_id and c.owner_user_id = auth.uid()));
+-- Data API least privilege: signed-out clients get no table privileges and signed-in clients
+-- only receive the CRUD operations the Android CRM actually needs. RLS remains the row boundary.
+revoke all on table public.lanu_crm_contacts from anon, authenticated;
+revoke all on table public.lanu_crm_quotes from anon, authenticated;
+revoke all on table public.lanu_crm_quote_lines from anon, authenticated;
+revoke all on table public.lanu_crm_orders from anon, authenticated;
+revoke all on table public.lanu_crm_order_lines from anon, authenticated;
 
-create policy lanu_quotes_owner_all on public.lanu_crm_quotes for all to authenticated
-using (exists (select 1 from public.lanu_crm_customers c where c.id = lanu_crm_quotes.customer_id and c.owner_user_id = auth.uid()))
-with check (exists (select 1 from public.lanu_crm_customers c where c.id = lanu_crm_quotes.customer_id and c.owner_user_id = auth.uid()));
+grant select, insert, update, delete on table public.lanu_crm_contacts to authenticated;
+grant select, insert, update, delete on table public.lanu_crm_quotes to authenticated;
+grant select, insert, update, delete on table public.lanu_crm_quote_lines to authenticated;
+grant select, insert, update, delete on table public.lanu_crm_orders to authenticated;
+grant select, insert, update, delete on table public.lanu_crm_order_lines to authenticated;
 
-create policy lanu_quote_lines_owner_all on public.lanu_crm_quote_lines for all to authenticated
-using (exists (select 1 from public.lanu_crm_quotes q join public.lanu_crm_customers c on c.id = q.customer_id where q.id = lanu_crm_quote_lines.quote_id and c.owner_user_id = auth.uid()))
-with check (exists (select 1 from public.lanu_crm_quotes q join public.lanu_crm_customers c on c.id = q.customer_id where q.id = lanu_crm_quote_lines.quote_id and c.owner_user_id = auth.uid()));
+-- Parent customer ownership is the single authorization source. Separate policies are intentional:
+-- they keep SELECT/INSERT/UPDATE/DELETE behavior independently testable and prevent accidental
+-- privilege broadening when one operation changes later.
 
-create policy lanu_orders_owner_all on public.lanu_crm_orders for all to authenticated
-using (exists (select 1 from public.lanu_crm_customers c where c.id = lanu_crm_orders.customer_id and c.owner_user_id = auth.uid()))
-with check (exists (select 1 from public.lanu_crm_customers c where c.id = lanu_crm_orders.customer_id and c.owner_user_id = auth.uid()));
+create policy lanu_contacts_owner_select on public.lanu_crm_contacts
+for select to authenticated
+using (exists (
+  select 1 from public.lanu_crm_customers c
+  where c.id = lanu_crm_contacts.customer_id
+    and c.owner_user_id = (select auth.uid())
+));
 
-create policy lanu_order_lines_owner_all on public.lanu_crm_order_lines for all to authenticated
-using (exists (select 1 from public.lanu_crm_orders o join public.lanu_crm_customers c on c.id = o.customer_id where o.id = lanu_crm_order_lines.order_id and c.owner_user_id = auth.uid()))
-with check (exists (select 1 from public.lanu_crm_orders o join public.lanu_crm_customers c on c.id = o.customer_id where o.id = lanu_crm_order_lines.order_id and c.owner_user_id = auth.uid()));
+create policy lanu_contacts_owner_insert on public.lanu_crm_contacts
+for insert to authenticated
+with check (exists (
+  select 1 from public.lanu_crm_customers c
+  where c.id = lanu_crm_contacts.customer_id
+    and c.owner_user_id = (select auth.uid())
+));
+
+create policy lanu_contacts_owner_update on public.lanu_crm_contacts
+for update to authenticated
+using (exists (
+  select 1 from public.lanu_crm_customers c
+  where c.id = lanu_crm_contacts.customer_id
+    and c.owner_user_id = (select auth.uid())
+))
+with check (exists (
+  select 1 from public.lanu_crm_customers c
+  where c.id = lanu_crm_contacts.customer_id
+    and c.owner_user_id = (select auth.uid())
+));
+
+create policy lanu_contacts_owner_delete on public.lanu_crm_contacts
+for delete to authenticated
+using (exists (
+  select 1 from public.lanu_crm_customers c
+  where c.id = lanu_crm_contacts.customer_id
+    and c.owner_user_id = (select auth.uid())
+));
+
+create policy lanu_quotes_owner_select on public.lanu_crm_quotes
+for select to authenticated
+using (exists (
+  select 1 from public.lanu_crm_customers c
+  where c.id = lanu_crm_quotes.customer_id
+    and c.owner_user_id = (select auth.uid())
+));
+
+create policy lanu_quotes_owner_insert on public.lanu_crm_quotes
+for insert to authenticated
+with check (
+  exists (
+    select 1 from public.lanu_crm_customers c
+    where c.id = lanu_crm_quotes.customer_id
+      and c.owner_user_id = (select auth.uid())
+  )
+  and (
+    lanu_crm_quotes.opportunity_id is null
+    or exists (
+      select 1 from public.lanu_crm_opportunities o
+      where o.id = lanu_crm_quotes.opportunity_id
+        and o.customer_id = lanu_crm_quotes.customer_id
+        and o.owner_user_id = (select auth.uid())
+    )
+  )
+);
+
+create policy lanu_quotes_owner_update on public.lanu_crm_quotes
+for update to authenticated
+using (exists (
+  select 1 from public.lanu_crm_customers c
+  where c.id = lanu_crm_quotes.customer_id
+    and c.owner_user_id = (select auth.uid())
+))
+with check (
+  exists (
+    select 1 from public.lanu_crm_customers c
+    where c.id = lanu_crm_quotes.customer_id
+      and c.owner_user_id = (select auth.uid())
+  )
+  and (
+    lanu_crm_quotes.opportunity_id is null
+    or exists (
+      select 1 from public.lanu_crm_opportunities o
+      where o.id = lanu_crm_quotes.opportunity_id
+        and o.customer_id = lanu_crm_quotes.customer_id
+        and o.owner_user_id = (select auth.uid())
+    )
+  )
+);
+
+create policy lanu_quotes_owner_delete on public.lanu_crm_quotes
+for delete to authenticated
+using (exists (
+  select 1 from public.lanu_crm_customers c
+  where c.id = lanu_crm_quotes.customer_id
+    and c.owner_user_id = (select auth.uid())
+));
+
+create policy lanu_quote_lines_owner_select on public.lanu_crm_quote_lines
+for select to authenticated
+using (exists (
+  select 1
+  from public.lanu_crm_quotes q
+  join public.lanu_crm_customers c on c.id = q.customer_id
+  where q.id = lanu_crm_quote_lines.quote_id
+    and c.owner_user_id = (select auth.uid())
+));
+
+create policy lanu_quote_lines_owner_insert on public.lanu_crm_quote_lines
+for insert to authenticated
+with check (exists (
+  select 1
+  from public.lanu_crm_quotes q
+  join public.lanu_crm_customers c on c.id = q.customer_id
+  where q.id = lanu_crm_quote_lines.quote_id
+    and c.owner_user_id = (select auth.uid())
+));
+
+create policy lanu_quote_lines_owner_update on public.lanu_crm_quote_lines
+for update to authenticated
+using (exists (
+  select 1
+  from public.lanu_crm_quotes q
+  join public.lanu_crm_customers c on c.id = q.customer_id
+  where q.id = lanu_crm_quote_lines.quote_id
+    and c.owner_user_id = (select auth.uid())
+))
+with check (exists (
+  select 1
+  from public.lanu_crm_quotes q
+  join public.lanu_crm_customers c on c.id = q.customer_id
+  where q.id = lanu_crm_quote_lines.quote_id
+    and c.owner_user_id = (select auth.uid())
+));
+
+create policy lanu_quote_lines_owner_delete on public.lanu_crm_quote_lines
+for delete to authenticated
+using (exists (
+  select 1
+  from public.lanu_crm_quotes q
+  join public.lanu_crm_customers c on c.id = q.customer_id
+  where q.id = lanu_crm_quote_lines.quote_id
+    and c.owner_user_id = (select auth.uid())
+));
+
+create policy lanu_orders_owner_select on public.lanu_crm_orders
+for select to authenticated
+using (exists (
+  select 1 from public.lanu_crm_customers c
+  where c.id = lanu_crm_orders.customer_id
+    and c.owner_user_id = (select auth.uid())
+));
+
+create policy lanu_orders_owner_insert on public.lanu_crm_orders
+for insert to authenticated
+with check (
+  exists (
+    select 1 from public.lanu_crm_customers c
+    where c.id = lanu_crm_orders.customer_id
+      and c.owner_user_id = (select auth.uid())
+  )
+  and (
+    lanu_crm_orders.quote_id is null
+    or exists (
+      select 1 from public.lanu_crm_quotes q
+      join public.lanu_crm_customers c on c.id = q.customer_id
+      where q.id = lanu_crm_orders.quote_id
+        and q.customer_id = lanu_crm_orders.customer_id
+        and c.owner_user_id = (select auth.uid())
+    )
+  )
+);
+
+create policy lanu_orders_owner_update on public.lanu_crm_orders
+for update to authenticated
+using (exists (
+  select 1 from public.lanu_crm_customers c
+  where c.id = lanu_crm_orders.customer_id
+    and c.owner_user_id = (select auth.uid())
+))
+with check (
+  exists (
+    select 1 from public.lanu_crm_customers c
+    where c.id = lanu_crm_orders.customer_id
+      and c.owner_user_id = (select auth.uid())
+  )
+  and (
+    lanu_crm_orders.quote_id is null
+    or exists (
+      select 1 from public.lanu_crm_quotes q
+      join public.lanu_crm_customers c on c.id = q.customer_id
+      where q.id = lanu_crm_orders.quote_id
+        and q.customer_id = lanu_crm_orders.customer_id
+        and c.owner_user_id = (select auth.uid())
+    )
+  )
+);
+
+create policy lanu_orders_owner_delete on public.lanu_crm_orders
+for delete to authenticated
+using (exists (
+  select 1 from public.lanu_crm_customers c
+  where c.id = lanu_crm_orders.customer_id
+    and c.owner_user_id = (select auth.uid())
+));
+
+create policy lanu_order_lines_owner_select on public.lanu_crm_order_lines
+for select to authenticated
+using (exists (
+  select 1
+  from public.lanu_crm_orders o
+  join public.lanu_crm_customers c on c.id = o.customer_id
+  where o.id = lanu_crm_order_lines.order_id
+    and c.owner_user_id = (select auth.uid())
+));
+
+create policy lanu_order_lines_owner_insert on public.lanu_crm_order_lines
+for insert to authenticated
+with check (exists (
+  select 1
+  from public.lanu_crm_orders o
+  join public.lanu_crm_customers c on c.id = o.customer_id
+  where o.id = lanu_crm_order_lines.order_id
+    and c.owner_user_id = (select auth.uid())
+));
+
+create policy lanu_order_lines_owner_update on public.lanu_crm_order_lines
+for update to authenticated
+using (exists (
+  select 1
+  from public.lanu_crm_orders o
+  join public.lanu_crm_customers c on c.id = o.customer_id
+  where o.id = lanu_crm_order_lines.order_id
+    and c.owner_user_id = (select auth.uid())
+))
+with check (exists (
+  select 1
+  from public.lanu_crm_orders o
+  join public.lanu_crm_customers c on c.id = o.customer_id
+  where o.id = lanu_crm_order_lines.order_id
+    and c.owner_user_id = (select auth.uid())
+));
+
+create policy lanu_order_lines_owner_delete on public.lanu_crm_order_lines
+for delete to authenticated
+using (exists (
+  select 1
+  from public.lanu_crm_orders o
+  join public.lanu_crm_customers c on c.id = o.customer_id
+  where o.id = lanu_crm_order_lines.order_id
+    and c.owner_user_id = (select auth.uid())
+));
