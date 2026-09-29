@@ -24,7 +24,7 @@ class CrmSyncWorker(
         val database = LanuCrmDatabase.getInstance(applicationContext)
         val auth = SupabaseAuthClient(applicationContext)
         val session = auth.ensureSession() ?: return Result.success()
-        val remote = SupabaseFullCrmRemoteDataSource(auth)
+        val remote = HardenedSupabaseFullCrmRemoteDataSource(auth)
 
         val pullResult = remote.pullInto(database)
         if (pullResult is RemotePullResult.RetryableFailure) return Result.retry()
