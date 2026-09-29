@@ -87,6 +87,37 @@ class CrmSyncEngineTest {
     }
 
     @Test
+    fun success_withNewerQueuedMutation_doesNotMarkEntitySyncedEarly() = runTest {
+        val create = operation(
+            id = "op-create",
+            entityId = "quote-1",
+            entityType = CommercialCrmSync.ENTITY_QUOTE,
+        ).copy(createdAtEpochMs = 1L, payloadVersion = 1L)
+        val update = operation(
+            id = "op-update",
+            entityId = "quote-1",
+            entityType = CommercialCrmSync.ENTITY_QUOTE,
+        ).copy(createdAtEpochMs = 2L, payloadVersion = 2L)
+        val dao = FakeSyncOperationDao(listOf(create, update))
+        val stateStore = FakeSyncStateStore()
+        val engine = CrmSyncEngine(
+            dao,
+            remote = object : RemoteCrmDataSource {
+                override suspend fun apply(operation: SyncOperationEntity) = RemoteSyncResult.Success
+            },
+            stateStore = stateStore,
+        )
+
+        assertEquals(SyncProcessResult.Synced("op-create"), engine.processOne())
+        assertEquals(null, stateStore.syncStates["quote-1"])
+        assertEquals(1, dao.countForEntity(CommercialCrmSync.ENTITY_QUOTE, "quote-1"))
+
+        assertEquals(SyncProcessResult.Synced("op-update"), engine.processOne())
+        assertEquals(SyncState.SYNCED, stateStore.syncStates["quote-1"])
+        assertEquals(0, dao.countForEntity(CommercialCrmSync.ENTITY_QUOTE, "quote-1"))
+    }
+
+    @Test
     fun ownerScopedEngine_skipsForeignQueueEntries_andProcessesOnlyOwnedOperation() = runTest {
         val foreign = operation(id = "op-foreign", entityId = "customer-foreign")
         val owned = operation(id = "op-owned", entityId = "customer-owned").copy(createdAtEpochMs = 2L)
@@ -220,6 +251,9 @@ class CrmSyncEngineTest {
 
         override suspend fun maxCreatedAtEpochMs(): Long? =
             allOperations.maxOfOrNull { it.createdAtEpochMs }
+
+        override suspend fun countForEntity(entityType: String, entityId: String): Int =
+            allOperations.count { it.entityType == entityType && it.entityId == entityId }
 
         override fun observePendingCount() = flowOf(
             allOperations.count { it.state == SyncOperationState.PENDING.name },
