@@ -9,12 +9,13 @@ import java.util.UUID
 /**
  * Offline-first commercial document repository.
  *
- * Quote/order documents and their product snapshots are persisted locally first. They remain
- * LOCAL_ONLY until the LANU Supabase schema/RLS for commercial tables is verified; this avoids
- * falsely reporting cloud synchronization for a backend that is not currently validated.
+ * Every mutation is committed locally first. When the parent customer belongs to an authenticated
+ * owner, the same Room transaction also records an upload operation. Anonymous/local-only data
+ * remains LOCAL_ONLY and is never sent under a later user's identity.
  */
 class CommercialCrmRepository(
     private val database: LanuCrmDatabase,
+    private val ownerUserId: String? = null,
     private val now: () -> Long = { System.currentTimeMillis() },
     private val idGenerator: () -> String = { UUID.randomUUID().toString() },
 ) {
@@ -38,9 +39,7 @@ class CommercialCrmRepository(
         validUntilEpochMs: Long? = null,
         notes: String? = null,
     ): CrmQuote = database.withTransaction {
-        require(database.customerDao().findById(customerId) != null) {
-            "Teklif için CRM müşterisi bulunamadı: $customerId"
-        }
+        requireOwnedCustomer(customerId)
         val normalizedNumber = quoteNumber.trim()
         require(normalizedNumber.isNotEmpty()) { "Teklif numarası boş olamaz." }
         val normalizedCurrency = currency.trim().uppercase(Locale.ROOT)
@@ -69,9 +68,10 @@ class CommercialCrmRepository(
             createdAtEpochMs = timestamp,
             updatedAtEpochMs = timestamp,
             version = 1L,
-            syncState = SyncState.LOCAL_ONLY.name,
+            syncState = CommercialCrmSync.stateFor(ownerUserId),
         )
         database.quoteDao().upsert(entity)
+        enqueueQuoteIfCloudOwned(entity, LocalCrmRepository.OP_CREATE, timestamp)
         quoteToDomain(entity)
     }
 
@@ -79,6 +79,7 @@ class CommercialCrmRepository(
         database.withTransaction {
             val current = database.quoteDao().findById(quoteId)
                 ?: error("Teklif bulunamadı: $quoteId")
+            requireOwnedCustomer(current.customerId)
             val from = CrmQuoteStatus.valueOf(current.status)
             require(CrmCommercialRules.canTransition(from, target)) {
                 "Geçersiz teklif durumu: ${from.name} → ${target.name}"
@@ -88,13 +89,15 @@ class CommercialCrmRepository(
                     "Ürün satırı olmayan teklif gönderilemez veya kabul edilemez."
                 }
             }
+            val timestamp = now()
             val updated = current.copy(
                 status = target.name,
-                updatedAtEpochMs = now(),
+                updatedAtEpochMs = timestamp,
                 version = current.version + 1L,
-                syncState = SyncState.LOCAL_ONLY.name,
+                syncState = CommercialCrmSync.stateFor(ownerUserId),
             )
             database.quoteDao().upsert(updated)
+            enqueueQuoteIfCloudOwned(updated, LocalCrmRepository.OP_UPDATE, timestamp)
             quoteToDomain(updated)
         }
 
@@ -109,6 +112,7 @@ class CommercialCrmRepository(
     ): CrmCommercialLine = database.withTransaction {
         val quote = database.quoteDao().findById(quoteId)
             ?: error("Teklif bulunamadı: $quoteId")
+        requireOwnedCustomer(quote.customerId)
         require(CrmQuoteStatus.valueOf(quote.status) == CrmQuoteStatus.DRAFT) {
             "Yalnız taslak teklife ürün satırı eklenebilir."
         }
@@ -119,6 +123,7 @@ class CommercialCrmRepository(
             discountBasisPoints = discountBasisPoints,
         )
         val timestamp = now()
+        val syncState = CommercialCrmSync.stateFor(ownerUserId)
         val line = CrmQuoteLineEntity(
             id = idGenerator(),
             quoteId = quoteId,
@@ -132,18 +137,21 @@ class CommercialCrmRepository(
             createdAtEpochMs = timestamp,
             updatedAtEpochMs = timestamp,
             version = 1L,
-            syncState = SyncState.LOCAL_ONLY.name,
+            syncState = syncState,
         )
         database.quoteLineDao().upsert(line)
+
         val total = database.quoteLineDao().totalForQuote(quoteId)
-        database.quoteDao().upsert(
-            quote.copy(
-                totalMinor = total,
-                updatedAtEpochMs = timestamp,
-                version = quote.version + 1L,
-                syncState = SyncState.LOCAL_ONLY.name,
-            ),
+        val updatedQuote = quote.copy(
+            totalMinor = total,
+            updatedAtEpochMs = timestamp,
+            version = quote.version + 1L,
+            syncState = syncState,
         )
+        database.quoteDao().upsert(updatedQuote)
+
+        enqueueQuoteLineIfCloudOwned(line, LocalCrmRepository.OP_CREATE, timestamp)
+        enqueueQuoteIfCloudOwned(updatedQuote, LocalCrmRepository.OP_UPDATE, timestamp)
         quoteLineToDomain(line)
     }
 
@@ -154,6 +162,7 @@ class CommercialCrmRepository(
     ): CrmOrder = database.withTransaction {
         val quote = database.quoteDao().findById(quoteId)
             ?: error("Siparişe dönüştürülecek teklif bulunamadı: $quoteId")
+        requireOwnedCustomer(quote.customerId)
         require(CrmQuoteStatus.valueOf(quote.status) == CrmQuoteStatus.ACCEPTED) {
             "Yalnız kabul edilmiş teklif siparişe dönüştürülebilir."
         }
@@ -163,6 +172,7 @@ class CommercialCrmRepository(
         require(normalizedNumber.isNotEmpty()) { "Sipariş numarası boş olamaz." }
 
         val timestamp = now()
+        val syncState = CommercialCrmSync.stateFor(ownerUserId)
         val orderId = idGenerator()
         val order = CrmOrderEntity(
             id = orderId,
@@ -176,27 +186,29 @@ class CommercialCrmRepository(
             createdAtEpochMs = timestamp,
             updatedAtEpochMs = timestamp,
             version = 1L,
-            syncState = SyncState.LOCAL_ONLY.name,
+            syncState = syncState,
         )
         database.orderDao().upsert(order)
+        enqueueOrderIfCloudOwned(order, LocalCrmRepository.OP_CREATE, timestamp)
+
         quoteLines.forEach { source ->
-            database.orderLineDao().upsert(
-                CrmOrderLineEntity(
-                    id = idGenerator(),
-                    orderId = orderId,
-                    productId = source.productId,
-                    productName = source.productName,
-                    unit = source.unit,
-                    quantityMilli = source.quantityMilli,
-                    unitPriceMinor = source.unitPriceMinor,
-                    discountBasisPoints = source.discountBasisPoints,
-                    lineTotalMinor = source.lineTotalMinor,
-                    createdAtEpochMs = timestamp,
-                    updatedAtEpochMs = timestamp,
-                    version = 1L,
-                    syncState = SyncState.LOCAL_ONLY.name,
-                ),
+            val orderLine = CrmOrderLineEntity(
+                id = idGenerator(),
+                orderId = orderId,
+                productId = source.productId,
+                productName = source.productName,
+                unit = source.unit,
+                quantityMilli = source.quantityMilli,
+                unitPriceMinor = source.unitPriceMinor,
+                discountBasisPoints = source.discountBasisPoints,
+                lineTotalMinor = source.lineTotalMinor,
+                createdAtEpochMs = timestamp,
+                updatedAtEpochMs = timestamp,
+                version = 1L,
+                syncState = syncState,
             )
+            database.orderLineDao().upsert(orderLine)
+            enqueueOrderLineIfCloudOwned(orderLine, LocalCrmRepository.OP_CREATE, timestamp)
         }
         orderToDomain(order)
     }
@@ -205,19 +217,63 @@ class CommercialCrmRepository(
         database.withTransaction {
             val current = database.orderDao().findById(orderId)
                 ?: error("Sipariş bulunamadı: $orderId")
+            requireOwnedCustomer(current.customerId)
             val from = CrmOrderStatus.valueOf(current.status)
             require(CrmCommercialRules.canTransition(from, target)) {
                 "Geçersiz sipariş durumu: ${from.name} → ${target.name}"
             }
+            val timestamp = now()
             val updated = current.copy(
                 status = target.name,
-                updatedAtEpochMs = now(),
+                updatedAtEpochMs = timestamp,
                 version = current.version + 1L,
-                syncState = SyncState.LOCAL_ONLY.name,
+                syncState = CommercialCrmSync.stateFor(ownerUserId),
             )
             database.orderDao().upsert(updated)
+            enqueueOrderIfCloudOwned(updated, LocalCrmRepository.OP_UPDATE, timestamp)
             orderToDomain(updated)
         }
+
+    private suspend fun requireOwnedCustomer(customerId: String): CrmCustomerEntity {
+        val customer = database.customerDao().findById(customerId)
+            ?: error("Ticari kayıt için CRM müşterisi bulunamadı: $customerId")
+        require(customer.ownerUserId == ownerUserId) {
+            "CRM müşterisi aktif kullanıcı kapsamına ait değil: $customerId"
+        }
+        return customer
+    }
+
+    private suspend fun enqueueQuoteIfCloudOwned(entity: CrmQuoteEntity, operation: String, timestamp: Long) {
+        if (ownerUserId.isNullOrBlank()) return
+        CommercialCrmSync.enqueue(
+            database, idGenerator(), CommercialCrmSync.ENTITY_QUOTE, entity.id, operation,
+            entity.version, CommercialCrmSync.quotePayload(entity), timestamp,
+        )
+    }
+
+    private suspend fun enqueueQuoteLineIfCloudOwned(entity: CrmQuoteLineEntity, operation: String, timestamp: Long) {
+        if (ownerUserId.isNullOrBlank()) return
+        CommercialCrmSync.enqueue(
+            database, idGenerator(), CommercialCrmSync.ENTITY_QUOTE_LINE, entity.id, operation,
+            entity.version, CommercialCrmSync.quoteLinePayload(entity), timestamp,
+        )
+    }
+
+    private suspend fun enqueueOrderIfCloudOwned(entity: CrmOrderEntity, operation: String, timestamp: Long) {
+        if (ownerUserId.isNullOrBlank()) return
+        CommercialCrmSync.enqueue(
+            database, idGenerator(), CommercialCrmSync.ENTITY_ORDER, entity.id, operation,
+            entity.version, CommercialCrmSync.orderPayload(entity), timestamp,
+        )
+    }
+
+    private suspend fun enqueueOrderLineIfCloudOwned(entity: CrmOrderLineEntity, operation: String, timestamp: Long) {
+        if (ownerUserId.isNullOrBlank()) return
+        CommercialCrmSync.enqueue(
+            database, idGenerator(), CommercialCrmSync.ENTITY_ORDER_LINE, entity.id, operation,
+            entity.version, CommercialCrmSync.orderLinePayload(entity), timestamp,
+        )
+    }
 
     private fun quoteToDomain(entity: CrmQuoteEntity) = CrmQuote(
         id = entity.id,
