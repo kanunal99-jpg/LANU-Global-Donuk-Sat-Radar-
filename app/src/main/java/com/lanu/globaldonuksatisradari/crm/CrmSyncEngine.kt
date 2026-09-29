@@ -24,6 +24,21 @@ class RoomCrmSyncStateStore(
 
             LocalCrmRepository.ENTITY_OPPORTUNITY ->
                 database.opportunityDao().updateSyncState(entityId, state.name)
+
+            CommercialCrmSync.ENTITY_CONTACT ->
+                database.contactDao().updateSyncState(entityId, state.name)
+
+            CommercialCrmSync.ENTITY_QUOTE ->
+                database.quoteDao().updateSyncState(entityId, state.name)
+
+            CommercialCrmSync.ENTITY_QUOTE_LINE ->
+                database.quoteLineDao().updateSyncState(entityId, state.name)
+
+            CommercialCrmSync.ENTITY_ORDER ->
+                database.orderDao().updateSyncState(entityId, state.name)
+
+            CommercialCrmSync.ENTITY_ORDER_LINE ->
+                database.orderLineDao().updateSyncState(entityId, state.name)
         }
     }
 }
@@ -60,13 +75,38 @@ class RoomCrmSyncOwnershipResolver(
                     database.customerDao().findById(it)
                 }
 
+            CommercialCrmSync.ENTITY_CONTACT ->
+                database.contactDao().findById(operation.entityId)?.customerId?.let {
+                    database.customerDao().findById(it)
+                }
+
+            CommercialCrmSync.ENTITY_QUOTE ->
+                database.quoteDao().findById(operation.entityId)?.customerId?.let {
+                    database.customerDao().findById(it)
+                }
+
+            CommercialCrmSync.ENTITY_QUOTE_LINE ->
+                database.quoteLineDao().findById(operation.entityId)?.quoteId?.let { quoteId ->
+                    database.quoteDao().findById(quoteId)?.customerId
+                }?.let { database.customerDao().findById(it) }
+
+            CommercialCrmSync.ENTITY_ORDER ->
+                database.orderDao().findById(operation.entityId)?.customerId?.let {
+                    database.customerDao().findById(it)
+                }
+
+            CommercialCrmSync.ENTITY_ORDER_LINE ->
+                database.orderLineDao().findById(operation.entityId)?.orderId?.let { orderId ->
+                    database.orderDao().findById(orderId)?.customerId
+                }?.let { database.customerDao().findById(it) }
+
             else -> null
         }
         return customer?.ownerUserId == ownerUserId
     }
 }
 
-/** Remote boundary for CRM synchronization. No concrete backend is assumed here. */
+/** Remote boundary for CRM synchronization. */
 interface RemoteCrmDataSource {
     suspend fun apply(operation: SyncOperationEntity): RemoteSyncResult
     suspend fun pullInto(database: LanuCrmDatabase): RemotePullResult = RemotePullResult.NotConfigured
@@ -151,11 +191,7 @@ class CrmSyncEngine(
                     id = operation.id,
                     attemptCount = nextAttempt,
                     lastError = result.reason,
-                    state = if (shouldRetry) {
-                        SyncOperationState.PENDING.name
-                    } else {
-                        SyncOperationState.FAILED.name
-                    },
+                    state = if (shouldRetry) SyncOperationState.PENDING.name else SyncOperationState.FAILED.name,
                 )
                 if (shouldRetry) {
                     SyncProcessResult.Deferred(operation.id, nextAttempt, result.reason)
