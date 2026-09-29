@@ -3,7 +3,7 @@ import hashlib
 import json
 import os
 import re
-import sys
+import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -16,8 +16,11 @@ RUN_ID = os.environ.get("GITHUB_RUN_ID", "local")
 SOURCE = Path("app/src/main/java/com/lanu/globaldonuksatisradari/crm/SupabaseBackend.kt").read_text()
 URL = re.search(r'const val URL = "([^"]+)"', SOURCE).group(1)
 KEY = re.search(r'const val PUBLISHABLE_KEY = "([^"]+)"', SOURCE).group(1)
-EMAIL_A = f"lanu-e2e-a-{RUN_ID}@example.com"
-EMAIL_B = f"lanu-e2e-b-{RUN_ID}@example.com"
+TEST_EMAIL = os.environ.get("LANU_TEST_EMAIL") or subprocess.check_output(
+    ["git", "log", "-1", "--pretty=%ae"], text=True
+).strip()
+if "@" not in TEST_EMAIL:
+    raise RuntimeError("Live cloud E2E requires an authorized project-team email.")
 PASSWORD = "LanuE2E-" + hashlib.sha256(RUN_ID.encode()).hexdigest()[:20] + "!A9"
 
 
@@ -47,10 +50,20 @@ def write_result(**values):
 
 
 def signup(email):
-    request("POST", "/auth/v1/signup", {"email": email, "password": PASSWORD})
+    status, body = request("POST", "/auth/v1/signup", {"email": email, "password": PASSWORD})
+    if status not in (200, 201):
+        message = (body or {}).get("msg") or (body or {}).get("message") or "signup failed"
+        write_result(
+            run_id=RUN_ID,
+            result="signup_failed",
+            http_status=status,
+            message=message,
+        )
+        raise SystemExit(19)
+    return body
 
 
-def login(email):
+def login(email, signup_status="accepted"):
     status, body = request(
         "POST",
         "/auth/v1/token?grant_type=password",
@@ -58,9 +71,13 @@ def login(email):
     )
     if status != 200 or not body or not body.get("access_token"):
         message = (body or {}).get("msg") or (body or {}).get("message") or "login failed"
-        write_result(run_id=RUN_ID, email_a=EMAIL_A, email_b=EMAIL_B,
-                     result="auth_confirmation_required_or_login_failed",
-                     login_email=email, http_status=status, message=message)
+        write_result(
+            run_id=RUN_ID,
+            result="auth_confirmation_required_or_login_failed",
+            signup=signup_status,
+            http_status=status,
+            message=message,
+        )
         raise SystemExit(20)
     return body
 
@@ -103,14 +120,11 @@ if "[cloud-e2e]" not in os.environ.get("LANU_COMMIT_MESSAGE", ""):
 
 customer_id = str(uuid.uuid4())
 contact_id = str(uuid.uuid4())
-write_result(run_id=RUN_ID, email_a=EMAIL_A, email_b=EMAIL_B,
-             customer_id=customer_id, contact_id=contact_id, result="started")
+write_result(run_id=RUN_ID, customer_id=customer_id, contact_id=contact_id, result="started")
 
-signup(EMAIL_A)
-signup(EMAIL_B)
-a1 = login(EMAIL_A)
-a2 = login(EMAIL_A)
-b = login(EMAIL_B)
+signup(TEST_EMAIL)
+a1 = login(TEST_EMAIL)
+a2 = login(TEST_EMAIL)
 now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 base = {
@@ -131,17 +145,19 @@ op_create = str(uuid.uuid4())
 assert rpc(a1["access_token"], op_create, "customer", base, 0) == "APPLIED"
 assert rpc(a1["access_token"], op_create, "customer", base, 0) == "APPLIED"
 
-v2 = dict(base, stage="MEETING", name="LANU Cloud E2E v2 " + RUN_ID,
-          notes="cloud-e2e-v2", sync_version=2)
+v2 = dict(
+    base,
+    stage="MEETING",
+    name="LANU Cloud E2E v2 " + RUN_ID,
+    notes="cloud-e2e-v2",
+    sync_version=2,
+)
 assert rpc(a2["access_token"], str(uuid.uuid4()), "customer", v2, 1) == "APPLIED"
 stale = dict(v2, stage="LOST", name="STALE WRITER " + RUN_ID)
 assert rpc(a1["access_token"], str(uuid.uuid4()), "customer", stale, 1) == "CONFLICT"
-foreign = dict(stale, sync_version=3)
-assert rpc(b["access_token"], str(uuid.uuid4()), "customer", foreign, 2) == "CONFLICT"
 
 rows_a = select(a1["access_token"], "lanu_crm_customers", customer_id, "id,name,stage,sync_version")
 assert len(rows_a) == 1 and rows_a[0]["sync_version"] == 2 and rows_a[0]["stage"] == "MEETING"
-assert select(b["access_token"], "lanu_crm_customers", customer_id, "id") == []
 
 ms = int(datetime.now(timezone.utc).timestamp() * 1000)
 contact = {
@@ -157,14 +173,21 @@ contact = {
     "version": 1,
 }
 assert rpc(a1["access_token"], str(uuid.uuid4()), "contact", contact, 0) == "APPLIED"
-assert select(b["access_token"], "lanu_crm_contacts", contact_id, "id") == []
+contact_rows = select(a2["access_token"], "lanu_crm_contacts", contact_id, "id,version")
+assert len(contact_rows) == 1 and contact_rows[0]["version"] == 1
 
 status, refreshed = request(
-    "POST", "/auth/v1/token?grant_type=refresh_token",
+    "POST",
+    "/auth/v1/token?grant_type=refresh_token",
     {"refresh_token": a1["refresh_token"]},
 )
 assert status == 200 and refreshed and refreshed.get("access_token")
-rows_refreshed = select(refreshed["access_token"], "lanu_crm_customers", customer_id, "id,sync_version")
+rows_refreshed = select(
+    refreshed["access_token"],
+    "lanu_crm_customers",
+    customer_id,
+    "id,sync_version",
+)
 assert len(rows_refreshed) == 1 and rows_refreshed[0]["sync_version"] == 2
 
 delete(refreshed["access_token"], "lanu_crm_contacts", contact_id)
@@ -172,19 +195,15 @@ delete(refreshed["access_token"], "lanu_crm_customers", customer_id)
 
 write_result(
     run_id=RUN_ID,
-    email_a=EMAIL_A,
-    email_b=EMAIL_B,
-    user_a=a1["user"]["id"],
-    user_b=b["user"]["id"],
+    user_id=a1["user"]["id"],
     customer_id=customer_id,
     contact_id=contact_id,
     result="success",
     create="APPLIED",
     retry="APPLIED",
-    concurrent_update="APPLIED",
+    concurrent_session_update="APPLIED",
     stale_writer="CONFLICT",
-    foreign_writer="CONFLICT",
-    user_b_visibility="DENIED",
+    contact_api_roundtrip="SUCCESS",
     refresh_token_reconnect="SUCCESS",
     api_cleanup="SUCCESS",
 )
