@@ -26,6 +26,122 @@ Her teknik problem için **en az 20 farklı bağımsız site/domain ve toplam en
 
 “Tam teslim”; kritik özelliklerin tamamlanması, profesyonel UI/UX, kurumsal CRM, Room/offline ve Supabase/cloud dayanıklılığı, testlerin tamamı, PR ve main CI'nin tamamen yeşil olması, main merge, GitHub Release APK, asset indirilebilirliği ve commit/hash eşleşmesinin kanıtlanması demektir.
 
+### KANONİK PROJE ENVANTERİ VE TESLİM SÖZLEŞMESİ — HER ZAMAN OKUNACAK, ASLA ATLANMAYACAK
+
+Bu bölüm proje üzerinde herhangi bir kod, dosya, branch, backend, test, CI veya Release işlemi yapılmadan önce okunacak ve doğrulanacaktır. Buradaki kimlikler ve hedefler kullanıcı tarafından belirlenen proje bağlamıdır. Yanlış repo, yanlış Supabase veya yanlış kaynak ağacı üzerinde işlem yapılmayacaktır.
+
+#### Ne istiyoruz?
+
+LANU Global Donuk Satış Radarı; Android cihazlarda çalışan, profesyonel, kurumsal, hızlı, güvenilir, offline/bulut dayanıklı ve gerçek saha satış kullanımına uygun **tam çalışan APK uygulaması** olarak teslim edilecektir. Kullanıcı arayüzü yalnız işlevsel bırakılmayacak; Radar, Dashboard, CRM, formlar, filtreler, müşteri detayları ve ticari akışlar profesyonel ve tutarlı UI/UX seviyesine getirilecektir.
+
+**Hedef: kabul kriterlerinin %100'ü kanıtlanmış profesyonel kurumsal Android APK teslimidir.** “%100” ifadesi tahmini ilerleme yüzdesi değildir; bu anayasadaki tüm kritik kabul kapılarının gerçekten tamamlanıp kanıtlanması anlamına gelir.
+
+#### GitHub repo adı — KANONİK
+
+- Repository: **`kanunal99-jpg/LANU-Global-Donuk-Sat-Radar-`**
+- Proje GitHub işlemleri bu repository üzerinde yapılacaktır.
+- Aktif PR/branch/main ilişkisi her işlem öncesi doğrulanacaktır.
+- Başka benzer isimli repository proje kaynağı kabul edilmeyecektir.
+
+#### Proje adı — KANONİK
+
+- **LANU Global Donuk Satış Radarı**
+- Ürün bağlamı: Global Donuk Gıda saha satış radarı + kurumsal CRM + ticari satış akışları.
+
+#### Supabase bağlantısı — KULLANICI TARAFINDAN ONAYLI
+
+Kullanıcı tarafından açıkça onaylanan kanonik Supabase backend:
+
+- Supabase mevcut görünen proje adı: **Willy-Kilo-Takip**
+- LANU hedef/işlevsel adı: **LANU GLOBAL / LANU Global Radar Supabase**
+- Project ref: **`jolfbmwxmsamzqtxassg`**
+- Bölge: **eu-central-1**
+- Durum: **LANU için kullanıcı tarafından ONAYLI kanonik Supabase bağlantısıdır.**
+
+Bu backend başka proje sanılarak terk edilmeyecek, silinmeyecek veya LANU dışı olduğu varsayılmayacaktır. Görünen ad değişse bile teknik kimlik project ref ile doğrulanacaktır.
+
+#### Klasör yapısı — KAYIT VE DOĞRULAMA ZORUNLULUĞU
+
+Repository klasör/ağaç yapısı yaşayan proje envanterinin parçasıdır. Her önemli yapısal değişiklikte:
+
+1. Aktif Android kaynak kökü doğrulanır.
+2. `app`/modül, `src/main`, `src/test`, `src/androidTest`, Room/data, repository/domain, Compose/UI, Supabase/sync, Gradle, CI/workflow, docs ve migration kaynaklarının gerçek konumları kontrol edilir.
+3. Eski/çift/ölü kaynak ağacı varsa hangi ağacın kanonik olduğu kanıtlanmadan silinmez.
+4. Taşıma/silme/yeniden adlandırma işlemi ve nedeni anayasaya kaydedilir.
+5. Klasör yapısı değişikliği sonrasında build/test/import/referans kırıkları doğrulanır.
+
+#### Kodlar — KAYIT VE İZLENEBİLİRLİK ZORUNLULUĞU
+
+Her önemli kod değişikliği için en az şu kayıt tutulacaktır:
+
+- Problem veya gereksinim
+- Etkilenen dosya/modül
+- Kök neden
+- Uygulanan kod değişikliği
+- Veri/migration etkisi
+- Güvenlik/offline etkisi
+- Test kapsamı
+- Commit SHA
+- CI/workflow sonucu
+- Emulator/gerçek cihaz kanıtı gerekiyorsa sonucu
+
+Kod yalnız derleniyor diye tamamlanmış sayılmaz; gerçek kullanıcı akışına bağlanması ve kabul testinden geçmesi gerekir.
+
+#### Hatalar — EKSİKSİZ KAYIT
+
+Her hata kaydedilecektir. Kayıtta mümkün olduğunda hata mesajı, başarısız test/akış, etkilenen commit/branch, tekrar üretme koşulu, kök neden ve etkisi bulunacaktır. Aynı hata tekrar ederse önceki problem kaydı okunacak; çözüm geçmişi atlanmayacaktır.
+
+#### Çözümler — KANIT ZORUNLULUĞU
+
+Her çözüm için **ARAŞTIR → AYIKLA → DÜZELT → ONAYLA → DOĞRULA → KANITLA** uygulanacaktır. Çözüm yalnız kod değişikliği değildir; test sonucu ve gerçek kabul kanıtı bulunmadan problem kapatılmaz. Bölüm 0'daki 20 bağımsız site / 40 ilgili kaynak standardı teknik problem çözümünde uygulanır.
+
+#### Her zaman okunacak ve hiçbir şey atlanmayacak
+
+Repo kimliği, proje adı, Supabase kimliği/onayı, klasör yapısı, kod değişiklikleri, hatalar, çözümler, testler, CI, migration, UI/UX, Release ve APK teslim durumu bu yaşayan belgede veya açıkça referans verilen kalıcı kayıtta tutulacaktır. **Yeni oturumda geçmiş varsayılmayacak; anayasa baştan sona okunacak. Hiçbir kritik madde atlanmayacaktır.**
+
+#### UI/UX tam teslim kuralı
+
+Ürün teslim edilmeden önce kullanıcı arayüzü uçtan uca düzeltilecektir. Özellikle:
+
+- Radar / Dashboard / CRM bilgi mimarisi
+- tekrarlı şehir/ilçe filtrelerinin kaldırılması
+- tutarlı navigasyon
+- müşteri/lead detayları
+- kontak, aktivite, görev/next action, fırsat ve huni
+- ürün/fiyat
+- teklif ve teklif satırları
+- sipariş ve sipariş satırları
+- loading/empty/error/offline durumları
+- form validasyonları ve anlaşılır hata mesajları
+- klavye/scroll/dialog davranışı
+- dokunma hedefleri ve küçük ekran uyumu
+- saha kullanımında hız ve okunabilirlik
+
+profesyonel kurumsal seviyede doğrulanacaktır.
+
+#### %100 teslim kapısı
+
+Aşağıdakilerin **tamamı** tamamlanmadan ürün %100 teslim edilmiş sayılmaz:
+
+- Kanonik repo ve kaynak ağacı doğrulaması
+- Profesyonel kurumsal Android UI/UX
+- Kritik CRM ve ticari akışların gerçek UI üzerinden çalışması
+- Room/offline source-of-truth
+- Kullanıcı tarafından onaylı kanonik Supabase üzerinde Auth/RLS/izolasyon
+- Cloud sync/outbox/retry/reconnect/conflict/idempotency
+- Doğrulanmış Global Donuk ürün kataloğu
+- Validate/sanitize/normalize/log/hata yönetimi/fallback
+- Build + lint + unit + instrumentation + Android emulator smoke
+- Gerekli gerçek cihaz UX kabulü
+- PR CI tamamen yeşil
+- Main merge
+- Main CI tamamen yeşil
+- Güncel main commit için GitHub Release APK
+- Release APK'nın gerçekten indirilebilir olması
+- Artifact/hash ile kaynak commit eşleşmesinin doğrulanması
+
+Bu kapılardan biri eksikse uygulama “%100 hazır”, “tam çalışan” veya “tam teslim” olarak raporlanmayacaktır.
+
 ## 1. Ana çalışma ilkesi — @Düşün
 
 **Ürün çıktı tam hazır hale gelene kadar çalış.**
@@ -89,6 +205,7 @@ Room güvenilir yerel veri katmanıdır. Cloud doğrulanamıyorsa LOCAL_ONLY/PEN
 - LANU hedef adı: **LANU GLOBAL / LANU Global Radar Supabase**
 - Project ref: **jolfbmwxmsamzqtxassg**
 - Bölge: **eu-central-1**
+- Kullanıcı onayı: **ONAYLI — LANU backend olarak kullanıcı tarafından açıkça belirlenmiştir.**
 
 **Willy-Kilo-Takip durdurulamaz/silinemez ve başka proje sanılarak terk edilemez. Bu proje LANU Global Donuk Satış Radarı'nın kanonik backend'idir.**
 
