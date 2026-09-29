@@ -3,6 +3,7 @@ package com.lanu.globaldonuksatisradari
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.lanu.globaldonuksatisradari.crm.CommercialCrmRepository
+import com.lanu.globaldonuksatisradari.crm.CommercialCrmSync
 import com.lanu.globaldonuksatisradari.crm.ContactCrmRepository
 import com.lanu.globaldonuksatisradari.crm.CrmOrderStatus
 import com.lanu.globaldonuksatisradari.crm.CrmQuoteStatus
@@ -119,5 +120,64 @@ class EnterpriseCrmPersistenceTest {
 
         val confirmed = commercial.transitionOrderStatus(order.id, CrmOrderStatus.CONFIRMED)
         assertEquals(CrmOrderStatus.CONFIRMED, confirmed.status)
+    }
+
+    @Test(timeout = 60_000)
+    fun authenticatedOwner_commercialMutationsAreQueuedForCloudSync() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val database = LanuCrmDatabase.getInstance(context)
+        val crm = LocalCrmRepository(database)
+        val suffix = System.nanoTime().toString()
+        val owner = "owner-$suffix"
+        val contacts = ContactCrmRepository(database, ownerUserId = owner)
+        val commercial = CommercialCrmRepository(database, ownerUserId = owner)
+
+        val customer = crm.addManualCustomerPoint(
+            businessName = "Cloud Queue Smoke $suffix",
+            address = "Test adresi",
+            city = "İstanbul",
+            district = "Kadıköy",
+            neighborhood = "Caferağa",
+            latitude = 40.9900,
+            longitude = 29.0300,
+            ownerUserId = owner,
+        )
+
+        val contact = contacts.createContact(
+            customerId = customer.id,
+            fullName = "Cloud Contact",
+            email = "cloud@example.com",
+        )
+        assertEquals(SyncState.PENDING_UPLOAD, contact.syncState)
+
+        val quote = commercial.createQuote(
+            customerId = customer.id,
+            opportunityId = null,
+            quoteNumber = "CLOUD-Q-$suffix",
+            currency = "TRY",
+        )
+        val line = commercial.addQuoteLine(
+            quoteId = quote.id,
+            productId = "cloud-product-$suffix",
+            productName = "Cloud Test Ürün",
+            unit = "Koli",
+            quantityMilli = 1_000L,
+            unitPriceMinor = 10_000L,
+        )
+        commercial.transitionQuoteStatus(quote.id, CrmQuoteStatus.SENT)
+        commercial.transitionQuoteStatus(quote.id, CrmQuoteStatus.ACCEPTED)
+        val order = commercial.createOrderFromAcceptedQuote(quote.id, "CLOUD-O-$suffix")
+        val orderLines = commercial.observeOrderLines(order.id).first()
+
+        assertEquals(SyncState.PENDING_UPLOAD, line.syncState)
+        assertEquals(SyncState.PENDING_UPLOAD, order.syncState)
+        assertTrue(orderLines.all { it.syncState == SyncState.PENDING_UPLOAD })
+
+        val entityTypes = crm.pendingSync(100).map { it.entityType }.toSet()
+        assertTrue(CommercialCrmSync.ENTITY_CONTACT in entityTypes)
+        assertTrue(CommercialCrmSync.ENTITY_QUOTE in entityTypes)
+        assertTrue(CommercialCrmSync.ENTITY_QUOTE_LINE in entityTypes)
+        assertTrue(CommercialCrmSync.ENTITY_ORDER in entityTypes)
+        assertTrue(CommercialCrmSync.ENTITY_ORDER_LINE in entityTypes)
     }
 }
