@@ -45,6 +45,45 @@ Zorunlu çalışma şekli:
 
 Kontrol sırası ve kaldığı nokta mümkün olduğunda şu formatta kaydedilir: `AUDIT_CHECKPOINT: <modül/klasör/dosya veya zincir> — <son kontrol edilen nokta> — <sonraki adım>`.
 
+### DERİN ARAŞTIRMA SONUÇLARINI SÜREKLİ DOĞRULAMA VE UYGULAMA — HER TEST PENCERESİNDE ZORUNLU
+
+Derin araştırma, forum/dokümantasyon taraması veya önceki teknik analiz **tek başına gerçek kabul kanıtı değildir**. Her test/build/CI bekleme penceresinde mevcut araştırma sonuçları güncel proje gerçeği ile yeniden çapraz doğrulanacaktır.
+
+Zorunlu doğrulama hattı:
+
+**ARAŞTIRMA BULGUSU → EXACT HEAD → GERÇEK KOD → WORKFLOW/CI → LOG/ARTIFACT → SUPABASE/PRODUCTION DURUMU → KÖK NEDEN → DÜZELT → UYGULA → YENİDEN TEST → KANITLA**
+
+Kurallar:
+
+1. Her test sonucu beklenirken mevcut derin araştırma bulguları güncel exact HEAD ile karşılaştırılır; eski commit, eski workflow veya eski log güncel HEAD için kanıt sayılmaz.
+2. Araştırmadaki her kritik varsayım gerçek call-site, gerçek dosya, gerçek workflow, gerçek backend ayarı, log veya artifact ile doğrulanır. Doğrulanamayan varsayım “kesin kök neden” olarak yazılmaz.
+3. Repo veya production gerçekliği araştırma raporundan daha yeni ise rapor revize edilir; eski analiz kutsal kabul edilmez.
+4. Bir hata bulunursa yalnız raporlanmaz. Güvenli ve yetki kapsamındaki düzeltme doğrudan uygulanır, yeni commit oluşturulur ve ilgili test zinciri yeniden başlatılır.
+5. Düzeltme production güvenliğini zayıflatarak yapılamaz. Özellikle Auth/RLS için testi yeşile çevirmek adına anonymous auth açmak, RLS kapatmak, service_role/secret anahtarını mobil uygulamaya veya güvensiz workflow alanına koymak yasaktır.
+6. Kimlik doğrulama testlerinde mümkünse kısa ömürlü, otomatik temizlenen ve üretim güvenlik duruşunu bozmayan yöntemler tercih edilir. GitHub Actions için OIDC tabanlı yetkilendirme, broker veya eşdeğer güvenli mekanizma; statik yüksek yetkili sırları workflow'a koymaya tercih edilir.
+7. Supabase doğrulamasında Auth → gerçek session → Data API → RLS → iki kullanıcı negatif izolasyon → RPC/idempotency/conflict → refresh/reconnect → API cleanup → geçici auth kullanıcı cleanup zinciri gerçek backend üzerinde test edilir.
+8. Test scripti ve workflow secret/token değerlerini loglamaz. Hassas veri yalnız güvenli secret mekanizmasında tutulur; publishable/public key ile service_role/secret birbirine karıştırılmaz.
+9. CI beklerken aynı anda supply-chain ve workflow güvenliği de denetlenir. GitHub Actions mümkün olduğunda immutable commit SHA ile pinlenir; kullanılan third-party action sürümleri, izinleri ve minimum permission ilkesi kontrol edilir.
+10. Yeni düzeltme ile HEAD değişirse önceki yeşil testler otomatik olarak tarihsel kanıta düşer; yeni HEAD için tüm ilgili kalite kapıları yeniden çalıştırılır.
+11. Test sonucu başarısızsa artifact/log doğrudan incelenir; semptom ile kök neden ayrılır. Aynı başarısız komut 2–3 kez kör biçimde tekrarlanmaz; yaklaşım yeniden değerlendirilir.
+12. Test sonucu başarılıysa yalnız “green” etiketiyle yetinilmez; başarının gerçekten hedeflenen kabul zincirini çalıştırdığı doğrulanır. Mock, bypass, yanlış branch veya yanlış backend üzerinde yeşil test kabul edilmez.
+13. Her bekleme penceresinde kontrol edilen araştırma maddesi ve kalan sonraki adım mümkün olduğunda şu formatta kaydedilir: `RESEARCH_VERIFY_CHECKPOINT: <bulgu> — <kanıt> — <durum> — <sonraki doğrulama>`.
+14. Kullanıcı ayrıca “devam” demese bile, test bekleme süresi boyunca bu doğrulama/düzeltme döngüsü sürdürülür; gerçek blokaj yoksa çalışma durmaz.
+
+#### 29 Eylül 2026 doğrulanmış Live Cloud E2E örneği — kalıcı ders
+
+Önceki Live Cloud E2E başarısızlığında görülen `HTTP 422 / Anonymous sign-ins are disabled` semptomu gerçek log ve artifact ile doğrulandı. Doğru çözüm production anonymous auth'u açmak olmadı. Güncel yaklaşımda GitHub Actions OIDC token'ı ile yetkilendirilen `lanu-ci-auth-broker` üzerinden iki geçici doğrulanmış kullanıcı/session oluşturulmakta; test sonunda geçici kullanıcılar silinmektedir.
+
+Bu olaydan çıkarılan kalıcı kurallar:
+
+- CI testini geçirmek için production Auth güvenliği gevşetilmez.
+- İki gerçek authenticated aktör ile owner/RLS izolasyonu doğrulanır.
+- Versioned mutation RPC üzerinde APPLIED/idempotent retry/CONFLICT davranışı test edilir.
+- Refresh token ile reconnect doğrulanır.
+- Data API kayıtları ve geçici Auth kullanıcıları cleanup ile sıfırlanır.
+- Başarılı workflow mutlaka çalıştığı exact HEAD SHA ile eşleştirilir.
+- Araştırma raporundaki “henüz doğrulanmadı” gibi bir bulgu repo gerçeği değiştiğinde yeniden doğrulanır ve güncel kanıta göre revize edilir.
+
 ### Gerçek takvim hedefi — 29 Eylül 2026 12:00 Türkiye saati
 
 Kullanıcının belirlediği operasyonel hedef: **29 Eylül 2026 saat 12:00 (Türkiye saati, UTC+3)** itibarıyla ürünün tam teslim kriterlerini tamamlamış olmaktır.
