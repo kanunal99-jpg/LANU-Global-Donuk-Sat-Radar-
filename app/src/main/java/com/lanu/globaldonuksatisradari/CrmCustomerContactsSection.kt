@@ -6,17 +6,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
+import com.lanu.globaldonuksatisradari.crm.CommercialCrmRepository
 import com.lanu.globaldonuksatisradari.crm.ContactCrmRepository
 import com.lanu.globaldonuksatisradari.crm.CrmCustomer
+import com.lanu.globaldonuksatisradari.crm.CrmQuoteStatus
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
 /**
- * Owner-scoped contact section for the CRM customer detail surface.
+ * Customer-detail persistence boundary for contacts and commercial documents.
  *
- * The repository boundary is intentionally created from the selected customer's owner id so
- * authenticated and anonymous/local records cannot bleed into each other. Contact mutations stay
- * LOCAL_ONLY until the LANU Supabase schema/RLS is verified end-to-end.
+ * Contacts are owner-scoped. Commercial records stay LOCAL_ONLY until the LANU Supabase
+ * commercial schema/RLS is verified end-to-end, so the UI never falsely reports cloud sync.
  */
 @Composable
 fun CrmCustomerContactsSection(
@@ -25,15 +28,34 @@ fun CrmCustomerContactsSection(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val repository = remember(context, customer.ownerUserId) {
-        ContactCrmRepository(
-            database = LanuCrmDatabase.getInstance(context),
-            ownerUserId = customer.ownerUserId,
-        )
+    val database = remember(context) { LanuCrmDatabase.getInstance(context) }
+    val contactRepository = remember(database, customer.ownerUserId) {
+        ContactCrmRepository(database = database, ownerUserId = customer.ownerUserId)
     }
-    val contacts by remember(repository, customer.id) {
-        repository.observeContacts(customer.id)
+    val commercialRepository = remember(database) { CommercialCrmRepository(database) }
+
+    val contacts by remember(contactRepository, customer.id) {
+        contactRepository.observeContacts(customer.id)
     }.collectAsState(initial = emptyList())
+    val quotes by remember(commercialRepository, customer.id) {
+        commercialRepository.observeQuotes(customer.id)
+    }.collectAsState(initial = emptyList())
+    val orders by remember(commercialRepository, customer.id) {
+        commercialRepository.observeOrders(customer.id)
+    }.collectAsState(initial = emptyList())
+
+    val quoteLinesFlow = remember(commercialRepository, quotes.map { it.id }) {
+        if (quotes.isEmpty()) flowOf(emptyMap()) else combine(
+            quotes.map { quote -> commercialRepository.observeQuoteLines(quote.id) },
+        ) { rows -> quotes.mapIndexed { index, quote -> quote.id to rows[index] }.toMap() }
+    }
+    val orderLinesFlow = remember(commercialRepository, orders.map { it.id }) {
+        if (orders.isEmpty()) flowOf(emptyMap()) else combine(
+            orders.map { order -> commercialRepository.observeOrderLines(order.id) },
+        ) { rows -> orders.mapIndexed { index, order -> order.id to rows[index] }.toMap() }
+    }
+    val quoteLines by quoteLinesFlow.collectAsState(initial = emptyMap())
+    val orderLines by orderLinesFlow.collectAsState(initial = emptyMap())
 
     CrmContactsCard(
         customerId = customer.id,
@@ -41,7 +63,7 @@ fun CrmCustomerContactsSection(
         onCreate = { fullName, role, phone, email, makePrimary ->
             scope.launch {
                 runCatching {
-                    repository.createContact(
+                    contactRepository.createContact(
                         customerId = customer.id,
                         fullName = fullName,
                         role = role,
@@ -49,35 +71,85 @@ fun CrmCustomerContactsSection(
                         email = email,
                         makePrimary = makePrimary,
                     )
-                }.onSuccess {
-                    onMessage("Yetkili kişi kaydedildi.")
-                }.onFailure {
-                    onMessage("Yetkili kişi kaydedilemedi: ${it.message.orEmpty()}")
-                }
+                }.onSuccess { onMessage("Yetkili kişi kaydedildi.") }
+                    .onFailure { onMessage("Yetkili kişi kaydedilemedi: ${it.message.orEmpty()}") }
             }
         },
         onUpdate = { contactId, fullName, role, phone, email ->
             scope.launch {
                 runCatching {
-                    repository.updateContact(
+                    contactRepository.updateContact(
                         contactId = contactId,
                         fullName = fullName,
                         role = role,
                         phone = phone,
                         email = email,
                     )
-                }.onSuccess {
-                    onMessage("Yetkili kişi güncellendi.")
-                }.onFailure {
-                    onMessage("Yetkili kişi güncellenemedi: ${it.message.orEmpty()}")
-                }
+                }.onSuccess { onMessage("Yetkili kişi güncellendi.") }
+                    .onFailure { onMessage("Yetkili kişi güncellenemedi: ${it.message.orEmpty()}") }
             }
         },
         onMakePrimary = { contactId ->
             scope.launch {
-                runCatching { repository.makePrimary(contactId) }
+                runCatching { contactRepository.makePrimary(contactId) }
                     .onSuccess { onMessage("Birincil yetkili güncellendi.") }
                     .onFailure { onMessage("Birincil yetkili güncellenemedi: ${it.message.orEmpty()}") }
+            }
+        },
+    )
+
+    CrmCommercialSection(
+        quotes = quotes,
+        orders = orders,
+        quoteLines = quoteLines,
+        orderLines = orderLines,
+        onCreateQuote = { quoteNumber, currency ->
+            scope.launch {
+                runCatching {
+                    commercialRepository.createQuote(
+                        customerId = customer.id,
+                        opportunityId = null,
+                        quoteNumber = quoteNumber,
+                        currency = currency,
+                    )
+                }.onSuccess { onMessage("Taslak teklif oluşturuldu.") }
+                    .onFailure { onMessage("Teklif oluşturulamadı: ${it.message.orEmpty()}") }
+            }
+        },
+        onAddQuoteLine = { quoteId, productName, unit, quantityMilli, unitPriceMinor ->
+            scope.launch {
+                runCatching {
+                    commercialRepository.addQuoteLine(
+                        quoteId = quoteId,
+                        productId = null,
+                        productName = productName,
+                        unit = unit,
+                        quantityMilli = quantityMilli,
+                        unitPriceMinor = unitPriceMinor,
+                    )
+                }.onSuccess { onMessage("Teklif ürün satırı eklendi.") }
+                    .onFailure { onMessage("Teklif satırı eklenemedi: ${it.message.orEmpty()}") }
+            }
+        },
+        onSendQuote = { quoteId ->
+            scope.launch {
+                runCatching { commercialRepository.transitionQuoteStatus(quoteId, CrmQuoteStatus.SENT) }
+                    .onSuccess { onMessage("Teklif gönderildi olarak işaretlendi.") }
+                    .onFailure { onMessage("Teklif gönderilemedi: ${it.message.orEmpty()}") }
+            }
+        },
+        onAcceptQuote = { quoteId ->
+            scope.launch {
+                runCatching { commercialRepository.transitionQuoteStatus(quoteId, CrmQuoteStatus.ACCEPTED) }
+                    .onSuccess { onMessage("Teklif kabul edildi.") }
+                    .onFailure { onMessage("Teklif kabul edilemedi: ${it.message.orEmpty()}") }
+            }
+        },
+        onCreateOrder = { quoteId, orderNumber ->
+            scope.launch {
+                runCatching { commercialRepository.createOrderFromAcceptedQuote(quoteId, orderNumber) }
+                    .onSuccess { onMessage("Kabul edilen teklif siparişe dönüştürüldü.") }
+                    .onFailure { onMessage("Sipariş oluşturulamadı: ${it.message.orEmpty()}") }
             }
         },
     )
