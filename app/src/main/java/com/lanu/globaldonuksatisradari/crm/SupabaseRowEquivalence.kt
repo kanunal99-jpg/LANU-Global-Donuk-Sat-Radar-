@@ -22,8 +22,13 @@ internal object SupabaseRowEquivalence {
         if (leftNull || rightNull) return leftNull && rightNull
         if (left == right) return true
 
-        numeric(left)?.let { l ->
-            numeric(right)?.let { r -> return l.compareTo(r) == 0 }
+        // PostgREST can deserialize a numeric DB value as Number while the client intentionally
+        // serializes the same value as a decimal string (for example NUMERIC money fields).
+        // Do not coerce two strings: SKU/phone/source IDs such as "001" and "1" are distinct.
+        if (left is Number || right is Number) {
+            numeric(left)?.let { l ->
+                numeric(right)?.let { r -> return l.compareTo(r) == 0 }
+            }
         }
 
         if (left is String && right is String) {
