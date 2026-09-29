@@ -15,12 +15,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
-/**
- * Customer-detail persistence boundary for contacts and commercial documents.
- *
- * Contacts are owner-scoped. Commercial records stay LOCAL_ONLY until the LANU Supabase
- * commercial schema/RLS is verified end-to-end, so the UI never falsely reports cloud sync.
- */
+/** Customer-detail persistence boundary for owner-scoped contacts and commercial documents. */
 @Composable
 fun CrmCustomerContactsSection(
     customer: CrmCustomer,
@@ -32,7 +27,9 @@ fun CrmCustomerContactsSection(
     val contactRepository = remember(database, customer.ownerUserId) {
         ContactCrmRepository(database = database, ownerUserId = customer.ownerUserId)
     }
-    val commercialRepository = remember(database) { CommercialCrmRepository(database) }
+    val commercialRepository = remember(database, customer.ownerUserId) {
+        CommercialCrmRepository(database = database, ownerUserId = customer.ownerUserId)
+    }
 
     val contacts by remember(contactRepository, customer.id) {
         contactRepository.observeContacts(customer.id)
