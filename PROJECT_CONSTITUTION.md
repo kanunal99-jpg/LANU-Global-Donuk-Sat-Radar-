@@ -26,6 +26,31 @@ Her teknik problem için **en az 20 farklı bağımsız site/domain ve toplam en
 
 “Tam teslim”; kritik özelliklerin tamamlanması, profesyonel UI/UX, kurumsal CRM, Room/offline ve Supabase/cloud dayanıklılığı, testlerin tamamı, PR ve main CI'nin tamamen yeşil olması, main merge, GitHub Release APK, asset indirilebilirliği ve commit/hash eşleşmesinin kanıtlanması demektir.
 
+### TEST/CI BEKLERKEN SÜREKLİ KOD DENETİMİ — BOŞ BEKLEME YASAK
+
+Test, build, instrumentation, Android emulator smoke, GitHub Actions/CI veya başka bir doğrulama işlemi çalışırken **boşta beklenmeyecektir**. Bekleme süresi projenin ikinci bir sürekli kalite kontrol hattı olarak kullanılacaktır.
+
+Zorunlu çalışma şekli:
+
+1. Test/CI başlatıldıktan sonra güvenli biçimde incelenebilen kaynak kod ve proje yapısı tek tek denetlenmeye devam edilir.
+2. Denetim rastgele yapılmaz; klasör/modül/dosya sırası izlenir.
+3. Kontrolün hangi klasör, modül, dosya veya kod zincirinde kaldığı kalıcı çalışma notuna yazılır.
+4. Test sonucu geldiğinde gerekiyorsa test sonucu önceliklendirilir; fakat kod denetimindeki son konum kaybedilmez.
+5. Bir sonraki test/CI bekleme penceresinde denetim **tam olarak kaldığı yerden devam eder**.
+6. Denetimde hata, eksik özellik, duplicate kaynak, güvenlik açığı, veri kaybı riski, UX problemi, yanlış state yönetimi, hatalı fallback veya test açığı bulunursa problem anında kaydedilir.
+7. Güvenle düzeltilebilen hata bekletilmez; **ARAŞTIR → AYIKLA → DÜZELT → ONAYLA → DOĞRULA → KANITLA** döngüsüyle düzeltilir ve uygun test kapsamına alınır.
+8. Yeni düzeltme mevcut çalışan CI sonucunu geçersiz kılacak yeni commit oluşturuyorsa eski yeşil sonuç yeni HEAD için kanıt kabul edilmez; güncel commit yeniden test edilir.
+9. Bu yöntem repository kaynak ağacı tamamıyla sistematik biçimde incelenene ve kritik zincirler tekrar doğrulanana kadar sürdürülür.
+10. Amaç test hattı ile kod denetimini paralel ilerleterek **sürekli kontrol mekanizması** oluşturmaktır; CI bekleme süresi çalışma durması anlamına gelmez.
+
+Kontrol sırası ve kaldığı nokta mümkün olduğunda şu formatta kaydedilir: `AUDIT_CHECKPOINT: <modül/klasör/dosya veya zincir> — <son kontrol edilen nokta> — <sonraki adım>`.
+
+### Gerçek takvim hedefi — 29 Eylül 2026 12:00 Türkiye saati
+
+Kullanıcının belirlediği operasyonel hedef: **29 Eylül 2026 saat 12:00 (Türkiye saati, UTC+3)** itibarıyla ürünün tam teslim kriterlerini tamamlamış olmaktır.
+
+Bu saat bir **hedef teslim zamanıdır**, kalite veya güvenlik kapılarını atlama izni değildir. Saat yaklaşsa veya geçse dahi kırık CI merge edilmez, doğrulanmamış test başarılı sayılmaz, gerçek cihaz/emulator sonucu uydurulmaz, RLS doğrulanmadan güvenli denmez ve commit/hash eşleşmesi doğrulanmadan APK %100 teslim ilan edilmez. Hedefe yetişmek için test/CI bekleme zamanları yukarıdaki sürekli kod denetimiyle aktif kullanılacaktır.
+
 ### KANONİK PROJE ENVANTERİ VE TESLİM SÖZLEŞMESİ — HER ZAMAN OKUNACAK, ASLA ATLANMAYACAK
 
 Bu bölüm proje üzerinde herhangi bir kod, dosya, branch, backend, test, CI veya Release işlemi yapılmadan önce okunacak ve doğrulanacaktır. Buradaki kimlikler ve hedefler kullanıcı tarafından belirlenen proje bağlamıdır. Yanlış repo, yanlış Supabase veya yanlış kaynak ağacı üzerinde işlem yapılmayacaktır.
