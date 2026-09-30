@@ -51,7 +51,7 @@ class NeighborhoodCatalogRepository(context: Context) {
             [out:json][timeout:50];
             area["name"="$cityName"]["boundary"="administrative"]["admin_level"="4"]->.cityArea;
             relation(area.cityArea)["name"="$districtName"]["boundary"="administrative"]["admin_level"~"6|7|8"]->.districtRel;
-            map_to_area.districtRel->.districtArea;
+            .districtRel map_to_area ->.districtArea;
             (
               relation(area.districtArea)["boundary"="administrative"]["admin_level"~"8|9|10"]["name"];
               nwr(area.districtArea)["place"~"neighbourhood|quarter|suburb|village"]["name"];
@@ -86,7 +86,7 @@ class NeighborhoodCatalogRepository(context: Context) {
                     if (name.isNotBlank()) add(name)
                 }
             }
-                .distinctBy(BusinessDeduplication::normalizeForComparison)
+                .distinctBy { BusinessDeduplication.normalizeForComparison(it) }
                 .sortedWith(String.CASE_INSENSITIVE_ORDER)
         } finally {
             connection.disconnect()
