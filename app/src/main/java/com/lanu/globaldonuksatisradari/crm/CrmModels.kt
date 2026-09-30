@@ -67,11 +67,22 @@ data class CrmCustomer(
     val stage: CrmStage = CrmStage.PROSPECT,
     val ownerUserId: String? = null,
     val notes: String? = null,
+    val contactName: String? = null,
+    val businessType: String? = null,
+    val taxOrNationalId: String? = null,
+    val phone: String? = null,
     val createdAtEpochMs: Long,
     val updatedAtEpochMs: Long,
     val version: Long = 0L,
     val syncState: SyncState = SyncState.LOCAL_ONLY,
 )
+
+data class BulkCrmSaveResult(
+    val inserted: Int,
+    val alreadyExisting: Int,
+) {
+    val total: Int get() = inserted + alreadyExisting
+}
 
 data class CrmActivity(
     val id: String,
