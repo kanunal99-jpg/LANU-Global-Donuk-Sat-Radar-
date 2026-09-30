@@ -1,16 +1,23 @@
 package com.lanu.globaldonuksatisradari
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import kotlinx.coroutines.launch
@@ -33,7 +40,10 @@ fun ManualPointScreen(
     val scope = rememberCoroutineScope()
 
     Column(
-        modifier = Modifier.padding(16.dp),
+        modifier = Modifier
+            .padding(16.dp)
+            .imePadding()
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text("Manuel Nokta Kaydı", style = MaterialTheme.typography.headlineSmall)
@@ -51,6 +61,7 @@ fun ManualPointScreen(
                 longitudeX,
                 { longitudeX = it },
                 Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 label = { Text("X / Boylam") },
                 singleLine = true,
             )
@@ -58,6 +69,7 @@ fun ManualPointScreen(
                 latitudeY,
                 { latitudeY = it },
                 Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 label = { Text("Y / Enlem") },
                 singleLine = true,
             )
@@ -93,15 +105,23 @@ fun ManualPointScreen(
                         saving = false
                         onSaved()
                     }.onFailure {
-                        message = it.message ?: "Kayıt sırasında hata oluştu."
+                        Log.e("LanuManualPoint", "Manuel müşteri noktası kaydedilemedi.", it)
+                        message = "Kayıt sırasında hata oluştu. Lütfen tekrar deneyin."
                         saving = false
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().testTag("manual_point_save"),
         ) {
             Text(if (saving) "Kaydediliyor…" else "Noktayı kaydet")
         }
-        message?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+        message?.let {
+            Text(
+                it,
+                modifier = Modifier.testTag("manual_point_message"),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (it.startsWith("Manuel nokta kaydedildi")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+            )
+        }
     }
 }

@@ -10,12 +10,11 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.performSemanticsAction
 import androidx.work.WorkManager
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
@@ -176,12 +175,29 @@ class MainActivitySmokeTest {
     }
 
     @Test(timeout = 60_000)
+    fun manualPoint_rejectsMissingRequiredFieldsWithoutWriting() {
+        waitForText("Nokta").performClick()
+        waitForText("Manuel Nokta Kaydı").assertIsDisplayed()
+
+        waitForTag("manual_point_save")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
+        composeRule.waitForIdle()
+
+        waitForText("Ad, adres, il ve ilçe zorunludur.")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test(timeout = 60_000)
     fun productCatalog_canOpenAndAddManualPrice() {
         waitForText("Ürünler").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
 
         val addButton = waitForTag("product_add_button").assertIsDisplayed().assertHasClickAction()
-        addButton.performSemanticsAction(SemanticsActions.OnClick)
+        addButton.performClick()
         composeRule.waitForIdle()
 
         waitForTag("product_editor_dialog").assertIsDisplayed()
