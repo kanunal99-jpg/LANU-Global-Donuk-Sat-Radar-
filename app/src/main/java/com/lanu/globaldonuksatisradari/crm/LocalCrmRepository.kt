@@ -79,7 +79,31 @@ class LocalCrmRepository(
     ): CrmCustomer = database.withTransaction {
         val existing = database.customerDao().findByBusinessSourceId(business.id)
         if (existing != null) return@withTransaction CrmMappings.toDomain(existing)
+        insertBusinessAsCustomer(business, ownerUserId)
+    }
 
+    suspend fun addBusinessesAsCustomers(
+        businesses: List<VerifiedBusiness>,
+        ownerUserId: String? = null,
+    ): BulkCrmSaveResult = database.withTransaction {
+        var inserted = 0
+        var alreadyExisting = 0
+        businesses.distinctBy { it.id }.forEach { business ->
+            val existing = database.customerDao().findByBusinessSourceId(business.id)
+            if (existing != null) {
+                alreadyExisting++
+            } else {
+                insertBusinessAsCustomer(business, ownerUserId)
+                inserted++
+            }
+        }
+        BulkCrmSaveResult(inserted = inserted, alreadyExisting = alreadyExisting)
+    }
+
+    private suspend fun insertBusinessAsCustomer(
+        business: VerifiedBusiness,
+        ownerUserId: String?,
+    ): CrmCustomer {
         val timestamp = now()
         val customer = CrmCustomer(
             id = idGenerator(),
@@ -94,6 +118,8 @@ class LocalCrmRepository(
             dataQuality = DataQuality.OBSERVED,
             stage = CrmStage.PROSPECT,
             ownerUserId = ownerUserId,
+            businessType = business.category?.trim()?.takeIf { it.isNotEmpty() },
+            phone = business.phone?.trim()?.takeIf { it.isNotEmpty() },
             createdAtEpochMs = timestamp,
             updatedAtEpochMs = timestamp,
             version = 1L,
@@ -125,9 +151,8 @@ class LocalCrmRepository(
                 lastError = null,
             ),
         )
-        customer
+        return customer
     }
-
 
     suspend fun addManualCustomerPoint(
         businessName: String,
@@ -137,6 +162,10 @@ class LocalCrmRepository(
         neighborhood: String?,
         latitude: Double,
         longitude: Double,
+        contactName: String? = null,
+        businessType: String? = null,
+        taxOrNationalId: String? = null,
+        phone: String? = null,
         ownerUserId: String? = null,
     ): CrmCustomer = database.withTransaction {
         require(businessName.trim().isNotEmpty()) { "Nokta adı boş olamaz." }
@@ -162,6 +191,10 @@ class LocalCrmRepository(
             dataQuality = DataQuality.USER_ENTERED,
             stage = CrmStage.PROSPECT,
             ownerUserId = ownerUserId,
+            contactName = contactName?.trim()?.takeIf { it.isNotEmpty() },
+            businessType = businessType?.trim()?.takeIf { it.isNotEmpty() },
+            taxOrNationalId = taxOrNationalId?.trim()?.takeIf { it.isNotEmpty() },
+            phone = phone?.trim()?.takeIf { it.isNotEmpty() },
             createdAtEpochMs = timestamp,
             updatedAtEpochMs = timestamp,
             version = 1L,
@@ -554,6 +587,10 @@ private object CrmMappings {
         stage = model.stage.name,
         ownerUserId = model.ownerUserId,
         notes = model.notes,
+        contactName = model.contactName,
+        businessType = model.businessType,
+        taxOrNationalId = model.taxOrNationalId,
+        phone = model.phone,
         createdAtEpochMs = model.createdAtEpochMs,
         updatedAtEpochMs = model.updatedAtEpochMs,
         version = model.version,
@@ -574,6 +611,10 @@ private object CrmMappings {
         stage = CrmStage.valueOf(entity.stage),
         ownerUserId = entity.ownerUserId,
         notes = entity.notes,
+        contactName = entity.contactName,
+        businessType = entity.businessType,
+        taxOrNationalId = entity.taxOrNationalId,
+        phone = entity.phone,
         createdAtEpochMs = entity.createdAtEpochMs,
         updatedAtEpochMs = entity.updatedAtEpochMs,
         version = entity.version,
