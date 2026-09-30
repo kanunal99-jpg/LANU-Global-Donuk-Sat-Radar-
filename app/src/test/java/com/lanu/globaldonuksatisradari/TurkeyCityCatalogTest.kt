@@ -1,15 +1,21 @@
 package com.lanu.globaldonuksatisradari
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
 
 class TurkeyCityCatalogTest {
     @Test
-    fun catalogContainsAll81Provinces() {
+    fun catalogContainsAll81UniqueProvinces() {
         assertEquals(81, TurkeyCityCatalog.ALL.size)
-        assertTrue(TurkeyAdministrativeRegions.PROVINCES.containsAll(TurkeyCityCatalog.ALL.map { it.name }))
-        assertTrue(TurkeyAdministrativeRegions.containsProvince("İstanbul"))
-        assertTrue(TurkeyAdministrativeRegions.containsProvince("Şanlıurfa"))
+        assertEquals(81, TurkeyCityCatalog.ALL.map { it.name }.toSet().size)
+        assertTrue(TurkeyCityCatalog.ALL.any { it.name == "İstanbul" })
+        assertTrue(TurkeyCityCatalog.ALL.any { it.name == "Hakkâri" })
+    }
+
+    @Test
+    fun istanbulFallbackStillContainsAllDistricts() {
+        val istanbul = TurkeyCityCatalog.ALL.single { it.name == "İstanbul" }
+        assertEquals(39, istanbul.fallbackDistricts.toSet().size)
     }
 }
