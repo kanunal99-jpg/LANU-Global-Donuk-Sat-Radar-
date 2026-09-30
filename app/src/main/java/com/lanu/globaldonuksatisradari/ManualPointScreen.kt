@@ -29,6 +29,10 @@ fun ManualPointScreen(
     onSaved: () -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
+    var contactName by remember { mutableStateOf("") }
+    var businessType by remember { mutableStateOf("") }
+    var taxOrNationalId by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
     var city by remember(defaultCity) { mutableStateOf(defaultCity) }
     var district by remember { mutableStateOf("") }
@@ -48,7 +52,27 @@ fun ManualPointScreen(
     ) {
         Text("Manuel Nokta Kaydı", style = MaterialTheme.typography.headlineSmall)
         Text("Adres ve koordinatlarını bildiğiniz müşteri/noktayı doğrudan CRM havuzuna ekleyin.")
-        OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("Müşteri / işletme adı") }, singleLine = true)
+        OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("Nokta / işletme adı") }, singleLine = true)
+        OutlinedTextField(contactName, { contactName = it }, Modifier.fillMaxWidth(), label = { Text("Ad Soyad (opsiyonel)") }, singleLine = true)
+        OutlinedTextField(businessType, { businessType = it }, Modifier.fillMaxWidth(), label = { Text("İşletme türü (opsiyonel)") }, singleLine = true)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedTextField(
+                taxOrNationalId,
+                { taxOrNationalId = it },
+                Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                label = { Text("TC / Vergi No") },
+                singleLine = true,
+            )
+            OutlinedTextField(
+                phone,
+                { phone = it },
+                Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                label = { Text("Telefon No") },
+                singleLine = true,
+            )
+        }
         OutlinedTextField(address, { address = it }, Modifier.fillMaxWidth(), label = { Text("Açık adres") }, minLines = 2)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(city, { city = it }, Modifier.weight(1f), label = { Text("İl") }, singleLine = true)
@@ -99,6 +123,10 @@ fun ManualPointScreen(
                             neighborhood = neighborhood,
                             latitude = lat,
                             longitude = lon,
+                            contactName = contactName,
+                            businessType = businessType,
+                            taxOrNationalId = taxOrNationalId,
+                            phone = phone,
                         )
                     }.onSuccess {
                         message = "Manuel nokta kaydedildi ve rutin havuzuna eklendi."
