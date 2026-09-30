@@ -45,6 +45,16 @@ class RadarScanHistoryRepositoryTest {
     }
 
     @Test
+    fun reappearingBusinessIsNotReportedAsNew() {
+        repository.compareAndRecord("İstanbul", "Kadıköy", "", listOf(business("1"), business("2")), 1L)
+        repository.compareAndRecord("İstanbul", "Kadıköy", "", listOf(business("1")), 2L)
+        val third = repository.compareAndRecord("İstanbul", "Kadıköy", "", listOf(business("1"), business("2")), 3L)
+
+        assertFalse(third.isFirstScan)
+        assertEquals(0, third.newCount)
+    }
+
+    @Test
     fun differentDistrictUsesIndependentBaseline() {
         repository.compareAndRecord("İstanbul", "Kadıköy", "", listOf(business("1")), 1L)
         val other = repository.compareAndRecord("İstanbul", "Beşiktaş", "", listOf(business("2")), 2L)
