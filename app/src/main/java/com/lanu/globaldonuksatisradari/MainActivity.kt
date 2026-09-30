@@ -204,7 +204,11 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     DropdownMenu(cityMenu, { cityMenu = false }) { cities.forEach { city -> DropdownMenuItem({ Text(city.name) }, onClick = { invalidateSearch(); selectedCity = city; availableDistricts = city.districts; selectedIstanbulSide = "Tümü"; selectedDistrict = "Tümü"; results = emptyList(); resetFilters(); cityMenu = false }) } }
                                 }
                                 Box(Modifier.weight(1f)) {
-                                    OutlinedButton(onClick = { districtMenu = true }, enabled = !districtLoading, modifier = Modifier.fillMaxWidth().testTag("district_filter")) { Text(if (districtLoading) "Yükleniyor…" else selectedDistrict) }
+                                    OutlinedButton(
+                                        onClick = { districtMenu = true },
+                                        enabled = !districtLoading || districtOptions.isNotEmpty(),
+                                        modifier = Modifier.fillMaxWidth().testTag("district_filter"),
+                                    ) { Text(if (districtLoading && districtOptions.isEmpty()) "Yükleniyor…" else selectedDistrict) }
                                     DropdownMenu(districtMenu, { districtMenu = false }) {
                                         DropdownMenuItem({ Text("Tümü") }, onClick = { invalidateSearch(); selectedDistrict = "Tümü"; results = emptyList(); resetFilters(); districtMenu = false })
                                         districtOptions.forEach { district -> DropdownMenuItem({ Text(district) }, onClick = { invalidateSearch(); selectedDistrict = district; results = emptyList(); resetFilters(); districtMenu = false }) }
