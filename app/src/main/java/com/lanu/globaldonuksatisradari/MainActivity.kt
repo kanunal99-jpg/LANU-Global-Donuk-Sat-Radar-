@@ -28,6 +28,7 @@ import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.data.BusinessQualityEvaluator
 import com.lanu.globaldonuksatisradari.data.DistrictCatalogRepository
+import com.lanu.globaldonuksatisradari.data.NeighborhoodCatalogRepository
 import com.lanu.globaldonuksatisradari.data.CoverageBusinessRepository
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.Dispatchers
@@ -76,6 +77,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var districtMenu by remember { mutableStateOf(false) }
     var availableDistricts by remember { mutableStateOf(selectedCity.districts) }
     var districtLoading by remember { mutableStateOf(false) }
+    var availableNeighborhoods by remember { mutableStateOf<List<String>>(emptyList()) }
+    var neighborhoodLoading by remember { mutableStateOf(false) }
     var neighborhoodMenu by remember { mutableStateOf(false) }
     var selectedDistrict by remember { mutableStateOf("Tümü") }
     var selectedNeighborhood by remember { mutableStateOf("Tümü") }
@@ -87,6 +90,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var selectedBusiness by remember { mutableStateOf<VerifiedBusiness?>(null) }
     var selectedCustomerId by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
+    var bulkSaving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var crmMessage by remember { mutableStateOf<String?>(null) }
     var searchRequestId by remember { mutableLongStateOf(0L) }
@@ -100,6 +104,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val context = LocalContext.current
     val repository = remember(context) { CoverageBusinessRepository(context) }
     val districtRepository = remember(context) { DistrictCatalogRepository(context) }
+    val neighborhoodRepository = remember(context) { NeighborhoodCatalogRepository(context) }
     LaunchedEffect(selectedCity.name) {
         districtLoading = true
         availableDistricts = runCatching {
@@ -110,6 +115,24 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
             selectedCity.districts
         }
         districtLoading = false
+    }
+    LaunchedEffect(selectedCity.name, selectedDistrict) {
+        selectedNeighborhood = "Tümü"
+        neighborhoodMenu = false
+        availableNeighborhoods = emptyList()
+        if (selectedDistrict == "Tümü") {
+            neighborhoodLoading = false
+            return@LaunchedEffect
+        }
+        neighborhoodLoading = true
+        availableNeighborhoods = runCatching {
+            neighborhoodRepository.getNeighborhoods(selectedCity.name, selectedDistrict)
+        }.getOrElse { throwable ->
+            if (throwable is CancellationException) throw throwable
+            Log.w("LanuRadar", "Mahalle kataloğu yenilenemedi: ${selectedCity.name}/$selectedDistrict", throwable)
+            emptyList()
+        }
+        neighborhoodLoading = false
     }
     val localCrmRepository = remember(context) { LocalCrmRepository(LanuCrmDatabase.getInstance(context)) }
     val productCatalogRepository = remember(context) { ProductCatalogRepository(context) }
@@ -204,10 +227,43 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             }
                         }
                         item {
-                            val neighborhoods = listOf("Tümü") + results.mapNotNull { it.neighborhood }.distinct().sorted()
+                            val neighborhoods = remember(availableNeighborhoods, results) {
+                                listOf("Tümü") +
+                                    (availableNeighborhoods + results.mapNotNull { it.neighborhood })
+                                        .filter { it.isNotBlank() }
+                                        .distinct()
+                                        .sortedWith(String.CASE_INSENSITIVE_ORDER)
+                            }
+                            val districtSelected = selectedDistrict != "Tümü"
                             Box {
-                                OutlinedButton(onClick = { if (neighborhoods.size > 1) neighborhoodMenu = true }, modifier = Modifier.fillMaxWidth()) { Text("Mahalle: $selectedNeighborhood") }
-                                DropdownMenu(neighborhoodMenu && neighborhoods.size > 1, { neighborhoodMenu = false }) { neighborhoods.forEach { n -> DropdownMenuItem({ Text(n) }, onClick = { selectedNeighborhood = n; neighborhoodMenu = false }) } }
+                                OutlinedButton(
+                                    onClick = { if (districtSelected && neighborhoods.size > 1) neighborhoodMenu = true },
+                                    enabled = districtSelected && (!neighborhoodLoading || neighborhoods.size > 1),
+                                    modifier = Modifier.fillMaxWidth().testTag("neighborhood_filter"),
+                                ) {
+                                    Text(
+                                        when {
+                                            !districtSelected -> "Mahalle: Önce ilçe seçin"
+                                            neighborhoodLoading && neighborhoods.size <= 1 -> "Mahalleler yükleniyor…"
+                                            else -> "Mahalle: $selectedNeighborhood"
+                                        },
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = neighborhoodMenu && neighborhoods.size > 1,
+                                    onDismissRequest = { neighborhoodMenu = false },
+                                ) {
+                                    neighborhoods.forEach { neighborhood ->
+                                        DropdownMenuItem(
+                                            text = { Text(neighborhood) },
+                                            onClick = {
+                                                selectedNeighborhood = neighborhood
+                                                results = results
+                                                neighborhoodMenu = false
+                                            },
+                                        )
+                                    }
+                                }
                             }
                         }
                         item {
@@ -262,15 +318,45 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 enabled = !loading,
                             ) { Text(if (loading) "İşletmeler aranıyor…" else "İşletmeleri getir") }
                         }
+                        if (results.isNotEmpty()) {
+                            item {
+                                Button(
+                                    modifier = Modifier.fillMaxWidth().testTag("crm_save_all_results"),
+                                    enabled = !bulkSaving,
+                                    onClick = {
+                                        bulkSaving = true
+                                        scope.launch {
+                                            runCatching { localCrmRepository.addBusinessesAsCustomers(results) }
+                                                .onSuccess { saved ->
+                                                    crmMessage = if (saved.alreadyExisting > 0) {
+                                                        "${saved.inserted} yeni nokta CRM'e kaydedildi; ${saved.alreadyExisting} nokta zaten kayıtlıydı."
+                                                    } else {
+                                                        "${saved.inserted} noktanın tamamı CRM'e kaydedildi."
+                                                    }
+                                                }
+                                                .onFailure { throwable ->
+                                                    Log.e("LanuCrm", "Toplu CRM kaydı başarısız oldu.", throwable)
+                                                    crmMessage = "Toplu CRM kaydı tamamlanamadı. Lütfen tekrar deneyin."
+                                                }
+                                            bulkSaving = false
+                                        }
+                                    },
+                                ) {
+                                    Text(if (bulkSaving) "CRM'e kaydediliyor…" else "Tüm Sonuçları CRM'e Kaydet (${results.size})")
+                                }
+                            }
+                        }
                         error?.let { message -> item { Card { Text(message, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error) } } }
                         crmMessage?.let { message -> item { Card { Text(message, Modifier.padding(16.dp)) } } }
                         selectedBusiness?.let { business -> item { BusinessDetailCard(business, { selectedBusiness = null }) } }
                         item { SalesDashboard(selectedCity.name, selectedDistrict, availableDistricts, dashboardMetrics) { invalidateSearch(); selectedDistrict = it; results = emptyList(); selectedBusiness = null; selectedCustomerId = null } }
                         item {
                             Card(Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text("Senkronizasyon", style = MaterialTheme.typography.titleMedium)
+                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("CRM ve Excel", style = MaterialTheme.typography.titleMedium)
+                                    Text("${crmCustomers.size} CRM noktası")
                                     Text(if (pendingSyncCount == 0) "Tüm yerel değişiklikler işlendi." else "$pendingSyncCount değişiklik bağlantı bekliyor.")
+                                    CrmExportActions(crmCustomers)
                                 }
                             }
                         }
