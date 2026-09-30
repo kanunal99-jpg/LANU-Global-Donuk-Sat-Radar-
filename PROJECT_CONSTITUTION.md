@@ -523,3 +523,129 @@ Kalıcı düzeltme:
 - Kullanıcıdan yeni prompt beklemek yasaktır.
 - Güncel HEAD yeniden okunur; araştırmanın eski kalan durum iddiaları yeniden doğrulanır; ardından kalıcı sonuçlar anayasa commit'ine dönüştürülür.
 - Araştırma sırasında repo değişmişse eski rapor snapshot'ı doğrudan “current” diye yazılmaz; tarihsel bulgu ve güncel doğrulama ayrı belirtilir.
+
+## 20. DERİN ARAŞTIRMA KAYDI — 30 EYLÜL 2026 İKİNCİ DOĞRULAMA VE DURUM GÜNCELLEMESİ
+
+### Araştırma sonucu ve exact-head yeniden doğrulaması
+
+- İkinci Derin Araştırma **30 Eylül 2026** tarihinde `finished_successfully` ile tamamlandı.
+- Araştırma raporunun son snapshot HEAD'i `77b2a1051cf164360f8918e89ecc845f7bcd41d7` idi; bu SHA rapor tamamlandıktan sonra tarihsel duruma düştü.
+- Bu anayasa kaydı yazılmadan hemen önce PR #30 metadata yeniden okunmuş ve güncel pre-write exact HEAD **`3bf39dd33522ec5b7bbfd39aa317fa577f319be0`** olarak doğrulanmıştır.
+- PR açıklamasındaki manuel “Current exact-head quality evidence” bölümü hâlâ `f492ebdb...` SHA'sını gösterdiği için **güncel kabul kaynağı değildir**. Kabul kaynağı PR metadata + exact-head workflow/run + artifact + production kanıtıdır.
+- Bu anayasa commit'i yeni HEAD oluşturacağı için `3bf39dd...` dahil önceki tüm green sonuçlar yeni HEAD için otomatik olarak tarihsel kanıta düşer.
+
+### Bölüm 19 bulgularının güncel durumu — supersede kaydı
+
+Bölüm 19 araştırma tarihçesidir; aşağıdaki maddeler 30 Eylül ikinci doğrulaması ile güncellenmiştir:
+
+1. **Commercial Live Cloud kapsamı — ÇÖZÜLDÜ / KODDA MEVCUT.** Güncel `scripts/live_cloud_e2e.py` customer, contact, quote, quote-line, order ve order-line zincirini; iki kullanıcı izolasyonunu; idempotent retry; stale/foreign writer conflict; refresh-token reconnect; API cleanup ve broker cleanup akışlarını içerir.
+2. **Stale quote fixture — ÇÖZÜLDÜ.** `expected_version=1` ile gerçek stale conflict test edilirken quote payload `version=2` tutulmaktadır; önceki `version=3` → `INVALID_VERSION` fixture hatası güncel scriptte yoktur.
+3. **İsimli expected/actual assertion — ÇÖZÜLDÜ.** Güncel script `expect_equal(...)` ve `expect_true(...)` ile kontrol adı + expected/actual bağlamı üretmektedir; çıplak kritik `assert` yaklaşımı kaldırılmıştır.
+4. **Live Cloud provenance — BÜYÜK ÖLÇÜDE ÇÖZÜLDÜ.** Script `expected_head_sha`, `actual_head_sha`, repository/repository_id, workflow/run id, Supabase project ref ve script SHA256 kanıtını üretir; checkout source HEAD eşleşmesi doğrulanır.
+5. **Action full-SHA pinning — ÇÖZÜLDÜ.** Live Cloud workflow `actions/checkout@11d5960...` ve `actions/upload-artifact@ea165f8...` full immutable SHA kullanır; Android workflow checkout/setup-java/setup-gradle/upload-artifact gibi kritik action'ları full SHA ile pinler.
+6. **Android least privilege — ÇÖZÜLDÜ.** Build/test job'u `contents: read`; ayrı `publish-release` job'u yalnız `push -> main` koşulunda `contents: write` kullanır. Checkout credentials persistence kapalıdır.
+7. **Android source-head provenance — ÇÖZÜLDÜ.** PR source SHA açıkça checkout edilir, `git rev-parse HEAD` ile eşleştirilir ve build-info `source_head`, `actual_head`, `github_sha`, workflow ve run id alanlarını ayrı ayrı kaydeder.
+
+Bu çözülmüş maddeler geri dönmemelidir; sonraki denetimlerde regression bulunursa yeni problem kaydı açılır.
+
+### Kalan açık 1 — Live Cloud evidence fail-closed değil
+
+Güncel `.github/workflows/live-cloud-e2e.yml` machine-readable evidence upload adımında hâlâ:
+
+`if-no-files-found: ignore`
+
+kullanmaktadır.
+
+Kalıcı hedef:
+
+- Beklenen `cloud-e2e-result.txt` yoksa workflow kanıt katmanı sessizce geçmemelidir.
+- `if-no-files-found: error` veya eşdeğer fail-closed davranış uygulanmalıdır.
+- Test başarılı görünse bile zorunlu evidence artifact yoksa kabul başarısız sayılır.
+
+Durum: **AÇIK — düşük riskli CI hardening olarak uygulanabilir.**
+
+### Kalan açık 2 — OIDC broker trust daraltması
+
+Güncel production source `lanu-ci-auth-broker` şu kontrolleri yapmaktadır: GitHub issuer, `lanu-cloud-e2e` audience, repository adı, repository ID, actor ID, workflow_ref ve numeric run ID.
+
+Buna rağmen `workflow_ref` kontrolü hâlâ `.includes(WORKFLOW_FRAGMENT)` kullanmaktadır; `repository_owner_id` ve `event_name` ayrıca doğrulanmamaktadır.
+
+Kalıcı güvenlik hedefi:
+
+- repository/repository_id kontrolleri korunur.
+- `repository_owner_id` beklenen sabit owner ID ile doğrulanır.
+- `event_name` bu broker için izin verilen event sınıfıyla daraltılır.
+- `workflow_ref` substring eşleşmesi yerine açık/öngörülebilir prefix veya exact trust kuralına daraltılır.
+- Uzun vadede güvenilir reusable workflow kullanılırsa `job_workflow_ref` / `job_workflow_sha` trust koşulları değerlendirilebilir.
+- Trust daraltması test edilmeden production broker deploy edilmez; güven sınırı yanlışlıkla genişletilmez.
+
+Durum: **AÇIK — production güvenlik değişikliği olduğu için deploy öncesi doğrulama zorunlu.**
+
+### Kalan açık 3 — Stale E2E Auth user cleanup pagination
+
+Broker `cleanupStale()` ve aynı-run existing-user taramasında yalnız `page: 1, perPage: 1000` kullanmaktadır.
+
+Kalıcı hedef:
+
+- Auth kullanıcı taraması güvenli pagination ile tüm sayfaları kapsamalıdır.
+- Cleanup yalnız `user_metadata.lanu_e2e === true` ve uygun run/yaş koşulları sağlandığında silme yapmalıdır.
+- Cleanup hataları teşhis edilebilir loglanmalı, normal kullanıcıya dokunma riski sıfırlandırılmalıdır.
+
+Durum: **AÇIK — düşük olasılıklı fakat gerçek dayanıklılık açığı.**
+
+### Kalan açık 4 — PR body volatile provenance kaynağı olamaz
+
+PR body hâlâ eski `f492ebdb...` SHA'sını “Current HEAD” olarak göstermektedir; gerçek PR HEAD çok daha yenidir.
+
+Kalıcı kural:
+
+- PR açıklamasındaki elle yazılan SHA/run/digest bilgisi acceptance source-of-truth değildir.
+- Güncel kaynak gerçeklik: PR API head SHA + workflow run metadata + exact-head artifact + production log.
+- Volatile current-state metni PR body'de tutulacaksa otomatik üretilmeli veya açıkça “historical snapshot” olarak işaretlenmelidir.
+- Build/test workflow'a yalnız bu metni güncellemek için gereksiz `pull-requests: write` verilmez.
+
+Durum: **AÇIK — governance/provenance sorunu.**
+
+### Kalan açık 5 — Artifact retention ve moving `latest` release
+
+Workflow artifact'ları süreli saklanır; bu nedenle release-grade provenance yalnız geçici artifact'a bağlı bırakılamaz. Operasyonel `latest` release convenience pointer olabilir fakat audit zinciri için tek kalıcı kimlik olmamalıdır.
+
+Kalıcı hedef:
+
+- Main merge sonrası final acceptance evidence; source commit, APK SHA256, build-info ve mümkünse artifact attestation ile kalıcılaştırılır.
+- Versioned/immutable release veya eşdeğer provenance kaydı tercih edilir; `latest` yalnız convenience pointer olarak kalabilir.
+- PR kodu main'e merge edilmeden production `latest` APK olarak yayınlanmaz.
+
+Durum: **AÇIK — merge/release aşamasında uygulanacak provenance hardening.**
+
+### Doğrulanmış Supabase/Auth güvenlik sonucu
+
+- Tarihsel `HTTP 422 / Anonymous sign-ins are disabled` gerçek production Auth log semptomuydu.
+- Çözüm production anonymous Auth'u açmak değildir ve açılmayacaktır.
+- Güncel model GitHub OIDC → trusted broker → confirmed ephemeral authenticated A/B users → normal user tokens → Data API/RLS/RPC zinciridir.
+- Publishable/legacy anon API key, anonymous Auth sign-in ile aynı şey değildir.
+- service-role/secret yalnız server-side broker sınırında tutulur; Android, repository artifact veya PR workflow'a taşınmaz.
+- Broker modern `SUPABASE_SECRET_KEYS.default` değerini tercih eder; legacy `SUPABASE_SERVICE_ROLE_KEY` fallback'i yalnız server-side kalmaktadır. Modern secret availability production'da kanıtlanmadan fallback kör biçimde kaldırılmaz.
+
+### Exact-head kabul ve yeni commit kuralı
+
+Bu anayasa güncellemesi yeni commit oluşturacağı için önceki green Android ve Live Cloud sonuçları yalnız tarihsel kanıttır. Yeni HEAD için en az:
+
+1. Live Cloud E2E exact-head checkout/provenance,
+2. customer/contact/quote/quote-line/order/order-line + conflict/idempotency + reconnect + cleanup,
+3. Android lint + unit + exact-source APK build + instrumentation/emulator smoke,
+4. machine-readable artifact doğrulaması,
+
+yeniden çalışıp başarıyla tamamlanmadan merge değerlendirilmez.
+
+Main merge, main CI ve Release APK ayrıca kendi kabul kapılarıdır; bu anayasa commit'inin başarılı yazılması ürünün “hazır” olduğu anlamına gelmez.
+
+### Derin Araştırma otomasyonu — teknik olarak uygulanabilir kesin davranış
+
+Derin Araştırma tamamlandığında sonuç platform tarafından aktif çalışma turuna/sohbete teslim edildiği anda **ilk zorunlu işlem** şudur:
+
+`RESULT READY → CURRENT HEAD → CURRENT CODE/CI/PRODUCTION VERIFY → CONSTITUTION SYNC → SAFE FIX → RETEST → EVIDENCE`
+
+Kullanıcıdan “yaz”, “ekle”, “devam” veya “sonuçları yazdın mı” mesajı beklenmez.
+
+Asenkron araştırma sonucu henüz aktif çalışma turuna teslim edilmemişken model kendi kendine yeni bir tur başlatamaz; fakat sonuç görünür hale geldiği ilk turda anayasa senkronizasyonu diğer normal işlerden önce yapılacaktır. Bu teknik sınır, kullanıcı prompt'u bekleme bahanesi olarak kullanılamaz.
