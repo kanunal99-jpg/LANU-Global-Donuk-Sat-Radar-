@@ -93,10 +93,14 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var bulkSaving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var crmMessage by remember { mutableStateOf<String?>(null) }
+    var scanDelta by remember { mutableStateOf<RadarScanDelta?>(null) }
+    var newBusinessKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
     var searchRequestId by remember { mutableLongStateOf(0L) }
     fun invalidateSearch() {
         searchRequestId++
         loading = false
+        scanDelta = null
+        newBusinessKeys = emptySet()
     }
 
     BackHandler(enabled = selectedCustomerId != null || backStack.isNotEmpty()) { if (selectedCustomerId != null) selectedCustomerId = null else goBack() }
@@ -105,6 +109,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val repository = remember(context) { CoverageBusinessRepository(context) }
     val districtRepository = remember(context) { DistrictCatalogRepository(context) }
     val neighborhoodRepository = remember(context) { NeighborhoodCatalogRepository(context) }
+    val scanHistoryRepository = remember(context) { RadarScanHistoryRepository(context) }
     LaunchedEffect(selectedCity.name) {
         districtLoading = true
         availableDistricts = runCatching {
@@ -295,8 +300,27 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         runCatching { withTimeout(SEARCH_TIMEOUT_MS) { repository.search(requestQuery, requestCity, requestDistrict) } }
                                             .onSuccess { records ->
                                                 if (requestId == searchRequestId) {
+                                                    val delta = scanHistoryRepository.compareAndRecord(
+                                                        city = requestCity,
+                                                        district = requestDistrict,
+                                                        query = requestQuery,
+                                                        records = records,
+                                                    )
                                                     results = records
-                                                    if (records.isEmpty()) error = "Seçilen kapsamda kayıt bulunamadı." else crmMessage = "${records.size} gerçek işletme kaydı getirildi."
+                                                    scanDelta = delta
+                                                    newBusinessKeys = delta.newBusinessKeys
+                                                    if (records.isEmpty()) {
+                                                        error = "Seçilen kapsamda kayıt bulunamadı."
+                                                    } else {
+                                                        crmMessage = when {
+                                                            delta.isFirstScan ->
+                                                                "${records.size} işletme bulundu. Bu tarama sonraki karşılaştırmalar için baz olarak kaydedildi."
+                                                            delta.newCount > 0 ->
+                                                                "${records.size} işletme bulundu. Son taramadan beri ${delta.newCount} yeni işletme bulundu."
+                                                            else ->
+                                                                "${records.size} işletme bulundu. Son taramadan beri yeni işletme yok."
+                                                        }
+                                                    }
                                                 }
                                             }
                                             .onFailure { throwable ->
@@ -347,6 +371,25 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         }
                         error?.let { message -> item { Card { Text(message, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error) } } }
                         crmMessage?.let { message -> item { Card { Text(message, Modifier.padding(16.dp)) } } }
+                        scanDelta?.let { delta ->
+                            item {
+                                Card(Modifier.fillMaxWidth().testTag("new_business_scan_summary")) {
+                                    Column(
+                                        Modifier.padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        Text("Tarama karşılaştırması", style = MaterialTheme.typography.titleMedium)
+                                        Text(
+                                            if (delta.isFirstScan) {
+                                                "İlk tarama baz olarak kaydedildi. Sonraki taramalarda yeni açılan/kaynağa yeni eklenen işletmeler ayrıca gösterilecek."
+                                            } else {
+                                                "Önceki tarama: ${delta.previousCount} • Şimdi: ${delta.currentCount} • Yeni: ${delta.newCount}"
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                        }
                         selectedBusiness?.let { business -> item { BusinessDetailCard(business, { selectedBusiness = null }) } }
                         item { SalesDashboard(selectedCity.name, selectedDistrict, availableDistricts, dashboardMetrics) { invalidateSearch(); selectedDistrict = it; results = emptyList(); selectedBusiness = null; selectedCustomerId = null } }
                         item {
@@ -372,7 +415,11 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             item { BusinessMapPreview(visibleResults) }
                         }
                         items(visibleResults, key = { it.id }) { business ->
-                            BusinessResultCard(business, { selectedBusiness = business }) {
+                            BusinessResultCard(
+                                business = business,
+                                isNew = RadarScanHistoryRepository.businessKey(business) in newBusinessKeys,
+                                onClick = { selectedBusiness = business },
+                            ) {
                                 scope.launch {
                                     runCatching { localCrmRepository.addBusinessAsCustomer(business) }
                                         .onSuccess { crmMessage = "${it.businessName} CRM'e kaydedildi." }
@@ -428,7 +475,12 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
 private const val SEARCH_TIMEOUT_MS = 120_000L
 
 @Composable
-private fun BusinessResultCard(business: VerifiedBusiness, onClick: () -> Unit, onSaveToCrm: () -> Unit) {
+private fun BusinessResultCard(
+    business: VerifiedBusiness,
+    isNew: Boolean,
+    onClick: () -> Unit,
+    onSaveToCrm: () -> Unit,
+) {
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -436,7 +488,21 @@ private fun BusinessResultCard(business: VerifiedBusiness, onClick: () -> Unit, 
                     Text(business.name, style = MaterialTheme.typography.titleMedium)
                     Text("${business.city} • ${business.district}${business.neighborhood?.let { " • $it" } ?: ""}", style = MaterialTheme.typography.bodySmall)
                 }
-                Text("${BusinessQualityEvaluator.evaluate(business).score}/100", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+                Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+                    if (isNew) {
+                        Text(
+                            "YENİ",
+                            modifier = Modifier.testTag("new_business_badge"),
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
+                    Text(
+                        "${BusinessQualityEvaluator.evaluate(business).score}/100",
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
             }
             business.category?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             business.phone?.let { Text("Telefon: $it", style = MaterialTheme.typography.bodySmall) }
