@@ -35,22 +35,30 @@ class RadarScanHistoryRepository(context: Context) {
 
         val previous = preferences.getString(key, null)
             ?.let { runCatching { JSONObject(it) }.getOrNull() }
-        val previousKeys = previous
-            ?.optJSONArray("businessKeys")
+        val previousScanKeys = previous
+            ?.optJSONArray("lastKeys")
             ?.toStringSet()
-            .orEmpty()
+            ?: previous
+                ?.optJSONArray("businessKeys")
+                ?.toStringSet()
+                .orEmpty()
+        val seenKeys = previous
+            ?.optJSONArray("seenKeys")
+            ?.toStringSet()
+            ?: previousScanKeys
 
         val delta = RadarScanDelta(
             isFirstScan = previous == null,
-            previousCount = previousKeys.size,
+            previousCount = previousScanKeys.size,
             currentCount = currentKeys.size,
-            newBusinessKeys = if (previous == null) emptySet() else currentKeys - previousKeys,
+            newBusinessKeys = if (previous == null) emptySet() else currentKeys - seenKeys,
             scannedAtEpochMs = nowEpochMs,
         )
 
         val payload = JSONObject()
             .put("savedAtEpochMs", nowEpochMs)
-            .put("businessKeys", JSONArray().apply { currentKeys.sorted().forEach(::put) })
+            .put("lastKeys", JSONArray().apply { currentKeys.sorted().forEach(::put) })
+            .put("seenKeys", JSONArray().apply { (seenKeys + currentKeys).sorted().forEach(::put) })
         preferences.edit().putString(key, payload.toString()).apply()
 
         return delta
