@@ -78,7 +78,9 @@ class LocalCrmRepository(
         ownerUserId: String? = null,
     ): CrmCustomer = database.withTransaction {
         val existing = database.customerDao().findByBusinessSourceId(business.id)
-        if (existing != null) return@withTransaction CrmMappings.toDomain(existing)
+        if (existing != null) {
+            return@withTransaction CrmMappings.toDomain(enrichBusinessMetadata(existing, business))
+        }
         insertBusinessAsCustomer(business, ownerUserId)
     }
 
@@ -91,6 +93,7 @@ class LocalCrmRepository(
         businesses.distinctBy { it.id }.forEach { business ->
             val existing = database.customerDao().findByBusinessSourceId(business.id)
             if (existing != null) {
+                enrichBusinessMetadata(existing, business)
                 alreadyExisting++
             } else {
                 insertBusinessAsCustomer(business, ownerUserId)
@@ -98,6 +101,20 @@ class LocalCrmRepository(
             }
         }
         BulkCrmSaveResult(inserted = inserted, alreadyExisting = alreadyExisting)
+    }
+
+    private suspend fun enrichBusinessMetadata(
+        existing: CrmCustomerEntity,
+        business: VerifiedBusiness,
+    ): CrmCustomerEntity {
+        val enriched = existing.copy(
+            businessType = existing.businessType
+                ?: business.category?.trim()?.takeIf { it.isNotEmpty() },
+            phone = existing.phone
+                ?: business.phone?.trim()?.takeIf { it.isNotEmpty() },
+        )
+        if (enriched != existing) database.customerDao().upsert(enriched)
+        return enriched
     }
 
     private suspend fun insertBusinessAsCustomer(
