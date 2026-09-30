@@ -11,9 +11,10 @@ class CrmSyncEngineTest {
         id: String = "op-1",
         attemptCount: Int = 0,
         entityId: String = "customer-1",
+        entityType: String = LocalCrmRepository.ENTITY_CUSTOMER,
     ) = SyncOperationEntity(
         id = id,
-        entityType = "customer",
+        entityType = entityType,
         entityId = entityId,
         operation = "UPDATE",
         payloadVersion = 1,
@@ -43,6 +44,31 @@ class CrmSyncEngineTest {
     }
 
     @Test
+    fun offlineThenReconnect_preservesCommercialQueue_andSyncsOnNextRun() = runTest {
+        val queued = operation(
+            entityId = "quote-1",
+            entityType = CommercialCrmSync.ENTITY_QUOTE,
+        )
+        val dao = FakeSyncOperationDao(listOf(queued))
+        val stateStore = FakeSyncStateStore()
+        var online = false
+        val remote = object : RemoteCrmDataSource {
+            override suspend fun apply(operation: SyncOperationEntity): RemoteSyncResult =
+                if (online) RemoteSyncResult.Success else RemoteSyncResult.RetryableFailure("offline")
+        }
+        val engine = CrmSyncEngine(dao, remote, stateStore = stateStore)
+
+        assertEquals(SyncProcessResult.Deferred("op-1", 1, "offline"), engine.processOne())
+        assertEquals(SyncOperationState.PENDING.name, dao.operationById("op-1")?.state)
+        assertEquals(1, dao.operationById("op-1")?.attemptCount)
+
+        online = true
+        assertEquals(SyncProcessResult.Synced("op-1"), engine.processOne())
+        assertEquals(null, dao.operationById("op-1"))
+        assertEquals(SyncState.SYNCED, stateStore.syncStates["quote-1"])
+    }
+
+    @Test
     fun success_deletesOperation_andMarksEntitySynced() = runTest {
         val dao = FakeSyncOperationDao(listOf(operation()))
         val stateStore = FakeSyncStateStore()
@@ -61,8 +87,67 @@ class CrmSyncEngineTest {
     }
 
     @Test
-    fun conflict_parksOperation_marksEntityConflict_andDoesNotBlockQueueRuns() = runTest {
-        val dao = FakeSyncOperationDao(listOf(operation()))
+    fun success_withNewerQueuedMutation_doesNotMarkEntitySyncedEarly() = runTest {
+        val create = operation(
+            id = "op-create",
+            entityId = "quote-1",
+            entityType = CommercialCrmSync.ENTITY_QUOTE,
+        ).copy(createdAtEpochMs = 1L, payloadVersion = 1L)
+        val update = operation(
+            id = "op-update",
+            entityId = "quote-1",
+            entityType = CommercialCrmSync.ENTITY_QUOTE,
+        ).copy(createdAtEpochMs = 2L, payloadVersion = 2L)
+        val dao = FakeSyncOperationDao(listOf(create, update))
+        val stateStore = FakeSyncStateStore()
+        val engine = CrmSyncEngine(
+            dao,
+            remote = object : RemoteCrmDataSource {
+                override suspend fun apply(operation: SyncOperationEntity) = RemoteSyncResult.Success
+            },
+            stateStore = stateStore,
+        )
+
+        assertEquals(SyncProcessResult.Synced("op-create"), engine.processOne())
+        assertEquals(null, stateStore.syncStates["quote-1"])
+        assertEquals(1, dao.countForEntity(CommercialCrmSync.ENTITY_QUOTE, "quote-1"))
+
+        assertEquals(SyncProcessResult.Synced("op-update"), engine.processOne())
+        assertEquals(SyncState.SYNCED, stateStore.syncStates["quote-1"])
+        assertEquals(0, dao.countForEntity(CommercialCrmSync.ENTITY_QUOTE, "quote-1"))
+    }
+
+    @Test
+    fun ownerScopedEngine_skipsForeignQueueEntries_andProcessesOnlyOwnedOperation() = runTest {
+        val foreign = operation(id = "op-foreign", entityId = "customer-foreign")
+        val owned = operation(id = "op-owned", entityId = "customer-owned").copy(createdAtEpochMs = 2L)
+        val dao = FakeSyncOperationDao(listOf(foreign, owned))
+        val applied = mutableListOf<String>()
+        val engine = CrmSyncEngine(
+            syncDao = dao,
+            remote = object : RemoteCrmDataSource {
+                override suspend fun apply(operation: SyncOperationEntity): RemoteSyncResult {
+                    applied += operation.id
+                    return RemoteSyncResult.Success
+                }
+            },
+            ownerUserId = "user-a",
+            ownershipResolver = CrmSyncOwnershipResolver { operation, ownerUserId ->
+                ownerUserId == "user-a" && operation.entityId == "customer-owned"
+            },
+        )
+
+        assertEquals(SyncProcessResult.Synced("op-owned"), engine.processOne())
+        assertEquals(listOf("op-owned"), applied)
+        assertTrue(dao.allOperations.any { it.id == "op-foreign" })
+        assertEquals(SyncProcessResult.NoWork, engine.processOne())
+    }
+
+    @Test
+    fun conflict_parksCommercialOperation_marksEntityConflict_andDoesNotBlockQueueRuns() = runTest {
+        val dao = FakeSyncOperationDao(
+            listOf(operation(entityId = "order-1", entityType = CommercialCrmSync.ENTITY_ORDER)),
+        )
         val stateStore = FakeSyncStateStore()
         val engine = CrmSyncEngine(
             dao,
@@ -75,7 +160,7 @@ class CrmSyncEngineTest {
 
         assertEquals(SyncProcessResult.Conflict("op-1", "version mismatch"), engine.processOne())
         assertEquals(SyncOperationState.CONFLICT.name, dao.allOperations.single().state)
-        assertEquals(SyncState.CONFLICT, stateStore.syncStates["customer-1"])
+        assertEquals(SyncState.CONFLICT, stateStore.syncStates["order-1"])
         assertEquals(SyncProcessResult.NoWork, engine.processOne())
     }
 
@@ -149,6 +234,7 @@ class CrmSyncEngineTest {
         val allOperations = initial.toMutableList()
         val operation: SyncOperationEntity?
             get() = allOperations.firstOrNull { it.state == SyncOperationState.PENDING.name }
+
         fun operationById(id: String): SyncOperationEntity? =
             allOperations.firstOrNull { it.id == id }
 
@@ -160,8 +246,19 @@ class CrmSyncEngineTest {
         override suspend fun pending(limit: Int): List<SyncOperationEntity> =
             allOperations
                 .filter { it.state == SyncOperationState.PENDING.name }
-                .sortedBy { it.createdAtEpochMs }
+                .sortedWith(compareBy<SyncOperationEntity> { it.createdAtEpochMs }.thenBy { it.id })
                 .take(limit)
+
+        override suspend fun pendingForOwner(ownerUserId: String, limit: Int): List<SyncOperationEntity> =
+            pending(limit)
+
+        override fun observePendingCountForOwner(ownerUserId: String) = observePendingCount()
+
+        override suspend fun maxCreatedAtEpochMs(): Long? =
+            allOperations.maxOfOrNull { it.createdAtEpochMs }
+
+        override suspend fun countForEntity(entityType: String, entityId: String): Int =
+            allOperations.count { it.entityType == entityType && it.entityId == entityId }
 
         override fun observePendingCount() = flowOf(
             allOperations.count { it.state == SyncOperationState.PENDING.name },

@@ -1,4 +1,8 @@
-# LANU Global Donuk Satış Radarı — ANAYASA
+# LANU Global Donuk Satış Radarı — ESKİ ANAYASA / TARİHSEL EK
+
+> **KANONİK KURAL:** Projenin tek güncel ve bağlayıcı anayasası repository kökündeki `PROJECT_CONSTITUTION.md` dosyasıdır. Bu dosya 17 Eylül 2026 tarihli tarihsel kuralları korumak için tutulur; çelişki halinde `PROJECT_CONSTITUTION.md` her zaman üstündür. Bu dosya ikinci/alternatif anayasa olarak yorumlanamaz.
+
+> Buradaki hâlâ geçerli teknik ilkeler, kök anayasayı destekleyen tarihsel ek niteliğindedir. Proje durumu, Supabase kimliği, araştırma standardı, sürekli çalışma/CI bekleme denetimi ve teslim kapıları için yalnız `PROJECT_CONSTITUTION.md` esas alınır.
 
 ## 1. Amaç
 Bu proje, HORECA satış ekiplerinin gerçek ve kaynaklandırılmış işletme verileri üzerinden şehir/ilçe/mahalle bazında müşteri keşfi, saha planlama, satış fırsatı analizi ve CRM takibi yapmasını sağlar.

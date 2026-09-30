@@ -31,6 +31,21 @@ object SupabaseConfig {
 
 data class SupabaseSession(val accessToken: String, val refreshToken: String, val userId: String)
 
+internal fun parseSupabaseSession(response: JSONObject): SupabaseSession? {
+    val nestedSession = response.optJSONObject("session")
+    val access = response.optString("access_token").ifBlank {
+        nestedSession?.optString("access_token").orEmpty()
+    }
+    val refresh = response.optString("refresh_token").ifBlank {
+        nestedSession?.optString("refresh_token").orEmpty()
+    }
+    val userId = response.optJSONObject("user")?.optString("id").orEmpty().ifBlank {
+        nestedSession?.optJSONObject("user")?.optString("id").orEmpty()
+    }
+    if (access.isBlank() || refresh.isBlank() || userId.isBlank()) return null
+    return SupabaseSession(access, refresh, userId)
+}
+
 private class SecureTokenStore(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("lanu_secure_session", Context.MODE_PRIVATE)
@@ -98,14 +113,8 @@ class SupabaseAuthClient(context: Context) {
             "POST", "/auth/v1/signup",
             JSONObject().put("email", email.trim()).put("password", password).toString(),
         )
-        val session = response.optJSONObject("session")
-        val user = response.optJSONObject("user")
-        val access = session?.optString("access_token").orEmpty()
-        val refresh = session?.optString("refresh_token").orEmpty()
-        val userId = user?.optString("id").orEmpty()
-        if (access.isNotBlank() && refresh.isNotBlank() && userId.isNotBlank()) {
-            saveSession(SupabaseSession(access, refresh, userId))
-        }
+        parseSupabaseSession(response)?.let(::saveSession)
+        Unit
     } }
 
     private suspend fun authenticate(path: String, email: String, password: String): Result<Unit> = withContext(Dispatchers.IO) { runCatching {
@@ -115,19 +124,12 @@ class SupabaseAuthClient(context: Context) {
             "POST", path,
             JSONObject().put("email", email.trim()).put("password", password).toString(),
         )
-        val session = response.optJSONObject("session")
-        val user = response.optJSONObject("user")
-        val access = session?.optString("access_token").orEmpty()
-        val refresh = session?.optString("refresh_token").orEmpty()
-        val userId = user?.optString("id").orEmpty()
-        if (access.isBlank() || refresh.isBlank() || userId.isBlank()) {
-            throw IllegalStateException(
-                response.optString("msg").ifBlank {
-                    response.optString("message").ifBlank { "Hesap doğrulaması bekleniyor veya oturum oluşturulamadı." }
-                },
-            )
-        }
-        saveSession(SupabaseSession(access, refresh, userId))
+        val parsed = parseSupabaseSession(response) ?: throw IllegalStateException(
+            response.optString("msg").ifBlank {
+                response.optString("message").ifBlank { "Hesap doğrulaması bekleniyor veya oturum oluşturulamadı." }
+            },
+        )
+        saveSession(parsed)
     } }
 
     suspend fun refresh(): Result<Unit> = withContext(Dispatchers.IO) { runCatching {

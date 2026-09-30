@@ -1,5 +1,8 @@
 package com.lanu.globaldonuksatisradari
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +21,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -33,16 +37,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 @Composable
 fun ProductCatalogScreen(repository: ProductCatalogRepository) {
+    val context = LocalContext.current
+    val imageStorage = remember(context) { ProductImageStorage(context) }
     val products by repository.products.collectAsState()
     var query by remember { mutableStateOf("") }
     var editorOpen by remember { mutableStateOf(false) }
@@ -56,10 +65,36 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
     var note by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var imageUrl by remember { mutableStateOf("") }
+    var imageSource by remember { mutableStateOf<ProductImageSource?>(null) }
+    var originalImageRef by remember { mutableStateOf<String?>(null) }
+    var pendingCamera by remember { mutableStateOf<PendingProductCameraCapture?>(null) }
     var sourceUrl by remember { mutableStateOf("https://globaldonukgida.com/") }
+    var sourceVerified by remember { mutableStateOf(false) }
     var editorError by remember { mutableStateOf<String?>(null) }
 
+    fun discardUnsavedReplacement() {
+        val current = imageUrl.takeIf { it.isNotBlank() }
+        if (current != null && current != originalImageRef) imageStorage.deleteOwned(current)
+    }
+
+    fun replaceImage(reference: String, source: ProductImageSource) {
+        discardUnsavedReplacement()
+        imageUrl = reference
+        imageSource = source
+        editorError = null
+    }
+
+    fun cancelEditor() {
+        discardUnsavedReplacement()
+        pendingCamera?.let(imageStorage::discardCameraCapture)
+        pendingCamera = null
+        editorOpen = false
+    }
+
     fun openNew() {
+        discardUnsavedReplacement()
+        pendingCamera?.let(imageStorage::discardCameraCapture)
+        pendingCamera = null
         editingId = null
         name = ""
         category = ""
@@ -69,12 +104,18 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         note = ""
         description = ""
         imageUrl = ""
+        imageSource = null
+        originalImageRef = null
         sourceUrl = "https://globaldonukgida.com/"
+        sourceVerified = false
         editorError = null
         editorOpen = true
     }
 
     fun openEdit(product: CatalogProduct) {
+        discardUnsavedReplacement()
+        pendingCamera?.let(imageStorage::discardCameraCapture)
+        pendingCamera = null
         editingId = product.id
         name = product.name
         category = product.category
@@ -84,13 +125,46 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         note = product.note.orEmpty()
         description = product.description.orEmpty()
         imageUrl = product.imageUrl.orEmpty()
+        imageSource = product.imageSource ?: product.imageUrl
+            ?.takeIf { it.startsWith("https://") }
+            ?.let { ProductImageSource.URL }
+        originalImageRef = product.imageUrl
         sourceUrl = product.sourceUrl ?: "https://globaldonukgida.com/"
+        sourceVerified = product.sourceVerifiedAtEpochMs != null
         editorError = null
         editorOpen = true
     }
 
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) {
+            runCatching { imageStorage.importFromPicker(uri) }
+                .onSuccess { replaceImage(it, ProductImageSource.GALLERY) }
+                .onFailure { editorError = it.message ?: "Galeri görseli alınamadı." }
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val capture = pendingCamera
+        pendingCamera = null
+        if (capture != null) {
+            if (success) {
+                runCatching { imageStorage.finalizeCameraCapture(capture) }
+                    .onSuccess { replaceImage(it, ProductImageSource.CAMERA) }
+                    .onFailure {
+                        imageStorage.discardCameraCapture(capture)
+                        editorError = it.message ?: "Kamera görseli kaydedilemedi."
+                    }
+            } else {
+                imageStorage.discardCameraCapture(capture)
+            }
+        }
+    }
+
     fun save() {
         editorError = runCatching {
+            if (sourceVerified) {
+                require(sourceUrl.isNotBlank()) { "Doğrulanmış ürün için resmî kaynak URL zorunludur." }
+            }
             repository.upsert(
                 id = editingId,
                 name = name,
@@ -102,8 +176,11 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                 description = description,
                 imageUrl = imageUrl,
                 sourceUrl = sourceUrl,
-                sourceVerifiedAtEpochMs = System.currentTimeMillis(),
+                sourceVerifiedAtEpochMs = if (sourceVerified) System.currentTimeMillis() else null,
+                imageSource = imageSource,
             )
+            if (originalImageRef != imageUrl) imageStorage.deleteOwned(originalImageRef)
+            originalImageRef = imageUrl.takeIf { it.isNotBlank() }
             editorOpen = false
         }.exceptionOrNull()?.message
     }
@@ -171,7 +248,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
 
     if (editorOpen) {
         AlertDialog(
-            onDismissRequest = { editorOpen = false },
+            onDismissRequest = ::cancelEditor,
             modifier = Modifier.testTag("product_editor_dialog").semantics { testTagsAsResourceId = true },
             title = { Text(if (editingId == null) "Yeni Ürün" else "Ürünü Düzenle", modifier = Modifier.testTag("product_editor_open_state")) },
             text = {
@@ -187,14 +264,89 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                     }
                     OutlinedTextField(value = price, onValueChange = { price = it }, modifier = Modifier.fillMaxWidth().testTag("product_price_input"), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), label = { Text("Birim fiyat *") }, placeholder = { Text("Örn. 1250,50") })
                     OutlinedTextField(value = description, onValueChange = { description = it }, modifier = Modifier.fillMaxWidth(), minLines = 3, label = { Text("Ürün açıklaması") })
-                    OutlinedTextField(value = imageUrl, onValueChange = { imageUrl = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Ürün fotoğrafı URL") })
+
+                    Text("Ürün fotoğrafı", style = MaterialTheme.typography.titleSmall)
+                    if (imageUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = imageUrl,
+                            contentDescription = "Ürün fotoğrafı önizleme",
+                            modifier = Modifier.fillMaxWidth().height(170.dp).testTag("product_image_preview"),
+                            contentScale = ContentScale.Crop,
+                        )
+                        val sourceLabel = when (imageSource) {
+                            ProductImageSource.URL -> "HTTPS URL"
+                            ProductImageSource.GALLERY -> "Galeri • yerel güvenli kopya"
+                            ProductImageSource.CAMERA -> "Kamera • yerel güvenli kopya"
+                            null -> "Bilinmiyor"
+                        }
+                        Text("Fotoğraf kaynağı: $sourceLabel", style = MaterialTheme.typography.bodySmall)
+                    }
+                    OutlinedTextField(
+                        value = if (imageSource == null || imageSource == ProductImageSource.URL) imageUrl else "",
+                        onValueChange = { value ->
+                            discardUnsavedReplacement()
+                            imageUrl = value
+                            imageSource = value.trim().takeIf { it.isNotEmpty() }?.let { ProductImageSource.URL }
+                            editorError = null
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("product_image_url_input"),
+                        singleLine = true,
+                        label = { Text("HTTPS görsel URL") },
+                        placeholder = { Text(if (imageSource == ProductImageSource.GALLERY || imageSource == ProductImageSource.CAMERA) "Yerel görsel seçili; URL girerek değiştirin" else "https://...") },
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("product_image_gallery_button"),
+                    ) { Text("Galeriden seç") }
+                    OutlinedButton(
+                        onClick = {
+                            val capture = runCatching { imageStorage.createCameraCapture() }
+                                .onFailure { editorError = it.message ?: "Kamera hazırlanamıyor." }
+                                .getOrNull()
+                            if (capture != null) {
+                                pendingCamera = capture
+                                runCatching { cameraLauncher.launch(capture.uri) }
+                                    .onFailure {
+                                        imageStorage.discardCameraCapture(capture)
+                                        pendingCamera = null
+                                        editorError = it.message ?: "Kamera uygulaması açılamadı."
+                                    }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("product_image_camera_button"),
+                    ) { Text("Fotoğraf çek") }
+                    if (imageUrl.isNotBlank()) {
+                        TextButton(
+                            onClick = {
+                                discardUnsavedReplacement()
+                                imageUrl = ""
+                                imageSource = null
+                                editorError = null
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("product_image_remove_button"),
+                        ) { Text("Fotoğrafı kaldır") }
+                    }
+
                     OutlinedTextField(value = sourceUrl, onValueChange = { sourceUrl = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Resmî kaynak URL") })
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = sourceVerified,
+                            onCheckedChange = { sourceVerified = it },
+                            modifier = Modifier.testTag("product_source_verified_checkbox"),
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text("Resmî kaynağı doğruladım", style = MaterialTheme.typography.bodyMedium)
+                            Text("İşaretlenmezse ürün kaydı doğrulanmış kaynak olarak etiketlenmez.", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
                     OutlinedTextField(value = note, onValueChange = { note = it }, modifier = Modifier.fillMaxWidth(), minLines = 2, label = { Text("Not") })
                     editorError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                 }
             },
             confirmButton = { Button(onClick = ::save, modifier = Modifier.testTag("product_save_button")) { Text("Kaydet") } },
-            dismissButton = { TextButton(onClick = { editorOpen = false }) { Text("Vazgeç") } },
+            dismissButton = { TextButton(onClick = ::cancelEditor) { Text("Vazgeç") } },
         )
     }
 
@@ -204,7 +356,13 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
             onDismissRequest = { deletingId = null },
             title = { Text("Ürünü sil") },
             text = { Text("“${deletingProduct.name}” kaydı katalogdan silinsin mi?") },
-            confirmButton = { Button(onClick = { repository.delete(deletingProduct.id); deletingId = null }) { Text("Sil") } },
+            confirmButton = {
+                Button(onClick = {
+                    repository.delete(deletingProduct.id)
+                    imageStorage.deleteOwned(deletingProduct.imageUrl)
+                    deletingId = null
+                }) { Text("Sil") }
+            },
             dismissButton = { TextButton(onClick = { deletingId = null }) { Text("İptal") } },
         )
     }
@@ -228,9 +386,23 @@ private fun ProductCard(product: CatalogProduct, onEdit: () -> Unit, onDelete: (
                 }
                 Text(ProductPrice.formatMinor(product.priceMinor, product.currency), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             }
+            product.imageSource?.let { source ->
+                val label = when (source) {
+                    ProductImageSource.URL -> "URL"
+                    ProductImageSource.GALLERY -> "Galeri"
+                    ProductImageSource.CAMERA -> "Kamera"
+                }
+                Text("Görsel kaynağı: $label", style = MaterialTheme.typography.labelSmall)
+            }
             product.description?.let { HorizontalDivider(); Text(it, style = MaterialTheme.typography.bodyMedium) }
             product.note?.let { HorizontalDivider(); Text(it, style = MaterialTheme.typography.bodySmall) }
             product.sourceUrl?.let { Text("Kaynak: $it", style = MaterialTheme.typography.labelSmall) }
+            if (product.sourceVerifiedAtEpochMs != null) {
+                val formatted = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale("tr", "TR")).format(Date(product.sourceVerifiedAtEpochMs))
+                Text("Kaynak doğrulandı • $formatted", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            } else {
+                Text("Kaynak doğrulanmadı", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+            }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 OutlinedButton(onClick = onEdit) { Text("Düzenle") }
                 TextButton(onClick = onDelete) { Text("Sil") }

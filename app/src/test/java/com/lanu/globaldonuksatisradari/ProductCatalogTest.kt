@@ -43,9 +43,60 @@ class ProductCatalogTest {
     }
 
     @Test
-    fun rejectsNonHttpsProductImageUrl() {
+    fun acceptsAndNormalizesHttpProductImageUrl() {
+        assertEquals(
+            "http://example.com/img/photo.jpg",
+            ProductMediaValidation.normalizeImageUrl(" HTTP://EXAMPLE.COM/img/tmp/../photo.jpg "),
+        )
+    }
+
+    @Test
+    fun acceptsAndNormalizesHttpsProductImageUrl() {
+        assertEquals(
+            "https://example.com/photo.jpg",
+            ProductMediaValidation.normalizeImageUrl("https://EXAMPLE.COM/photo.jpg"),
+        )
+    }
+
+    @Test
+    fun acceptsOfficialGlobalDonukVerifiedSource() {
+        assertEquals(
+            "https://globaldonukgida.com/urunler",
+            ProductMediaValidation.normalizeVerifiedGlobalDonukSourceUrl(
+                "https://GLOBALDONUKGIDA.COM/urunler",
+            ),
+        )
+        assertEquals(
+            "https://www.globaldonukgida.com/katalog",
+            ProductMediaValidation.normalizeVerifiedGlobalDonukSourceUrl(
+                "https://www.globaldonukgida.com/katalog",
+            ),
+        )
+    }
+
+    @Test
+    fun rejectsNonGlobalDonukVerifiedSource() {
         assertThrows(IllegalArgumentException::class.java) {
-            ProductMediaValidation.requireHttpsUrl("http://example.com/image.jpg", "Ürün fotoğrafı URL")
+            ProductMediaValidation.normalizeVerifiedGlobalDonukSourceUrl("https://example.com/urunler")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            ProductMediaValidation.normalizeVerifiedGlobalDonukSourceUrl(
+                "https://globaldonukgida.com.example.org/urunler",
+            )
+        }
+    }
+
+    @Test
+    fun rejectsNonWebProductImageUrl() {
+        assertThrows(IllegalArgumentException::class.java) {
+            ProductMediaValidation.normalizeImageUrl("ftp://example.com/image.jpg")
+        }
+    }
+
+    @Test
+    fun rejectsCredentialBearingProductImageUrl() {
+        assertThrows(IllegalArgumentException::class.java) {
+            ProductMediaValidation.normalizeImageUrl("https://user:pass@example.com/image.jpg")
         }
     }
 

@@ -8,201 +8,216 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CrmCustomerDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(customer: CrmCustomerEntity)
-
-    @Query("SELECT * FROM crm_customer WHERE id = :id LIMIT 1")
-    suspend fun findById(id: String): CrmCustomerEntity?
-
-    @Query("SELECT * FROM crm_customer WHERE businessSourceId = :businessSourceId LIMIT 1")
-    suspend fun findByBusinessSourceId(businessSourceId: String): CrmCustomerEntity?
-
-    @Query("SELECT * FROM crm_customer WHERE city = :city ORDER BY updatedAtEpochMs DESC")
-    fun observeByCity(city: String): Flow<List<CrmCustomerEntity>>
-
-    @Query("SELECT * FROM crm_customer ORDER BY updatedAtEpochMs DESC")
-    fun observeAll(): Flow<List<CrmCustomerEntity>>
-
-    @Query("UPDATE crm_customer SET syncState = :state WHERE id = :id")
-    suspend fun updateSyncState(id: String, state: String)
-
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(customer: CrmCustomerEntity)
+    @Query("SELECT * FROM crm_customer WHERE id = :id LIMIT 1") suspend fun findById(id: String): CrmCustomerEntity?
+    @Query("SELECT * FROM crm_customer WHERE businessSourceId = :businessSourceId LIMIT 1") suspend fun findByBusinessSourceId(businessSourceId: String): CrmCustomerEntity?
     @Query(
-        "UPDATE crm_customer SET notes = :notes, updatedAtEpochMs = :updatedAtEpochMs, " +
-            "version = :version, syncState = :state WHERE id = :id",
+        """
+        SELECT * FROM crm_customer
+        WHERE businessSourceId = :businessSourceId
+          AND ((ownerUserId = :ownerUserId) OR (ownerUserId IS NULL AND :ownerUserId IS NULL))
+        LIMIT 1
+        """,
     )
-    suspend fun updateNotes(
-        id: String,
-        notes: String?,
-        updatedAtEpochMs: Long,
-        version: Long,
-        state: String,
-    ): Int
+    suspend fun findByBusinessSourceIdForOwner(
+        businessSourceId: String,
+        ownerUserId: String?,
+    ): CrmCustomerEntity?
+    @Query("SELECT * FROM crm_customer WHERE city = :city ORDER BY updatedAtEpochMs DESC") fun observeByCity(city: String): Flow<List<CrmCustomerEntity>>
+    @Query("SELECT * FROM crm_customer ORDER BY updatedAtEpochMs DESC") fun observeAll(): Flow<List<CrmCustomerEntity>>
+    @Query("UPDATE crm_customer SET syncState = :state WHERE id = :id") suspend fun updateSyncState(id: String, state: String)
+    @Query("UPDATE crm_customer SET notes = :notes, updatedAtEpochMs = :updatedAtEpochMs, version = :version, syncState = :state WHERE id = :id") suspend fun updateNotes(id: String, notes: String?, updatedAtEpochMs: Long, version: Long, state: String): Int
+}
+
+@Dao
+interface CrmContactDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(contact: CrmContactEntity)
+    @Query("SELECT * FROM crm_contact WHERE id = :id LIMIT 1") suspend fun findById(id: String): CrmContactEntity?
+    @Query("SELECT * FROM crm_contact WHERE customerId = :customerId ORDER BY isPrimary DESC, fullName COLLATE NOCASE ASC") fun observeForCustomer(customerId: String): Flow<List<CrmContactEntity>>
+    @Query("SELECT * FROM crm_contact WHERE customerId = :customerId ORDER BY isPrimary DESC, fullName COLLATE NOCASE ASC") suspend fun listForCustomer(customerId: String): List<CrmContactEntity>
+    @Query("SELECT COUNT(*) FROM crm_contact WHERE customerId = :customerId") suspend fun countForCustomer(customerId: String): Int
+    @Query("UPDATE crm_contact SET isPrimary = 0, updatedAtEpochMs = :updatedAtEpochMs, version = version + 1, syncState = :state WHERE customerId = :customerId AND isPrimary = 1") suspend fun clearPrimary(customerId: String, updatedAtEpochMs: Long, state: String): Int
+    @Query("UPDATE crm_contact SET syncState = :state WHERE id = :id") suspend fun updateSyncState(id: String, state: String): Int
 }
 
 @Dao
 interface CrmActivityDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(activity: CrmActivityEntity)
-
-    @Query("SELECT * FROM crm_activity WHERE id = :id LIMIT 1")
-    suspend fun findById(id: String): CrmActivityEntity?
-
-    @Query("SELECT * FROM crm_activity WHERE customerId = :customerId ORDER BY occurredAtEpochMs DESC")
-    suspend fun findForCustomer(customerId: String): List<CrmActivityEntity>
-
-    @Query("SELECT * FROM crm_activity WHERE customerId = :customerId ORDER BY occurredAtEpochMs DESC")
-    fun observeForCustomer(customerId: String): Flow<List<CrmActivityEntity>>
-
-    @Query("UPDATE crm_activity SET syncState = :state WHERE id = :id")
-    suspend fun updateSyncState(id: String, state: String)
-
-    @Query(
-        "SELECT a.* FROM crm_activity a " +
-            "INNER JOIN crm_customer c ON c.id = a.customerId " +
-            "WHERE c.city = :city AND (:district IS NULL OR c.district = :district) " +
-            "ORDER BY a.occurredAtEpochMs DESC",
-    )
-    fun observeForRegion(city: String, district: String?): Flow<List<CrmActivityEntity>>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(activity: CrmActivityEntity)
+    @Query("SELECT * FROM crm_activity WHERE id = :id LIMIT 1") suspend fun findById(id: String): CrmActivityEntity?
+    @Query("SELECT * FROM crm_activity WHERE customerId = :customerId ORDER BY occurredAtEpochMs DESC") suspend fun findForCustomer(customerId: String): List<CrmActivityEntity>
+    @Query("SELECT * FROM crm_activity WHERE customerId = :customerId ORDER BY occurredAtEpochMs DESC") fun observeForCustomer(customerId: String): Flow<List<CrmActivityEntity>>
+    @Query("UPDATE crm_activity SET syncState = :state WHERE id = :id") suspend fun updateSyncState(id: String, state: String)
+    @Query("SELECT a.* FROM crm_activity a INNER JOIN crm_customer c ON c.id = a.customerId WHERE c.city = :city AND (:district IS NULL OR c.district = :district) ORDER BY a.occurredAtEpochMs DESC") fun observeForRegion(city: String, district: String?): Flow<List<CrmActivityEntity>>
 }
 
 @Dao
 interface CrmNextActionDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(action: CrmNextActionEntity)
-
-    @Query("SELECT * FROM crm_next_action WHERE customerId = :customerId ORDER BY dueAtEpochMs ASC")
-    fun observeForCustomer(customerId: String): Flow<List<CrmNextActionEntity>>
-
-    @Query(
-        "SELECT * FROM crm_next_action " +
-            "WHERE completedAtEpochMs IS NULL " +
-            "ORDER BY dueAtEpochMs ASC " +
-            "LIMIT :limit",
-    )
-    fun observeOpen(limit: Int): Flow<List<CrmNextActionEntity>>
-
-    @Query(
-        "SELECT a.* FROM crm_next_action a " +
-            "INNER JOIN crm_customer c ON c.id = a.customerId " +
-            "WHERE a.completedAtEpochMs IS NULL " +
-            "AND c.city = :city " +
-            "AND (:district IS NULL OR c.district = :district) " +
-            "ORDER BY a.dueAtEpochMs ASC",
-    )
-    fun observeOpenForRegion(city: String, district: String?): Flow<List<CrmNextActionEntity>>
-
-    @Query(
-        "SELECT a.* FROM crm_next_action a " +
-            "INNER JOIN crm_customer c ON c.id = a.customerId " +
-            "WHERE a.completedAtEpochMs IS NULL " +
-            "AND a.dueAtEpochMs <= :nowEpochMs " +
-            "AND c.city = :city " +
-            "AND (:district IS NULL OR c.district = :district) " +
-            "ORDER BY a.dueAtEpochMs ASC",
-    )
-    fun observeDueForRegion(
-        city: String,
-        district: String?,
-        nowEpochMs: Long,
-    ): Flow<List<CrmNextActionEntity>>
-
-    @Query(
-        "SELECT * FROM crm_next_action " +
-            "WHERE completedAtEpochMs IS NULL AND dueAtEpochMs <= :nowEpochMs " +
-            "ORDER BY dueAtEpochMs ASC " +
-            "LIMIT :limit",
-    )
-    fun observeDue(nowEpochMs: Long, limit: Int): Flow<List<CrmNextActionEntity>>
-
-    @Query("SELECT * FROM crm_next_action WHERE id = :id LIMIT 1")
-    suspend fun findById(id: String): CrmNextActionEntity?
-
-    @Query("UPDATE crm_next_action SET syncState = :state WHERE id = :id")
-    suspend fun updateSyncState(id: String, state: String): Int
-
-    @Query(
-        "UPDATE crm_next_action SET completedAtEpochMs = :completedAtEpochMs, " +
-            "completedByUserId = :completedByUserId, version = version + 1, syncState = :syncState " +
-            "WHERE id = :id AND completedAtEpochMs IS NULL",
-    )
-    suspend fun complete(
-        id: String,
-        completedAtEpochMs: Long,
-        completedByUserId: String?,
-        syncState: String,
-    ): Int
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(action: CrmNextActionEntity)
+    @Query("SELECT * FROM crm_next_action WHERE customerId = :customerId ORDER BY dueAtEpochMs ASC") fun observeForCustomer(customerId: String): Flow<List<CrmNextActionEntity>>
+    @Query("SELECT * FROM crm_next_action WHERE completedAtEpochMs IS NULL ORDER BY dueAtEpochMs ASC LIMIT :limit") fun observeOpen(limit: Int): Flow<List<CrmNextActionEntity>>
+    @Query("SELECT a.* FROM crm_next_action a INNER JOIN crm_customer c ON c.id = a.customerId WHERE a.completedAtEpochMs IS NULL AND c.city = :city AND (:district IS NULL OR c.district = :district) ORDER BY a.dueAtEpochMs ASC") fun observeOpenForRegion(city: String, district: String?): Flow<List<CrmNextActionEntity>>
+    @Query("SELECT a.* FROM crm_next_action a INNER JOIN crm_customer c ON c.id = a.customerId WHERE a.completedAtEpochMs IS NULL AND a.dueAtEpochMs <= :nowEpochMs AND c.city = :city AND (:district IS NULL OR c.district = :district) ORDER BY a.dueAtEpochMs ASC") fun observeDueForRegion(city: String, district: String?, nowEpochMs: Long): Flow<List<CrmNextActionEntity>>
+    @Query("SELECT * FROM crm_next_action WHERE completedAtEpochMs IS NULL AND dueAtEpochMs <= :nowEpochMs ORDER BY dueAtEpochMs ASC LIMIT :limit") fun observeDue(nowEpochMs: Long, limit: Int): Flow<List<CrmNextActionEntity>>
+    @Query("SELECT * FROM crm_next_action WHERE id = :id LIMIT 1") suspend fun findById(id: String): CrmNextActionEntity?
+    @Query("UPDATE crm_next_action SET syncState = :state WHERE id = :id") suspend fun updateSyncState(id: String, state: String): Int
+    @Query("UPDATE crm_next_action SET completedAtEpochMs = :completedAtEpochMs, completedByUserId = :completedByUserId, version = version + 1, syncState = :syncState WHERE id = :id AND completedAtEpochMs IS NULL") suspend fun complete(id: String, completedAtEpochMs: Long, completedByUserId: String?, syncState: String): Int
 }
 
 @Dao
 interface CrmOpportunityDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(opportunity: CrmOpportunityEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(opportunity: CrmOpportunityEntity)
+    @Query("SELECT * FROM crm_opportunity WHERE customerId = :customerId ORDER BY updatedAtEpochMs DESC") fun observeForCustomer(customerId: String): Flow<List<CrmOpportunityEntity>>
+    @Query("SELECT * FROM crm_opportunity WHERE id = :id LIMIT 1") suspend fun findById(id: String): CrmOpportunityEntity?
+    @Query("SELECT o.* FROM crm_opportunity o INNER JOIN crm_customer c ON c.id = o.customerId WHERE c.city = :city AND (:district IS NULL OR c.district = :district) ORDER BY o.updatedAtEpochMs DESC") fun observeForRegion(city: String, district: String?): Flow<List<CrmOpportunityEntity>>
+    @Query("UPDATE crm_opportunity SET status = :status, updatedAtEpochMs = :updatedAtEpochMs, version = version + 1, syncState = :syncState WHERE id = :id") suspend fun updateStatus(id: String, status: String, updatedAtEpochMs: Long, syncState: String): Int
+    @Query("UPDATE crm_opportunity SET syncState = :state WHERE id = :id") suspend fun updateSyncState(id: String, state: String): Int
+}
 
-    @Query("SELECT * FROM crm_opportunity WHERE customerId = :customerId ORDER BY updatedAtEpochMs DESC")
-    fun observeForCustomer(customerId: String): Flow<List<CrmOpportunityEntity>>
+@Dao
+interface CrmQuoteDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(quote: CrmQuoteEntity)
+    @Query("SELECT * FROM crm_quote WHERE id = :id LIMIT 1") suspend fun findById(id: String): CrmQuoteEntity?
+    @Query("SELECT * FROM crm_quote WHERE customerId = :customerId ORDER BY updatedAtEpochMs DESC") fun observeForCustomer(customerId: String): Flow<List<CrmQuoteEntity>>
+    @Query("UPDATE crm_quote SET status = :status, updatedAtEpochMs = :updatedAtEpochMs, version = version + 1, syncState = :syncState WHERE id = :id") suspend fun updateStatus(id: String, status: String, updatedAtEpochMs: Long, syncState: String): Int
+    @Query("UPDATE crm_quote SET syncState = :state WHERE id = :id") suspend fun updateSyncState(id: String, state: String): Int
+}
 
-    @Query("SELECT * FROM crm_opportunity WHERE id = :id LIMIT 1")
-    suspend fun findById(id: String): CrmOpportunityEntity?
-
-    @Query(
-        "SELECT o.* FROM crm_opportunity o " +
-            "INNER JOIN crm_customer c ON c.id = o.customerId " +
-            "WHERE c.city = :city " +
-            "AND (:district IS NULL OR c.district = :district) " +
-            "ORDER BY o.updatedAtEpochMs DESC",
-    )
-    fun observeForRegion(city: String, district: String?): Flow<List<CrmOpportunityEntity>>
-
-    @Query(
-        "UPDATE crm_opportunity SET status = :status, updatedAtEpochMs = :updatedAtEpochMs, " +
-            "version = version + 1, syncState = :syncState WHERE id = :id",
-    )
-    suspend fun updateStatus(
-        id: String,
-        status: String,
-        updatedAtEpochMs: Long,
-        syncState: String,
-    ): Int
-
-    @Query("UPDATE crm_opportunity SET syncState = :state WHERE id = :id")
-    suspend fun updateSyncState(id: String, state: String): Int
+@Dao
+interface CrmOrderDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(order: CrmOrderEntity)
+    @Query("SELECT * FROM crm_order WHERE id = :id LIMIT 1") suspend fun findById(id: String): CrmOrderEntity?
+    @Query("SELECT * FROM crm_order WHERE customerId = :customerId ORDER BY updatedAtEpochMs DESC") fun observeForCustomer(customerId: String): Flow<List<CrmOrderEntity>>
+    @Query("UPDATE crm_order SET status = :status, updatedAtEpochMs = :updatedAtEpochMs, version = version + 1, syncState = :syncState WHERE id = :id") suspend fun updateStatus(id: String, status: String, updatedAtEpochMs: Long, syncState: String): Int
+    @Query("UPDATE crm_order SET syncState = :state WHERE id = :id") suspend fun updateSyncState(id: String, state: String): Int
 }
 
 @Dao
 interface CrmStageTransitionDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(transition: CrmStageTransitionEntity)
-
-    @Query("SELECT * FROM crm_stage_transition WHERE customerId = :customerId ORDER BY changedAtEpochMs DESC")
-    fun observeForCustomer(customerId: String): Flow<List<CrmStageTransitionEntity>>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insert(transition: CrmStageTransitionEntity)
+    @Query("SELECT * FROM crm_stage_transition WHERE customerId = :customerId ORDER BY changedAtEpochMs DESC") fun observeForCustomer(customerId: String): Flow<List<CrmStageTransitionEntity>>
 }
 
 @Dao
 interface SyncOperationDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(operation: SyncOperationEntity)
-
-    @Query("SELECT * FROM crm_sync_operation WHERE state = 'PENDING' ORDER BY createdAtEpochMs ASC LIMIT :limit")
-    suspend fun pending(limit: Int): List<SyncOperationEntity>
-
-    @Query("SELECT COUNT(*) FROM crm_sync_operation WHERE state = 'PENDING'")
-    fun observePendingCount(): kotlinx.coroutines.flow.Flow<Int>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insert(operation: SyncOperationEntity)
+    @Query("SELECT * FROM crm_sync_operation WHERE state = 'PENDING' ORDER BY createdAtEpochMs ASC, id ASC LIMIT :limit") suspend fun pending(limit: Int): List<SyncOperationEntity>
 
     @Query(
-        "UPDATE crm_sync_operation " +
-            "SET attemptCount = :attemptCount, lastError = :lastError, state = :state " +
-            "WHERE id = :id",
+        """
+        SELECT s.* FROM crm_sync_operation s
+        WHERE s.state = 'PENDING' AND (
+            (s.entityType = 'customer' AND EXISTS (
+                SELECT 1 FROM crm_customer c
+                WHERE c.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'activity' AND EXISTS (
+                SELECT 1 FROM crm_activity a
+                INNER JOIN crm_customer c ON c.id = a.customerId
+                WHERE a.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'next_action' AND EXISTS (
+                SELECT 1 FROM crm_next_action n
+                INNER JOIN crm_customer c ON c.id = n.customerId
+                WHERE n.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'opportunity' AND EXISTS (
+                SELECT 1 FROM crm_opportunity o
+                INNER JOIN crm_customer c ON c.id = o.customerId
+                WHERE o.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'contact' AND EXISTS (
+                SELECT 1 FROM crm_contact ct
+                INNER JOIN crm_customer c ON c.id = ct.customerId
+                WHERE ct.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'quote' AND EXISTS (
+                SELECT 1 FROM crm_quote q
+                INNER JOIN crm_customer c ON c.id = q.customerId
+                WHERE q.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'quote_line' AND EXISTS (
+                SELECT 1 FROM crm_quote_line ql
+                INNER JOIN crm_quote q ON q.id = ql.quoteId
+                INNER JOIN crm_customer c ON c.id = q.customerId
+                WHERE ql.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'order' AND EXISTS (
+                SELECT 1 FROM crm_order o
+                INNER JOIN crm_customer c ON c.id = o.customerId
+                WHERE o.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'order_line' AND EXISTS (
+                SELECT 1 FROM crm_order_line ol
+                INNER JOIN crm_order o ON o.id = ol.orderId
+                INNER JOIN crm_customer c ON c.id = o.customerId
+                WHERE ol.id = s.entityId AND c.ownerUserId = :ownerUserId
+            ))
+        )
+        ORDER BY s.createdAtEpochMs ASC, s.id ASC
+        LIMIT :limit
+        """,
     )
-    suspend fun updateAttemptAndState(
-        id: String,
-        attemptCount: Int,
-        lastError: String?,
-        state: String,
+    suspend fun pendingForOwner(ownerUserId: String, limit: Int): List<SyncOperationEntity>
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM crm_sync_operation s
+        WHERE s.state = 'PENDING' AND (
+            (s.entityType = 'customer' AND EXISTS (
+                SELECT 1 FROM crm_customer c
+                WHERE c.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'activity' AND EXISTS (
+                SELECT 1 FROM crm_activity a
+                INNER JOIN crm_customer c ON c.id = a.customerId
+                WHERE a.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'next_action' AND EXISTS (
+                SELECT 1 FROM crm_next_action n
+                INNER JOIN crm_customer c ON c.id = n.customerId
+                WHERE n.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'opportunity' AND EXISTS (
+                SELECT 1 FROM crm_opportunity o
+                INNER JOIN crm_customer c ON c.id = o.customerId
+                WHERE o.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'contact' AND EXISTS (
+                SELECT 1 FROM crm_contact ct
+                INNER JOIN crm_customer c ON c.id = ct.customerId
+                WHERE ct.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'quote' AND EXISTS (
+                SELECT 1 FROM crm_quote q
+                INNER JOIN crm_customer c ON c.id = q.customerId
+                WHERE q.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'quote_line' AND EXISTS (
+                SELECT 1 FROM crm_quote_line ql
+                INNER JOIN crm_quote q ON q.id = ql.quoteId
+                INNER JOIN crm_customer c ON c.id = q.customerId
+                WHERE ql.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'order' AND EXISTS (
+                SELECT 1 FROM crm_order o
+                INNER JOIN crm_customer c ON c.id = o.customerId
+                WHERE o.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'order_line' AND EXISTS (
+                SELECT 1 FROM crm_order_line ol
+                INNER JOIN crm_order o ON o.id = ol.orderId
+                INNER JOIN crm_customer c ON c.id = o.customerId
+                WHERE ol.id = s.entityId AND c.ownerUserId = :ownerUserId
+            ))
+        )
+        """,
     )
+    fun observePendingCountForOwner(ownerUserId: String): Flow<Int>
 
-    @Query("UPDATE crm_sync_operation SET state = :state, lastError = :lastError WHERE id = :id")
-    suspend fun updateState(id: String, state: String, lastError: String?)
-
-    @Query("DELETE FROM crm_sync_operation WHERE id = :id")
-    suspend fun delete(id: String)
+    @Query("SELECT MAX(createdAtEpochMs) FROM crm_sync_operation") suspend fun maxCreatedAtEpochMs(): Long?
+    @Query("SELECT COUNT(*) FROM crm_sync_operation WHERE entityType = :entityType AND entityId = :entityId") suspend fun countForEntity(entityType: String, entityId: String): Int
+    @Query("SELECT COUNT(*) FROM crm_sync_operation WHERE state = 'PENDING'") fun observePendingCount(): Flow<Int>
+    @Query("UPDATE crm_sync_operation SET attemptCount = :attemptCount, lastError = :lastError, state = :state WHERE id = :id") suspend fun updateAttemptAndState(id: String, attemptCount: Int, lastError: String?, state: String)
+    @Query("UPDATE crm_sync_operation SET state = :state, lastError = :lastError WHERE id = :id") suspend fun updateState(id: String, state: String, lastError: String?)
+    @Query("DELETE FROM crm_sync_operation WHERE id = :id") suspend fun delete(id: String)
 }

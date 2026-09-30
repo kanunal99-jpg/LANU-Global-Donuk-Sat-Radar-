@@ -8,10 +8,17 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.net.URI
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.util.Locale
 import java.util.UUID
+
+enum class ProductImageSource {
+    URL,
+    GALLERY,
+    CAMERA,
+}
 
 data class CatalogProduct(
     val id: String,
@@ -26,13 +33,66 @@ data class CatalogProduct(
     val sourceUrl: String?,
     val sourceVerifiedAtEpochMs: Long?,
     val updatedAtEpochMs: Long,
+    val imageSource: ProductImageSource? = null,
 )
 
 object ProductMediaValidation {
-    fun requireHttpsUrl(value: String?, field: String) {
-        value?.trim()?.takeIf { it.isNotEmpty() }?.let {
-            require(it.startsWith("https://")) { "$field yalnızca HTTPS olmalıdır." }
+    private const val GLOBAL_DONUK_HOST = "globaldonukgida.com"
+
+    fun isWebUrl(value: String?): Boolean {
+        val scheme = runCatching { URI(value?.trim().orEmpty()).scheme?.lowercase(Locale.ROOT) }.getOrNull()
+        return scheme == "http" || scheme == "https"
+    }
+
+    fun normalizeImageUrl(value: String?): String? =
+        normalizeWebUrl(value, "Ürün fotoğrafı URL", allowHttp = true)
+
+    fun normalizeSourceUrl(value: String?): String? =
+        normalizeWebUrl(value, "Kaynak URL", allowHttp = false)
+
+    fun normalizeVerifiedGlobalDonukSourceUrl(value: String?): String {
+        val normalized = normalizeSourceUrl(value)
+            ?: throw IllegalArgumentException("Doğrulanmış ürün için resmî Global Donuk kaynak URL zorunludur.")
+        val host = URI(normalized).host?.lowercase(Locale.ROOT).orEmpty()
+        require(host == GLOBAL_DONUK_HOST || host.endsWith(".$GLOBAL_DONUK_HOST")) {
+            "Doğrulanmış kaynak globaldonukgida.com alan adında olmalıdır."
         }
+        return normalized
+    }
+
+    fun isVerifiedGlobalDonukSource(value: String?): Boolean =
+        runCatching { normalizeVerifiedGlobalDonukSourceUrl(value) }.isSuccess
+
+    fun requireHttpsUrl(value: String?, field: String) {
+        normalizeWebUrl(value, field, allowHttp = false)
+    }
+
+    fun requireLocalImageReference(value: String?, field: String) {
+        val normalized = value?.trim().orEmpty()
+        require(normalized.startsWith("file:")) { "$field güvenli yerel uygulama dosyası olmalıdır." }
+    }
+
+    private fun normalizeWebUrl(value: String?, field: String, allowHttp: Boolean): String? {
+        val raw = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val uri = runCatching { URI(raw) }.getOrElse {
+            throw IllegalArgumentException("$field geçerli bir URL olmalıdır.")
+        }
+        val scheme = uri.scheme?.lowercase(Locale.ROOT)
+        val allowed = scheme == "https" || (allowHttp && scheme == "http")
+        require(allowed) {
+            if (allowHttp) "$field yalnızca HTTP/HTTPS olmalıdır." else "$field yalnızca HTTPS olmalıdır."
+        }
+        require(!uri.host.isNullOrBlank()) { "$field geçerli bir alan adı içermelidir." }
+        require(uri.userInfo == null) { "$field kullanıcı bilgisi içeremez." }
+        return URI(
+            scheme,
+            null,
+            uri.host.lowercase(Locale.ROOT),
+            uri.port,
+            uri.path,
+            uri.query,
+            uri.fragment,
+        ).normalize().toASCIIString()
     }
 }
 
@@ -89,13 +149,37 @@ class ProductCatalogRepository(context: Context) {
         imageUrl: String? = null,
         sourceUrl: String? = null,
         sourceVerifiedAtEpochMs: Long? = null,
+        imageSource: ProductImageSource? = null,
     ): CatalogProduct {
         val normalizedName = name.trim()
         require(normalizedName.isNotEmpty()) { "Ürün adı boş olamaz." }
         require(priceMinor >= 0L) { "Fiyat negatif olamaz." }
 
-        ProductMediaValidation.requireHttpsUrl(imageUrl, "Ürün fotoğrafı URL")
-        ProductMediaValidation.requireHttpsUrl(sourceUrl, "Kaynak URL")
+        val rawImageRef = imageUrl?.trim()?.takeIf { it.isNotEmpty() }
+        val normalizedImageSource = when {
+            rawImageRef == null -> null
+            imageSource != null -> imageSource
+            ProductMediaValidation.isWebUrl(rawImageRef) -> ProductImageSource.URL
+            else -> null
+        }
+        val normalizedImageRef = when (normalizedImageSource) {
+            null -> {
+                require(rawImageRef == null) { "Ürün fotoğrafı kaynağı bilinmiyor." }
+                null
+            }
+            ProductImageSource.URL -> ProductMediaValidation.normalizeImageUrl(rawImageRef)
+            ProductImageSource.GALLERY,
+            ProductImageSource.CAMERA -> {
+                ProductMediaValidation.requireLocalImageReference(rawImageRef, "Ürün fotoğrafı")
+                rawImageRef
+            }
+        }
+        val normalizedSourceUrl = if (sourceVerifiedAtEpochMs != null) {
+            require(sourceVerifiedAtEpochMs > 0L) { "Kaynak doğrulama zamanı geçerli olmalıdır." }
+            ProductMediaValidation.normalizeVerifiedGlobalDonukSourceUrl(sourceUrl)
+        } else {
+            ProductMediaValidation.normalizeSourceUrl(sourceUrl)
+        }
 
         val normalizedCurrency = currency.trim().uppercase(Locale.ROOT)
         require(normalizedCurrency.length == 3) { "Para birimi 3 harf olmalıdır. Örnek: TRY" }
@@ -109,10 +193,11 @@ class ProductCatalogRepository(context: Context) {
             currency = normalizedCurrency,
             note = note?.trim()?.takeIf { it.isNotEmpty() },
             description = description?.trim()?.takeIf { it.isNotEmpty() },
-            imageUrl = imageUrl?.trim()?.takeIf { it.isNotEmpty() },
-            sourceUrl = sourceUrl?.trim()?.takeIf { it.isNotEmpty() },
+            imageUrl = normalizedImageRef,
+            sourceUrl = normalizedSourceUrl,
             sourceVerifiedAtEpochMs = sourceVerifiedAtEpochMs,
             updatedAtEpochMs = System.currentTimeMillis(),
+            imageSource = normalizedImageSource,
         )
 
         val updated = state.value
@@ -144,6 +229,18 @@ class ProductCatalogRepository(context: Context) {
             buildList {
                 for (index in 0 until array.length()) {
                     val item = array.getJSONObject(index)
+                    val imageRef = item.optString("imageUrl").takeIf { it.isNotBlank() }
+                    val persistedSource = item.optString("imageSource").takeIf { it.isNotBlank() }?.let { value ->
+                        runCatching { ProductImageSource.valueOf(value) }.getOrNull()
+                    }
+                    val rawSourceUrl = item.optString("sourceUrl").takeIf { it.isNotBlank() }
+                    val normalizedSourceUrl = runCatching {
+                        ProductMediaValidation.normalizeSourceUrl(rawSourceUrl)
+                    }.getOrNull()
+                    val persistedVerifiedAt = item.optLong("sourceVerifiedAtEpochMs", 0L).takeIf { it > 0L }
+                    val trustedVerifiedAt = persistedVerifiedAt?.takeIf {
+                        ProductMediaValidation.isVerifiedGlobalDonukSource(normalizedSourceUrl)
+                    }
                     add(
                         CatalogProduct(
                             id = item.getString("id"),
@@ -154,10 +251,13 @@ class ProductCatalogRepository(context: Context) {
                             currency = item.optString("currency", "TRY").ifBlank { "TRY" },
                             note = item.optString("note").takeIf { it.isNotBlank() },
                             description = item.optString("description").takeIf { it.isNotBlank() },
-                            imageUrl = item.optString("imageUrl").takeIf { it.isNotBlank() },
-                            sourceUrl = item.optString("sourceUrl").takeIf { it.isNotBlank() },
-                            sourceVerifiedAtEpochMs = item.optLong("sourceVerifiedAtEpochMs", 0L).takeIf { it > 0L },
+                            imageUrl = imageRef,
+                            sourceUrl = normalizedSourceUrl,
+                            sourceVerifiedAtEpochMs = trustedVerifiedAt,
                             updatedAtEpochMs = item.optLong("updatedAtEpochMs", 0L),
+                            imageSource = persistedSource ?: imageRef
+                                ?.takeIf(ProductMediaValidation::isWebUrl)
+                                ?.let { ProductImageSource.URL },
                         ),
                     )
                 }
@@ -179,6 +279,7 @@ class ProductCatalogRepository(context: Context) {
                     put("note", product.note)
                     put("description", product.description)
                     put("imageUrl", product.imageUrl)
+                    put("imageSource", product.imageSource?.name)
                     put("sourceUrl", product.sourceUrl)
                     put("sourceVerifiedAtEpochMs", product.sourceVerifiedAtEpochMs)
                     put("updatedAtEpochMs", product.updatedAtEpochMs)

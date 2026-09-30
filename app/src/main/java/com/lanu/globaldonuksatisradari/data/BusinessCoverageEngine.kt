@@ -5,6 +5,7 @@ data class CoverageScope(
     val city: String,
     val district: String,
     val category: String,
+    val neighborhood: String? = null,
 )
 
 data class CoverageSourceResult(
