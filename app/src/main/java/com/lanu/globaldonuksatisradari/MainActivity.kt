@@ -22,6 +22,7 @@ import com.lanu.globaldonuksatisradari.crm.CrmValueOrigin
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.crm.SupabaseAuthClient
+import com.lanu.globaldonuksatisradari.crm.matchesCrmRegion
 import com.lanu.globaldonuksatisradari.data.BusinessQualityEvaluator
 import com.lanu.globaldonuksatisradari.data.CoverageBusinessRepository
 import com.lanu.globaldonuksatisradari.data.DistrictCatalogRepository
@@ -219,6 +220,11 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
 
     val regionKey = "$queryCityName|$selectedDistrict"
     val regionDistrict = selectedDistrict.takeUnless { it == "Tümü" }
+    val regionCustomers = remember(crmCustomers, queryCityName, regionDistrict) {
+        crmCustomers.filter { customer ->
+            matchesCrmRegion(customer.city, customer.district, queryCityName, regionDistrict)
+        }
+    }
     val allRegionActivities by remember(regionKey) {
         localCrmRepository.observeActivitiesForRegion(queryCityName, regionDistrict)
     }.collectAsState(initial = emptyList())
@@ -228,7 +234,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val allRegionOpportunities by remember(regionKey) {
         localCrmRepository.observeOpportunitiesForRegion(queryCityName, regionDistrict)
     }.collectAsState(initial = emptyList())
-    val scopedCustomerIds = remember(crmCustomers) { crmCustomers.mapTo(mutableSetOf()) { it.id } }
+    val scopedCustomerIds = remember(regionCustomers) { regionCustomers.mapTo(mutableSetOf()) { it.id } }
     val regionActivities = remember(allRegionActivities, scopedCustomerIds) {
         allRegionActivities.filter { it.customerId in scopedCustomerIds }
     }
@@ -275,8 +281,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
             visibleResults.map { it.source.name }.distinct().sorted(),
         )
     }
-    val dashboardMetrics = remember(crmCustomers, regionActivities, regionNextActions, regionOpportunities) {
-        CrmDashboardMetrics.from(crmCustomers, regionActivities, regionNextActions, regionOpportunities)
+    val dashboardMetrics = remember(regionCustomers, regionActivities, regionNextActions, regionOpportunities) {
+        CrmDashboardMetrics.from(regionCustomers, regionActivities, regionNextActions, regionOpportunities)
     }
 
     fun resetFilters() {
@@ -498,10 +504,11 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     loading = true
                                     scope.launch {
                                         runCatching {
-                                            repository.search(
-                                                query.trim(),
-                                                queryCityName,
-                                                selectedDistrict.takeUnless { it == "Tümü" },
+                                            repository.searchScoped(
+                                                query = query.trim(),
+                                                city = queryCityName,
+                                                district = selectedDistrict.takeUnless { it == "Tümü" },
+                                                neighborhood = selectedNeighborhood.takeUnless { it == "Tümü" },
                                             )
                                         }.onSuccess { records ->
                                             results = records
