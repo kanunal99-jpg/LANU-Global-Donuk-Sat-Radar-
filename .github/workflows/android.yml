@@ -31,6 +31,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
         with:
           gradle-version: '8.9'
+          cache-disabled: true
       - name: Verify exact source checkout
         env:
           SOURCE_HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
@@ -198,9 +199,17 @@ jobs:
           adb -s "$SERIAL" shell settings put global animator_duration_scale 0
           adb -s "$SERIAL" shell input keyevent 82 || true
 
+          echo "===== CLEAN EXACT-SOURCE ANDROID TEST OUTPUTS ====="
+          rm -rf app/build build
+          test ! -d app/build
+
           set +e
-          echo "===== RUNNING ALL ANDROID INSTRUMENTATION TESTS ====="
-          timeout 900s gradle connectedDebugAndroidTest --no-daemon --stacktrace
+          echo "===== RUNNING ALL ANDROID INSTRUMENTATION TESTS FROM EXACT SOURCE ====="
+          timeout 900s gradle connectedDebugAndroidTest \
+            --no-daemon \
+            --stacktrace \
+            --no-build-cache \
+            --rerun-tasks
           TEST_EXIT="$?"
           set -e
 
@@ -216,6 +225,8 @@ jobs:
             tail -n 800 /tmp/emulator.log || true
             exit "$TEST_EXIT"
           fi
+
+          test -s app/build/outputs/apk/debug/app-debug.apk
 
       - name: Prepare release filenames
         env:
