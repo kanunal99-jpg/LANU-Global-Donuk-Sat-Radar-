@@ -3,6 +3,7 @@ package com.lanu.globaldonuksatisradari
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -94,6 +95,17 @@ class MainActivitySmokeTest {
     fun blankSearch_keepsBroadInventoryModeAvailable() {
         scrollMainToTag("inventory_filters_card")
         waitForTag("inventory_filters_card").assertIsDisplayed()
+    }
+
+    @Test(timeout = 60_000)
+    fun istanbulSideFilter_showsOnlyMatchingDistricts() {
+        scrollMainToTag("istanbul_side_filter")
+        waitForTag("istanbul_side_filter").performClick()
+        waitForText("İstanbul Anadolu").performClick()
+
+        waitForTag("district_filter").performClick()
+        waitForText("Kadıköy").assertExists()
+        composeRule.onNodeWithText("Beşiktaş").assertDoesNotExist()
     }
 
     @Test(timeout = 60_000)

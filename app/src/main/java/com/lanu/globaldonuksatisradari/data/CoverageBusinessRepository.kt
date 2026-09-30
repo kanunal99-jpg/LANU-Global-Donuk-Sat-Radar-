@@ -55,9 +55,32 @@ class CoverageBusinessRepository(
         district: String?,
     ): List<VerifiedBusiness> {
         val normalizedDistrict = district?.takeUnless { it.isBlank() || it.equals("Tümü", true) }
+        return searchDistricts(query, city, normalizedDistrict?.let(::listOf))
+    }
 
-        val scopes = if (city.equals("İstanbul", true) && normalizedDistrict == null) {
-            IstanbulDistricts.ALL.map { districtName ->
+    suspend fun searchDistricts(
+        query: String,
+        city: String,
+        districts: List<String>?,
+    ): List<VerifiedBusiness> {
+        val normalizedDistricts = districts
+            ?.map(String::trim)
+            ?.filter(String::isNotEmpty)
+            ?.distinct()
+
+        val scopes = coverageScopes(query, city, normalizedDistricts)
+
+        val scans = engine.scanAll(scopes)
+        return CoverageResultMerger.merge(
+            scans = scans,
+            localCache = localCache,
+            nowEpochMs = System.currentTimeMillis(),
+        )
+    }
+
+    internal companion object {
+        fun coverageScopes(query: String, city: String, normalizedDistricts: List<String>?): List<CoverageScope> = if (city.equals("İstanbul", true)) {
+            (normalizedDistricts ?: IstanbulDistricts.ALL).map { districtName ->
                 CoverageScope(
                     city = city,
                     district = districtName,
@@ -68,18 +91,10 @@ class CoverageBusinessRepository(
             listOf(
                 CoverageScope(
                     city = city,
-                    district = normalizedDistrict ?: "Tümü",
+                    district = normalizedDistricts?.singleOrNull() ?: "Tümü",
                     category = query.ifBlank { "*" },
                 )
             )
         }
-
-        val scans = engine.scanAll(scopes)
-        return CoverageResultMerger.merge(
-            scans = scans,
-            localCache = localCache,
-            nowEpochMs = System.currentTimeMillis(),
-        )
     }
-
 }

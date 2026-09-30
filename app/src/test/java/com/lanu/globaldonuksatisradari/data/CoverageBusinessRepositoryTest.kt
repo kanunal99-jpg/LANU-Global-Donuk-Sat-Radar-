@@ -22,4 +22,14 @@ class CoverageBusinessRepositoryTest {
         assertEquals(39, IstanbulDistricts.ALL.size)
         assertEquals(39, IstanbulDistricts.ALL.toSet().size)
     }
+
+    @Test
+    fun istanbulSideScanUsesOnlyRequestedDistricts() {
+        val requested = IstanbulDistricts.ANATOLIAN
+        val scopes = CoverageBusinessRepository.coverageScopes("kafe", "İstanbul", requested)
+
+        assertEquals(requested, scopes.map { it.district })
+        assertTrue(scopes.none { it.district in IstanbulDistricts.EUROPEAN })
+        assertTrue(scopes.all { it.city == "İstanbul" && it.category == "kafe" })
+    }
 }

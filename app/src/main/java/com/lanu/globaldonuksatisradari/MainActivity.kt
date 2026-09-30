@@ -78,6 +78,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var districtLoading by remember { mutableStateOf(false) }
     var neighborhoodMenu by remember { mutableStateOf(false) }
     var selectedDistrict by remember { mutableStateOf("Tümü") }
+    var selectedIstanbulSide by remember { mutableStateOf("Tümü") }
     var selectedNeighborhood by remember { mutableStateOf("Tümü") }
     var categoryFilter by remember { mutableStateOf("Tümü") }
     var phoneFilter by remember { mutableStateOf("Tümü") }
@@ -102,6 +103,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val districtRepository = remember(context) { DistrictCatalogRepository(context) }
     LaunchedEffect(selectedCity.name) {
         districtLoading = true
+        availableDistricts = selectedCity.districts
         availableDistricts = runCatching {
             districtRepository.getDistricts(selectedCity.name, selectedCity.districts)
         }.getOrElse { throwable ->
@@ -129,6 +131,13 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val regionNextActions by remember(regionKey) { localCrmRepository.observeOpenNextActionsForRegion(selectedCity.name, regionDistrict) }.collectAsState(initial = emptyList())
     val regionOpportunities by remember(regionKey) { localCrmRepository.observeOpportunitiesForRegion(selectedCity.name, regionDistrict) }.collectAsState(initial = emptyList())
     val presenceOptions = listOf("Tümü", "Var", "Yok")
+    val districtOptions = remember(availableDistricts, selectedCity.name, selectedIstanbulSide) {
+        if (selectedCity.name == "İstanbul" && selectedIstanbulSide != "Tümü") {
+            IstanbulDistricts.districtsFor(selectedIstanbulSide)
+        } else {
+            availableDistricts
+        }
+    }
     val categoryOptions = remember(results) { listOf("Tümü") + results.mapNotNull { it.category?.trim()?.takeIf(String::isNotBlank) }.distinct().sorted() }
     val visibleResults = remember(results, selectedDistrict, selectedNeighborhood, categoryFilter, phoneFilter, websiteFilter) {
         results.filter { business ->
@@ -192,13 +201,35 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                 Box(Modifier.weight(1f)) {
                                     OutlinedButton(onClick = { cityMenu = true }, modifier = Modifier.fillMaxWidth()) { Text(selectedCity.name) }
-                                    DropdownMenu(cityMenu, { cityMenu = false }) { cities.forEach { city -> DropdownMenuItem({ Text(city.name) }, onClick = { invalidateSearch(); selectedCity = city; selectedDistrict = "Tümü"; results = emptyList(); resetFilters(); cityMenu = false }) } }
+                                    DropdownMenu(cityMenu, { cityMenu = false }) { cities.forEach { city -> DropdownMenuItem({ Text(city.name) }, onClick = { invalidateSearch(); selectedCity = city; availableDistricts = city.districts; selectedIstanbulSide = "Tümü"; selectedDistrict = "Tümü"; results = emptyList(); resetFilters(); cityMenu = false }) } }
                                 }
                                 Box(Modifier.weight(1f)) {
-                                    OutlinedButton(onClick = { districtMenu = true }, modifier = Modifier.fillMaxWidth().testTag("district_filter")) { Text(if (districtLoading) "Yükleniyor…" else selectedDistrict) }
+                                    OutlinedButton(onClick = { districtMenu = true }, enabled = !districtLoading, modifier = Modifier.fillMaxWidth().testTag("district_filter")) { Text(if (districtLoading) "Yükleniyor…" else selectedDistrict) }
                                     DropdownMenu(districtMenu, { districtMenu = false }) {
                                         DropdownMenuItem({ Text("Tümü") }, onClick = { invalidateSearch(); selectedDistrict = "Tümü"; results = emptyList(); resetFilters(); districtMenu = false })
-                                        availableDistricts.forEach { district -> DropdownMenuItem({ Text(district) }, onClick = { invalidateSearch(); selectedDistrict = district; results = emptyList(); resetFilters(); districtMenu = false }) }
+                                        districtOptions.forEach { district -> DropdownMenuItem({ Text(district) }, onClick = { invalidateSearch(); selectedDistrict = district; results = emptyList(); resetFilters(); districtMenu = false }) }
+                                    }
+                                }
+                            }
+                        }
+                        if (selectedCity.name == "İstanbul") {
+                            item {
+                                var sideMenu by remember { mutableStateOf(false) }
+                                Box {
+                                    OutlinedButton(onClick = { sideMenu = true }, modifier = Modifier.fillMaxWidth().testTag("istanbul_side_filter")) {
+                                        Text("Yaka: $selectedIstanbulSide")
+                                    }
+                                    DropdownMenu(sideMenu, { sideMenu = false }) {
+                                        listOf("Tümü", IstanbulDistricts.ANATOLIAN_SIDE, IstanbulDistricts.EUROPEAN_SIDE).forEach { side ->
+                                            DropdownMenuItem({ Text(side) }, onClick = {
+                                                invalidateSearch()
+                                                selectedIstanbulSide = side
+                                                selectedDistrict = "Tümü"
+                                                selectedNeighborhood = "Tümü"
+                                                results = emptyList()
+                                                sideMenu = false
+                                            })
+                                        }
                                     }
                                 }
                             }
@@ -236,8 +267,14 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     val requestCity = selectedCity.name
                                     val requestDistrict = selectedDistrict.takeUnless { it == "Tümü" }
                                     val requestQuery = query.trim()
+                                    val requestSide = selectedIstanbulSide
                                     scope.launch {
-                                        runCatching { withTimeout(SEARCH_TIMEOUT_MS) { repository.search(requestQuery, requestCity, requestDistrict) } }
+                                        val requestDistricts = if (requestCity == "İstanbul" && requestDistrict == null && requestSide != "Tümü") {
+                                            IstanbulDistricts.districtsFor(requestSide)
+                                        } else {
+                                            requestDistrict?.let(::listOf)
+                                        }
+                                        runCatching { withTimeout(SEARCH_TIMEOUT_MS) { repository.searchDistricts(requestQuery, requestCity, requestDistricts) } }
                                             .onSuccess { records ->
                                                 if (requestId == searchRequestId) {
                                                     results = records
@@ -265,7 +302,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         error?.let { message -> item { Card { Text(message, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error) } } }
                         crmMessage?.let { message -> item { Card { Text(message, Modifier.padding(16.dp)) } } }
                         selectedBusiness?.let { business -> item { BusinessDetailCard(business, { selectedBusiness = null }) } }
-                        item { SalesDashboard(selectedCity.name, selectedDistrict, availableDistricts, dashboardMetrics) { invalidateSearch(); selectedDistrict = it; results = emptyList(); selectedBusiness = null; selectedCustomerId = null } }
+                        item { SalesDashboard(selectedCity.name, selectedDistrict, districtOptions, dashboardMetrics) { invalidateSearch(); selectedDistrict = it; selectedNeighborhood = "Tümü"; results = emptyList(); selectedBusiness = null; selectedCustomerId = null } }
                         item {
                             Card(Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
