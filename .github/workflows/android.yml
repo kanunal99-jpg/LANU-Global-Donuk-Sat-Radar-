@@ -11,21 +11,35 @@ on:
     branches: [ main ]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     timeout-minutes: 40
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
         with:
           gradle-version: '8.9'
+      - name: Verify exact source checkout
+        env:
+          SOURCE_HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          ACTUAL_HEAD="$(git rev-parse HEAD)"
+          echo "Expected source HEAD: $SOURCE_HEAD"
+          echo "Actual checkout HEAD: $ACTUAL_HEAD"
+          test "$ACTUAL_HEAD" = "$SOURCE_HEAD"
       - name: Run lint
         run: timeout 180s gradle lint --no-daemon --stacktrace
       - name: Run unit tests
@@ -204,22 +218,47 @@ jobs:
           fi
 
       - name: Prepare release filenames
+        env:
+          SOURCE_HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
+          ACTUAL_HEAD="$(git rev-parse HEAD)"
+          test "$ACTUAL_HEAD" = "$SOURCE_HEAD"
           cp app/build/outputs/apk/debug/app-debug.apk Lanu-Global-Donuk-Satis-Radari-latest.apk
           sha256sum Lanu-Global-Donuk-Satis-Radari-latest.apk > Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256
-          printf 'commit=%s\nworkflow=%s\nrun_id=%s\n' "$GITHUB_SHA" "$GITHUB_WORKFLOW" "$GITHUB_RUN_ID" > Lanu-Global-Donuk-Satis-Radari-latest.build-info.txt
+          printf 'source_head=%s\nactual_head=%s\ngithub_sha=%s\nworkflow=%s\nrun_id=%s\n' \
+            "$SOURCE_HEAD" "$ACTUAL_HEAD" "$GITHUB_SHA" "$GITHUB_WORKFLOW" "$GITHUB_RUN_ID" \
+            > Lanu-Global-Donuk-Satis-Radari-latest.build-info.txt
           test -s Lanu-Global-Donuk-Satis-Radari-latest.apk
           test -s Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256
-      - uses: actions/upload-artifact@v4
+          test -s Lanu-Global-Donuk-Satis-Radari-latest.build-info.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: lanu-global-donuk-satis-radari-debug
           path: |
             Lanu-Global-Donuk-Satis-Radari-latest.apk
             Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256
             Lanu-Global-Donuk-Satis-Radari-latest.build-info.txt
+
+  publish-release:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified build artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: lanu-global-donuk-satis-radari-debug
+      - name: Verify artifact provenance and hash
+        run: |
+          set -euo pipefail
+          grep -Fx "source_head=$GITHUB_SHA" Lanu-Global-Donuk-Satis-Radari-latest.build-info.txt
+          grep -Fx "actual_head=$GITHUB_SHA" Lanu-Global-Donuk-Satis-Radari-latest.build-info.txt
+          sha256sum -c Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256
+          test -s Lanu-Global-Donuk-Satis-Radari-latest.apk
       - name: Publish latest successful APK
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
           APK_PATH: Lanu-Global-Donuk-Satis-Radari-latest.apk
@@ -251,4 +290,3 @@ jobs:
             "$APK_PATH" \
             "$SHA_PATH" \
             "$BUILD_INFO_PATH"
-
