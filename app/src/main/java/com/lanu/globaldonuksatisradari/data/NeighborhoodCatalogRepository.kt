@@ -94,7 +94,7 @@ class NeighborhoodCatalogRepository(context: Context) {
     }
 
     private fun escapeOverpass(value: String): String =
-        value.replace("\\", "\\\\").replace(""", "\\"")
+        value.replace("\\", "\\\\").replace("\"", "\\\"")
 
     private fun readCache(key: String): List<String>? {
         val raw = preferences.getString(key, null) ?: return null
