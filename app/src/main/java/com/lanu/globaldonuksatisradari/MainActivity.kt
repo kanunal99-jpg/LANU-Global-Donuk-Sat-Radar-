@@ -258,7 +258,6 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                             text = { Text(neighborhood) },
                                             onClick = {
                                                 selectedNeighborhood = neighborhood
-                                                results = results
                                                 neighborhoodMenu = false
                                             },
                                         )
@@ -374,7 +373,14 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         }
                         items(visibleResults, key = { it.id }) { business ->
                             BusinessResultCard(business, { selectedBusiness = business }) {
-                                scope.launch { runCatching { localCrmRepository.addBusinessAsCustomer(business) }.onSuccess { crmMessage = "${it.businessName} CRM'e kaydedildi." }.onFailure { crmMessage = "CRM kaydı yapılamadı: ${it.message.orEmpty()}" } }
+                                scope.launch {
+                                    runCatching { localCrmRepository.addBusinessAsCustomer(business) }
+                                        .onSuccess { crmMessage = "${it.businessName} CRM'e kaydedildi." }
+                                        .onFailure {
+                                            Log.e("LanuCrm", "CRM kaydı başarısız oldu.", it)
+                                            crmMessage = "CRM kaydı yapılamadı. Lütfen tekrar deneyin."
+                                        }
+                                }
                             }
                         }
                         if (filteredCrmCustomers.isNotEmpty()) {
