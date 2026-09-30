@@ -10,6 +10,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
@@ -178,10 +179,16 @@ class MainActivitySmokeTest {
         waitForText("Nokta").performClick()
         waitForText("Manuel Nokta Kaydı").assertIsDisplayed()
 
-        waitForTag("manual_point_save").assertHasClickAction().performClick()
+        waitForTag("manual_point_save")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
+        composeRule.waitForIdle()
 
-        waitForTag("manual_point_message").assertIsDisplayed()
-        waitForText("Ad, adres, il ve ilçe zorunludur.").assertIsDisplayed()
+        waitForText("Ad, adres, il ve ilçe zorunludur.")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test(timeout = 60_000)
