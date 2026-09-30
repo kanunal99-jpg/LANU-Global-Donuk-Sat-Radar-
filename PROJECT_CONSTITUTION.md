@@ -353,3 +353,173 @@ Kullanıcı `Willy-Kilo-Takip` projesinin LANU için kullanılacağını kesinle
 - Offline queue→reconnect→sync→conflict: **E2E DOĞRULANACAK**.
 
 Cloud katmanı ancak kanonik backend üzerinde şema/RLS, migration güvenliği, iki kullanıcı izolasyonu, offline/reconnect, log ve Android instrumentation/emulator smoke ile kanıtlanınca tamamlanmış sayılır.
+
+## 19. DERİN ARAŞTIRMA KAYDI — EXACT HEAD, COMMERCIAL CLOUD E2E VE CI SUPPLY-CHAIN
+
+### Araştırma tarihi ve yeniden doğrulama
+
+- Derin Araştırma: **29 Eylül 2026**.
+- Araştırma sırasında PR HEAD birden fazla kez değişti; araştırma raporunun son gözlediği HEAD daha sonra tarihsel duruma düştü.
+- Bu kayıt yazılmadan hemen önce gerçek PR metadata yeniden okunmuş ve güncel exact HEAD **`1eca474dbb83de6795d9d258c63d31f9a1ce65cc`** olarak doğrulanmıştır.
+- PR açıklamasındaki manuel “Current exact-head quality evidence” bölümü hâlâ eski `f492ebd...` kanıtını taşıdığı için **source of truth değildir**. Source of truth PR metadata + exact-HEAD workflow/artifact kanıtıdır.
+
+### Doğrulanmış kalıcı bulgu 1 — Commercial quote/order Live Cloud kapsamı eksik
+
+Güncel `scripts/live_cloud_e2e.py` exact HEAD üzerinde yeniden incelendi. Script şu anda customer/contact, iki kullanıcı izolasyonu, customer RPC idempotency/conflict, refresh/reconnect ve cleanup zincirini çalıştırmaktadır; fakat **quote, quote-line, order ve order-line Live Cloud kabul zinciri mevcut değildir**.
+
+Derin Araştırma sırasında tarihsel `e48a415...` HEAD üzerinde commercial cloud testi eklendiğinde görülen başarısızlığın kök nedeni backend/RLS değil, **stale quote test fixture sürüm kontratı** idi. Stale writer `expected_version=1` ile çalışırken payload `version=3` gönderilmişti. RPC kontratı payload version'ın `expected_version + 1` olmasını istediği için test gerçek conflict kontrolüne ulaşmadan `INVALID_VERSION` üretmiş, test ise `CONFLICT` beklediği için düşmüştü.
+
+Kalıcı düzeltme kuralı:
+
+- Commercial cloud kapsamı başarısız test kaldırılarak değil, **fixture düzeltilerek** geri getirilir.
+- Stale quote writer için `expected_version=1` ise payload `version=2` kalmalıdır; gerçek stale conflict böyle test edilir.
+- Live Cloud kabul zinciri customer/contact ile sınırlı kalamaz; quote → quote-line → quote transition → order → order-line A/B izolasyonu ve conflict/idempotency zinciri de gerçek backend üzerinde çalışmalıdır.
+- Bir test kapsamdan çıkarılmışsa daha önceki yeşil sonuç o kapsam için miras kanıt sayılmaz.
+
+### Doğrulanmış kalıcı bulgu 2 — Assertion kanıtı isimli ve expected/actual olmalı
+
+Güncel script kritik kontrollerde çıplak Python `assert` kullanmaktadır. Bu yapı başarısız artifact'ta yalnız `AssertionError` gibi kök nedeni zayıf hata üretebilir.
+
+Kalıcı kural:
+
+- Kritik E2E assertion'ları `check adı + expected + actual` değerini açıkça üretmelidir.
+- Artifact başarısızlığı kök neden araştırmasını kolaylaştıracak kadar bağlam taşımalıdır.
+- “AssertionError” tek başına kabul edilebilir teşhis kanıtı değildir.
+
+### Doğrulanmış kalıcı bulgu 3 — Live Cloud exact source HEAD doğru checkout ediliyor, ancak artifact provenance güçlendirilmeli
+
+Güncel `.github/workflows/live-cloud-e2e.yml` PR source HEAD'i `github.event.pull_request.head.sha` ile checkout etmektedir. Bu yön doğrudur.
+
+Ancak artifact yalnız run sonucu metnini taşımaktadır. Kalıcı hedef:
+
+- `expected_head_sha`
+- `actual_head_sha = git rev-parse HEAD`
+- repository kimliği
+- workflow/run kimliği
+- kanonik Supabase project ref
+- kontrol sonuçları
+- cleanup sonuçları
+- mümkünse script/evidence hash
+
+machine-readable evidence içinde tutulmalıdır.
+
+PR event'inde `GITHUB_SHA` source HEAD ile eş anlamlı kabul edilmeyecektir.
+
+### Doğrulanmış kalıcı bulgu 4 — GitHub Actions mutable tag kullanımı azaltılmalı
+
+Güncel workflow'larda hâlâ aşağıdaki gibi mutable tag'ler kullanılmaktadır:
+
+- `actions/checkout@v4`
+- `actions/upload-artifact@v4`
+- `actions/setup-java@v5`
+- `gradle/actions/setup-gradle@v4`
+
+Kalıcı supply-chain kuralı:
+
+- GitHub Actions bağımlılıkları mümkün olduğunda doğrulanmış **full-length immutable commit SHA** ile pinlenir.
+- Aynı major sürümü full SHA'ya pinlemek ayrı hardening commit'i olarak yapılır.
+- Major version yükseltmesi aynı commit'e karıştırılmaz; ayrı değişiklik ve tam CI ile doğrulanır.
+- Action pin değişikliği sonrası Android + Live Cloud etkilenen kapılar yeniden çalıştırılır.
+
+### Doğrulanmış kalıcı bulgu 5 — Android CI least-privilege ihlali
+
+Güncel `.github/workflows/android.yml` workflow seviyesinde `contents: write` vermektedir. Aynı job lint, unit test, emulator/instrumentation, artifact üretimi ve main release yayınlamayı birlikte yapmaktadır.
+
+Kalıcı düzeltme hedefi:
+
+- PR/build/test/emulator job'u: `contents: read`.
+- Release/publish: yalnız `push -> main` sonrasında çalışan ayrı job ve yalnız bu job için `contents: write`.
+- PR kodunu çalıştıran test alanı ile repository write privilege aynı güven alanında tutulmaz.
+- Checkout'ta mümkün olduğunda `persist-credentials: false` kullanılır.
+
+### Doğrulanmış kalıcı bulgu 6 — Android provenance içinde source HEAD ile GITHUB_SHA ayrılmalı
+
+Güncel Android build-info `$GITHUB_SHA` kaydetmektedir. PR event'lerinde bu değer source PR HEAD yerine synthetic merge SHA olabilir.
+
+Kalıcı kural:
+
+- PR source HEAD ayrıca `github.event.pull_request.head.sha` olarak kaydedilir.
+- `actual git HEAD`, `source PR HEAD`, `workflow GITHUB_SHA` ayrı alanlardır; birbirine karıştırılmaz.
+- APK/artifact kabulü yalnız hangi commit'in gerçekten build/test edildiği açıkça kanıtlanıyorsa geçerlidir.
+
+### Doğrulanmış kalıcı bulgu 7 — OIDC broker mimarisi korunacak
+
+GitHub OIDC → `lanu-ci-auth-broker` → geçici confirmed authenticated A/B users → normal user access token → Data API/RLS/RPC zinciri güvenli tercih olarak korunacaktır.
+
+Yasaklar:
+
+- CI uğruna production anonymous auth açılmaz.
+- RLS zayıflatılmaz/kapatılmaz.
+- service_role/secret Android'e veya PR workflow'una taşınmaz.
+- OIDC trust koşulları generic auto-fix kapsamında gevşetilmez.
+
+İleri hardening yapılırsa `repository_id`, `event_name`, `base_ref`, `workflow_ref`, `run_id` ve uygun actor/workflow claim'leri kontrollü biçimde doğrulanır; güven sınırı genişletilmez.
+
+### Doğrulanmış kalıcı bulgu 8 — Machine-readable evidence ve constitution sync
+
+Her acceptance run mümkün olduğunda tek bir machine-readable evidence üretmelidir. En az şu alanlar hedeflenir:
+
+- repository id / adı
+- PR
+- expected source HEAD
+- actual checked-out HEAD
+- workflow + run id
+- backend project ref
+- auth yöntemi
+- customer/contact/commercial chain check sonuçları
+- idempotency/conflict sonucu
+- refresh/reconnect sonucu
+- API cleanup sonucu
+- auth-user cleanup sonucu
+- overall result
+
+Token, refresh token, password, OIDC JWT veya secret/service-role artifact'a yazılmaz.
+
+Derin Araştırma finding kayıtları idempotent managed-block/finding-id yaklaşımıyla tutulmalı; aynı bulgu her run'da belgeye tekrar tekrar çoğaltılmamalıdır.
+
+### Otomatik uygulama güven sınırı
+
+Prompt beklemeden otomatik uygulanabilecek düşük riskli bakım sınıfı:
+
+- test fixture/assertion düzeltmesi
+- exact-head evidence/provenance alanları
+- aynı major action'ın full SHA'ya pinlenmesi
+- test-only coverage genişletmesi
+- constitution/finding kaydı
+- non-destructive CI doğrulama adımları
+
+Generic auto-fix sayılmayacak yüksek etkili değişiklikler:
+
+- anonymous auth açmak
+- RLS azaltmak/kapatmak
+- secret/service_role istemci/workflow alanına taşımak
+- OIDC trust modelini genişletmek
+- destructive production DDL
+- key rotation
+- main merge
+- Release yayını
+
+Bu yüksek etkili işlemler kendi güvenlik ve teslim kapılarına göre ayrıca doğrulanır.
+
+### Zorunlu öncelik sırası
+
+1. Commercial quote/order Live Cloud kapsamını valid stale-version fixture ile geri getir.
+2. Çıplak `assert` yerine isimli expected/actual kabul kontrolleri ekle.
+3. Evidence içine exact source HEAD / actual HEAD / backend provenance ekle.
+4. GitHub Actions bağımlılıklarını immutable full SHA ile pinle.
+5. Android source-head provenance'ini `GITHUB_SHA`dan ayır.
+6. Android build/test `contents: read` ve main publish `contents: write` olacak şekilde yetkiyi ayır.
+7. Yeni HEAD üzerinde Android CI + Live Cloud E2E'yi birlikte doğrula.
+8. Commercial customer/contact/quote/quote-line/order/order-line + refresh/reconnect + cleanup kapsamının gerçekten çalıştığını artifact ile kanıtla.
+9. Ancak bundan sonra merge/main CI/Release APK teslim kapıları değerlendirilir.
+
+### Araştırma otomasyonu ihlali ve düzeltmesi
+
+Bu Derin Araştırma tamamlandıktan sonra sonuçlar ilk anda anayasaya otomatik yazılmamış, kullanıcı “Sonuçları yazdın mı” diye sormak zorunda kalmıştır. Bu durum “komut beklemek yasak” kuralının fiilen uygulanmadığını göstermiştir.
+
+Kalıcı düzeltme:
+
+- Derin Araştırma raporu `finished_successfully` durumuna geçtiği anda anayasa güncellemesi bağımsız bir sonraki zorunlu işlem olarak kabul edilir.
+- Kullanıcıdan yeni prompt beklemek yasaktır.
+- Güncel HEAD yeniden okunur; araştırmanın eski kalan durum iddiaları yeniden doğrulanır; ardından kalıcı sonuçlar anayasa commit'ine dönüştürülür.
+- Araştırma sırasında repo değişmişse eski rapor snapshot'ı doğrudan “current” diye yazılmaz; tarihsel bulgu ve güncel doğrulama ayrı belirtilir.
