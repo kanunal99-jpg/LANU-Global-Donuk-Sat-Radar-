@@ -461,7 +461,10 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 Card(Modifier.fillMaxWidth()) {
                                     Row(Modifier.padding(14.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Column(Modifier.weight(1f)) { Text(customer.businessName, style = MaterialTheme.typography.titleMedium); Text("${customer.city} • ${customer.district} • ${customer.stage.name}", style = MaterialTheme.typography.bodySmall) }
-                                        OutlinedButton(onClick = { selectedCustomerId = customer.id }) { Text("Aç") }
+                                        OutlinedButton(
+                                            onClick = { selectedCustomerId = customer.id },
+                                            modifier = Modifier.testTag("crm_open_${customer.businessSourceId}"),
+                                        ) { Text("Aç") }
                                     }
                                 }
                             }
