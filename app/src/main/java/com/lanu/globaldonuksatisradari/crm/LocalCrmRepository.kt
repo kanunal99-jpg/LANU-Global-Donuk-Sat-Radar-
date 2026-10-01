@@ -5,6 +5,7 @@ import com.lanu.globaldonuksatisradari.data.BusinessCategoryLabels
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryMatcher
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryRecord
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryStatus
+import com.lanu.globaldonuksatisradari.data.OfficialRegistryTrust
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -117,6 +118,8 @@ class LocalCrmRepository(
         records: List<OfficialRegistryRecord>,
     ): OfficialRegistryCrmEnrichmentResult = database.withTransaction {
         if (records.isEmpty()) return@withTransaction OfficialRegistryCrmEnrichmentResult()
+        val verifiedRecords = OfficialRegistryTrust.verified(records)
+        if (verifiedRecords.isEmpty()) return@withTransaction OfficialRegistryCrmEnrichmentResult()
 
         var matched = 0
         var updated = 0
@@ -130,7 +133,7 @@ class LocalCrmRepository(
                 district = existing.district,
                 address = existing.address,
                 phone = existing.phone,
-                records = records,
+                records = verifiedRecords,
             ) ?: return@forEach
 
             matched++
