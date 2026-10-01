@@ -30,6 +30,8 @@ data class VerifiedBusiness(
     val openingHours: String? = null,
     val menuUrl: String? = null,
     val menuText: String? = null,
+    /** Optional official-registry evidence used to enrich phone/address without losing OSM discovery provenance. */
+    val officialRegistryEvidence: OfficialRegistryEvidence? = null,
 )
 
 /** Keeps unverified external records out of the application domain. */
