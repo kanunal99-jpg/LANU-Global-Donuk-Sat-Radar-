@@ -210,6 +210,70 @@ class OfficialRegistryEnrichmentTest {
     }
 
     @Test
+    fun sourceSelectionWithoutRegistryIdCannotOverrideTrustedBusinessFields() {
+        val result = OfficialRegistryEnricher.enrich(
+            businesses = listOf(
+                business(
+                    phone = "0216 111 22 33",
+                    address = "OSM Adresi",
+                ),
+            ),
+            records = listOf(
+                record(
+                    registrationNumber = null,
+                    status = "Faal",
+                    phone = "0216 999 88 77",
+                    address = "Kaynağı doğrulanmamış adres",
+                ),
+            ),
+        ).single()
+
+        assertEquals("0216 111 22 33", result.phone)
+        assertEquals("OSM Adresi", result.address)
+        assertNull(result.officialRegistryEvidence)
+    }
+
+    @Test
+    fun itoPublicMemberHeadersPreserveRegistryStatusDistrictAndNace() {
+        val csv = """
+            Sicil No;Ünvan;Üyelik Durum;Semt;NACE
+            1103007;TANHAŞ DADAŞ EKMEK FIRIN VE UNLU MAMULLERİ SANAYİ TİCARET LİMİTED ŞİRKETİ;Faal;SULTANBEYLİ;10.71.02
+        """.trimIndent()
+
+        val record = OfficialRegistryImportParser.parse(
+            bytes = csv.toByteArray(Charsets.UTF_8),
+            fileName = "ito-uye-listesi.csv",
+            source = OfficialRegistrySource.ITO,
+            importedAtEpochMs = 300L,
+        ).single()
+
+        assertEquals("1103007", record.registrationNumber)
+        assertEquals("Faal", record.status)
+        assertEquals("İstanbul", record.city)
+        assertEquals("SULTANBEYLİ", record.district)
+        assertEquals("10.71.02", record.naceCode)
+        assertTrue(OfficialRegistryTrust.isIdentityVerified(record))
+    }
+
+    @Test
+    fun exportedRegistryIdHeaderCanBeReimportedWithoutLosingIdentity() {
+        val csv = """
+            Nokta Adı;Sicil / Kayıt No;Durum;İl;İlçe;Açık Adres
+            Örnek Gıda;123456;Faal;İstanbul;Kadıköy;Moda Cad. No:10
+        """.trimIndent()
+
+        val record = OfficialRegistryImportParser.parse(
+            bytes = csv.toByteArray(Charsets.UTF_8),
+            fileName = "lanu-registry.csv",
+            source = OfficialRegistrySource.ITO,
+            importedAtEpochMs = 400L,
+        ).single()
+
+        assertEquals("123456", record.registrationNumber)
+        assertTrue(OfficialRegistryTrust.isIdentityVerified(record))
+    }
+
+    @Test
     fun officialSourceContractsRequireAuthorizedImportInsteadOfAnonymousScraping() {
         assertEquals(SourceAccessMethod.OFFICIAL_BULK_REQUEST, OfficialRegistrySource.ITO.contract.accessMethod)
         assertEquals(SourceAccessMethod.AUTHENTICATED_EXPORT, OfficialRegistrySource.MERSIS.contract.accessMethod)
