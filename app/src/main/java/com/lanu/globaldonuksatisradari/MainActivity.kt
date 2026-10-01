@@ -156,10 +156,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val crmCustomers by localCrmRepository.observeCustomers(null).collectAsState(initial = emptyList())
     val pendingSyncCount by localCrmRepository.observePendingSyncCount().collectAsState(initial = 0)
     val filteredCrmCustomers = remember(crmCustomers, selectedCity.name, selectedDistrict) {
-        crmCustomers.filter { customer ->
-            customer.city.equals(selectedCity.name, ignoreCase = true) &&
-                (selectedDistrict == "Tümü" || customer.district.equals(selectedDistrict, ignoreCase = true))
-        }
+        scopeCrmCustomers(crmCustomers, selectedCity.name, selectedDistrict)
     }
     val selectedCrmCustomer = selectedCustomerId?.let { id -> crmCustomers.firstOrNull { it.id == id } }
     val selectedCustomerKey = selectedCustomerId.orEmpty()
