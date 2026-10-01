@@ -5,15 +5,17 @@ import kotlin.test.assertTrue
 
 class OverpassBusinessSourceAdapterTest {
     @Test
-    fun blankIstanbulQueryBuildsBroadBusinessInventory() {
+    fun blankIstanbulQueryBuildsSalesTargetInventoryOnly() {
         val query = OverpassQueryBuilder.build("İstanbul", null, "")
         assertTrue(query.contains("""area["name"="İstanbul"]["boundary"="administrative"]["admin_level"="4"]->.searchArea;"""))
-        assertTrue(query.contains("""nwr["name"]["amenity"]"""))
-        assertTrue(query.contains("""nwr["name"]["shop"]"""))
-        assertTrue(query.contains("""nwr["name"]["craft"]"""))
-        assertTrue(query.contains("""nwr["name"]["healthcare"]"""))
-        assertTrue(query.contains("""nwr["name"]["sport"]"""))
-        assertTrue(query.contains("""nwr["name"]["food"]"""))
+        assertTrue(query.contains("restaurant|cafe|fast_food"))
+        assertTrue(query.contains("supermarket|convenience|food|bakery"))
+        assertTrue(query.contains("hotel|hostel|motel"))
+        assertTrue(!query.contains("place_of_worship"))
+        assertTrue(!query.contains("healthcare"))
+        assertTrue(!query.contains("school"))
+        assertTrue(!query.contains("sport"))
+        assertTrue(!query.contains("community_centre"))
         assertTrue(!query.contains("map_to_area"))
     }
 
@@ -23,6 +25,34 @@ class OverpassBusinessSourceAdapterTest {
         assertTrue(query.contains("""["admin_level"="6"]"""))
         assertTrue(query.contains("""["name"="Kadıköy"]"""))
         assertTrue(query.contains("districtRelation"))
+    }
+
+    @Test
+    fun parserUsesSelectedDistrictAndQuarterNeighborhood() {
+        val payload = """
+            {"elements":[{
+              "type":"node",
+              "id":123,
+              "lat":39.55,
+              "lon":44.08,
+              "tags":{
+                "name":"Test Market",
+                "shop":"supermarket",
+                "addr:district":"Beyşehir",
+                "addr:quarter":"Hürriyet Mahallesi"
+              }
+            }]}
+        """.trimIndent()
+
+        val result = OverpassBusinessSourceAdapter().parse(
+            payload = payload,
+            selectedCity = "Ağrı",
+            selectedDistrict = "Doğubayazıt",
+            verifiedAtEpochMs = 100L,
+        )
+
+        assertTrue(result.single().district == "Doğubayazıt")
+        assertTrue(result.single().neighborhood == "Hürriyet Mahallesi")
     }
 
     @Test
