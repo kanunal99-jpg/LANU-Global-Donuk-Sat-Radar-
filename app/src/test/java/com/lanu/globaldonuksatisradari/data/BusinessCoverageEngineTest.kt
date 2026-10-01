@@ -62,7 +62,7 @@ class BusinessCoverageEngineTest {
     }
 
     @Test
-    fun emptySuccessfulSourceDoesNotTriggerFallbackOrInventData() = runTest {
+    fun targetedEmptyPrimaryUsesFallbackSource() = runTest {
         val engine = BusinessCoverageEngine(
             sources = listOf(
                 CoverageSource {
@@ -76,6 +76,27 @@ class BusinessCoverageEngineTest {
         )
 
         val result = engine.scan(scope)
+
+        assertEquals("fallback", result.selectedSourceId)
+        assertEquals(1, result.businesses.size)
+        assertEquals(2, result.successfulSourceCount)
+    }
+
+    @Test
+    fun broadEmptyPrimaryRemainsAuthoritativeAndDoesNotTriggerTargetedFallback() = runTest {
+        val engine = BusinessCoverageEngine(
+            sources = listOf(
+                CoverageSource {
+                    Result.success(CoverageSourceResult(primary, emptyList(), 10L))
+                },
+                CoverageSource {
+                    Result.success(CoverageSourceResult(fallback, listOf(business("b1", fallback)), 11L))
+                },
+            ),
+            nowEpochMs = { 20L },
+        )
+
+        val result = engine.scan(scope.copy(category = "*"))
 
         assertEquals("primary", result.selectedSourceId)
         assertTrue(result.businesses.isEmpty())
