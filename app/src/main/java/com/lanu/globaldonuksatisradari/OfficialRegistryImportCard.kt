@@ -38,6 +38,7 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun OfficialRegistryImportCard(
+    defaultCity: String? = null,
     onImported: (OfficialRegistryImportSummary, List<OfficialRegistryRecord>) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
@@ -74,6 +75,7 @@ fun OfficialRegistryImportCard(
                         source = source,
                         fileName = fileName,
                         bytes = bytes,
+                        defaultCity = if (source == OfficialRegistrySource.CHAMBER) defaultCity else null,
                     )
                 }
             }.onSuccess { summary ->
@@ -325,8 +327,13 @@ fun OfficialRegistryImportCard(
 
             status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             Text(
-                "Not: ODA/TOBB dahil kaynak seçimi dosyanın nereden alındığını beyan eder; resmî kimlik için sicil/kayıt numarası aranır. " +
-                    "Giriş gerektiren oda/TOBB sistemleri otomatik kazınmaz; yetkili çıktı içe aktarılır.",
+                buildString {
+                    append("Not: ODA/TOBB dahil kaynak seçimi dosyanın nereden alındığını beyan eder; resmî kimlik için sicil/kayıt numarası aranır. ")
+                    append("Giriş gerektiren oda/TOBB sistemleri otomatik kazınmaz; yetkili çıktı içe aktarılır.")
+                    if (!defaultCity.isNullOrBlank()) {
+                        append(" ODA dosyasında İl sütunu yoksa seçili şehir ($defaultCity) kullanılır.")
+                    }
+                },
                 style = MaterialTheme.typography.labelSmall,
             )
         }
