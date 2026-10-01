@@ -186,6 +186,25 @@ class OfficialRegistryEnrichmentTest {
     }
 
     @Test
+    fun legalTitleCanMatchShortTradeNameWhenRegionAlsoMatches() {
+        val match = OfficialRegistryMatcher.bestMatch(
+            name = "Arslan Gıda",
+            city = "İstanbul",
+            district = "Sultanbeyli",
+            address = "Dilber Sokak",
+            phone = null,
+            records = listOf(
+                record(
+                    name = "ARSLAN GIDA SANAYİ VE TİCARET LİMİTED ŞİRKETİ",
+                    address = "Dilber Sokak No:10 Sultanbeyli İstanbul",
+                ),
+            ),
+        )
+
+        assertEquals("123456", match?.registrationNumber)
+    }
+
+    @Test
     fun officialSourceContractsRequireAuthorizedImportInsteadOfAnonymousScraping() {
         assertEquals(SourceAccessMethod.OFFICIAL_BULK_REQUEST, OfficialRegistrySource.ITO.contract.accessMethod)
         assertEquals(SourceAccessMethod.AUTHENTICATED_EXPORT, OfficialRegistrySource.MERSIS.contract.accessMethod)
