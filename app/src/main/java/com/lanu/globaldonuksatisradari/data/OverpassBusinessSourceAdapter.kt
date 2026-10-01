@@ -30,7 +30,7 @@ object OverpassBusinessSource {
     val contract = BusinessSourceContract(
         descriptor = descriptor,
         accessMethod = SourceAccessMethod.PUBLIC_SEARCH,
-        scope = "Bounded user-triggered business/POI discovery; OSM/ODbL data; cached locally",
+        scope = "Bounded user-triggered HORECA and retail sales-target discovery; OSM/ODbL data; cached locally",
         permittedUseVerified = true,
         supportsBulk = false,
         fieldNames = setOf(
@@ -41,8 +41,6 @@ object OverpassBusinessSource {
 }
 
 object OverpassQueryBuilder {
-    private val BUSINESS_TAGS = listOf("amenity", "shop", "craft", "tourism", "leisure", "office", "healthcare", "sport", "food", "social_facility", "community_centre")
-
     fun build(city: String, district: String?, query: String): String {
         require(city.isNotBlank()) { "Şehir boş olamaz" }
         val scope = buildScope(city, district)
@@ -76,10 +74,12 @@ object OverpassQueryBuilder {
         }
     }
 
-    private fun buildBroadQuery(): String =
-        BUSINESS_TAGS.joinToString("\n") { tag ->
-            """nwr["name"]["$tag"](area.searchArea);"""
-        }
+    private fun buildBroadQuery(): String = listOf(
+        """nwr["name"]["amenity"~"restaurant|cafe|fast_food|food_court|bar|pub|biergarten|ice_cream|marketplace|catering"](area.searchArea);""",
+        """nwr["name"]["shop"~"supermarket|convenience|food|bakery|butcher|deli|greengrocer|seafood|wholesale"](area.searchArea);""",
+        """nwr["name"]["craft"="caterer"](area.searchArea);""",
+        """nwr["name"]["tourism"~"hotel|hostel|motel|guest_house|apartment"](area.searchArea);""",
+    ).joinToString("\n")
 
     private fun buildTermQuery(query: String): String {
         val normalized = normalize(query)
@@ -291,7 +291,15 @@ class OverpassBusinessSourceAdapter(
                 name = name,
                 city = selectedCity,
                 district = district,
-                neighborhood = tags.optString("addr:suburb").takeIf(String::isNotBlank),
+                neighborhood = firstTag(
+                    tags,
+                    "addr:neighbourhood",
+                    "addr:quarter",
+                    "addr:suburb",
+                    "addr:village",
+                    "addr:hamlet",
+                    "is_in:neighbourhood",
+                ),
                 source = contract.descriptor,
                 verifiedAtEpochMs = verifiedAtEpochMs,
                 latitude = latitude,
