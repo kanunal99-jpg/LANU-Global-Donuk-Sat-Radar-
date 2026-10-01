@@ -211,6 +211,14 @@ fun OfficialRegistryImportCard(
                     "${filteredRecords.size} eşleşme • ilk ${minOf(filteredRecords.size, 30)} kayıt gösteriliyor",
                     style = MaterialTheme.typography.bodySmall,
                 )
+                OfficialRegistryExportActions(
+                    records = filteredRecords,
+                    source = selectedSource,
+                )
+                Text(
+                    "Excel dışa aktarımı ekranda gösterilen ilk 30 kayıtla sınırlı değildir; filtreye uyan ${filteredRecords.size} kaydın tamamını içerir.",
+                    style = MaterialTheme.typography.labelSmall,
+                )
                 filteredRecords.take(30).forEach { record ->
                     Card(Modifier.fillMaxWidth()) {
                         Column(
