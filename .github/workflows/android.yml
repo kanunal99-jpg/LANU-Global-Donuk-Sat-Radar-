@@ -206,6 +206,27 @@ jobs:
             exit "$TEST_EXIT"
           fi
 
+          echo "===== CLEAN INSTALL PUBLISHED APK SOURCE ====="
+          APP_ID="com.lanu.globaldonuksatisradari"
+          APK_SOURCE="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK_SOURCE"
+          adb -s "$SERIAL" uninstall "$APP_ID" >/dev/null 2>&1 || true
+          adb -s "$SERIAL" install "$APK_SOURCE"
+
+          echo "===== COLD START APK ====="
+          adb -s "$SERIAL" shell am force-stop "$APP_ID"
+          START_OUTPUT="$(adb -s "$SERIAL" shell am start -W -n "$APP_ID/.MainActivity" 2>&1)"
+          printf '%s\n' "$START_OUTPUT"
+          echo "$START_OUTPUT" | grep -q "Status: ok"
+
+          for _ in $(seq 1 30); do
+            PID="$(adb -s "$SERIAL" shell pidof "$APP_ID" 2>/dev/null | tr -d '\r' || true)"
+            [ -n "$PID" ] && break
+            sleep 1
+          done
+          test -n "${PID:-}"
+          adb -s "$SERIAL" shell dumpsys activity activities | grep -q "$APP_ID"
+
       - name: Prepare release filenames
         run: |
           set -euo pipefail
@@ -254,4 +275,34 @@ jobs:
             "$APK_PATH" \
             "$SHA_PATH" \
             "$BUILD_INFO_PATH"
+
+
+      - name: Verify published APK download
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APK_PATH: Lanu-Global-Donuk-Satis-Radari-latest.apk
+          SHA_PATH: Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256
+        run: |
+          set -euo pipefail
+          VERIFY_DIR="/tmp/lanu-release-verify"
+          rm -rf "$VERIFY_DIR"
+          mkdir -p "$VERIFY_DIR"
+
+          TARGET="$(gh release view latest --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq '.targetCommitish')"
+          test "$TARGET" = "$GITHUB_SHA"
+
+          gh release download latest \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "$APK_PATH" \
+            --pattern "$SHA_PATH" \
+            --dir "$VERIFY_DIR"
+
+          (
+            cd "$VERIFY_DIR"
+            sha256sum -c "$SHA_PATH"
+          )
+
+          cmp -s "$APK_PATH" "$VERIFY_DIR/$APK_PATH"
+          echo "Published APK download verified for $GITHUB_SHA"
 
