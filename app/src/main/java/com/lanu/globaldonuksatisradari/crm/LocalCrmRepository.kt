@@ -1,6 +1,7 @@
 package com.lanu.globaldonuksatisradari.crm
 
 import androidx.room.withTransaction
+import com.lanu.globaldonuksatisradari.data.BusinessCategoryLabels
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -107,13 +108,46 @@ class LocalCrmRepository(
         existing: CrmCustomerEntity,
         business: VerifiedBusiness,
     ): CrmCustomerEntity {
-        val enriched = existing.copy(
-            businessType = existing.businessType
-                ?: business.category?.trim()?.takeIf { it.isNotEmpty() },
-            phone = existing.phone
-                ?: business.phone?.trim()?.takeIf { it.isNotEmpty() },
+        val timestamp = now()
+        val enrichedCandidate = existing.copy(
+            businessName = business.name.trim().takeIf { it.isNotEmpty() } ?: existing.businessName,
+            city = business.city.trim().takeIf { it.isNotEmpty() } ?: existing.city,
+            district = business.district.trim()
+                .takeIf { it.isNotEmpty() && !it.equals("Bilinmiyor", ignoreCase = true) }
+                ?: existing.district,
+            neighborhood = business.neighborhood?.trim()?.takeIf { it.isNotEmpty() }
+                ?: existing.neighborhood,
+            address = business.address?.trim()?.takeIf { it.isNotEmpty() }
+                ?: existing.address,
+            latitude = business.latitude ?: existing.latitude,
+            longitude = business.longitude ?: existing.longitude,
+            businessType = BusinessCategoryLabels.displayName(business.category)
+                ?: BusinessCategoryLabels.displayName(existing.businessType),
+            phone = business.phone?.trim()?.takeIf { it.isNotEmpty() }
+                ?: existing.phone,
         )
-        if (enriched != existing) database.customerDao().upsert(enriched)
+
+        if (enrichedCandidate == existing) return existing
+
+        val enriched = enrichedCandidate.copy(
+            updatedAtEpochMs = timestamp,
+            version = existing.version + 1L,
+            syncState = SyncState.PENDING_UPLOAD.name,
+        )
+        database.customerDao().upsert(enriched)
+        database.syncOperationDao().insert(
+            SyncOperationEntity(
+                id = idGenerator(),
+                entityType = ENTITY_CUSTOMER,
+                entityId = enriched.id,
+                operation = OP_UPDATE,
+                payloadVersion = enriched.version,
+                payloadJson = CrmPayloads.customer(CrmMappings.toDomain(enriched)),
+                createdAtEpochMs = timestamp,
+                attemptCount = 0,
+                lastError = null,
+            ),
+        )
         return enriched
     }
 
@@ -135,7 +169,7 @@ class LocalCrmRepository(
             dataQuality = DataQuality.OBSERVED,
             stage = CrmStage.PROSPECT,
             ownerUserId = ownerUserId,
-            businessType = business.category?.trim()?.takeIf { it.isNotEmpty() },
+            businessType = BusinessCategoryLabels.displayName(business.category),
             phone = business.phone?.trim()?.takeIf { it.isNotEmpty() },
             createdAtEpochMs = timestamp,
             updatedAtEpochMs = timestamp,

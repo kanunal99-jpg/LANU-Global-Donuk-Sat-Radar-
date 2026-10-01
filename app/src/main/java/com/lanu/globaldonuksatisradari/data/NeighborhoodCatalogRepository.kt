@@ -2,6 +2,7 @@ package com.lanu.globaldonuksatisradari.data
 
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -15,6 +16,7 @@ import java.net.URLEncoder
 class NeighborhoodCatalogRepository(context: Context) {
     private val preferences =
         context.applicationContext.getSharedPreferences("neighborhood_catalog_cache", Context.MODE_PRIVATE)
+    private val primary = TurkiyeAdministrativeApi()
 
     private val endpoints = listOf(
         OverpassBusinessSource.BASE_URL,
@@ -30,11 +32,28 @@ class NeighborhoodCatalogRepository(context: Context) {
 
         readCache(key)?.takeIf { it.isNotEmpty() }?.let { return@withContext it }
 
+        try {
+            val primaryResult = primary.neighborhoods(city, district)
+            if (primaryResult.isNotEmpty()) {
+                writeCache(key, primaryResult)
+                return@withContext primaryResult
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Log.w("LanuLocation", "TurkiyeAPI mahalle listesi alınamadı: $city/$district", error)
+        }
+
         for (endpoint in endpoints.distinct()) {
             currentCoroutineContext().ensureActive()
-            val result = runCatching { fetch(endpoint, city, district) }
-                .onFailure { Log.w("LanuLocation", "Mahalle kataloğu alınamadı: $city/$district @ $endpoint", it) }
-                .getOrDefault(emptyList())
+            val result = try {
+                fetch(endpoint, city, district)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w("LanuLocation", "OSM mahalle fallback başarısız: $city/$district @ $endpoint", error)
+                emptyList()
+            }
             if (result.isNotEmpty()) {
                 writeCache(key, result)
                 return@withContext result

@@ -118,7 +118,17 @@ class NominatimBusinessSourceAdapter(
             if (id.isBlank()) continue
             result += VerifiedBusiness(
                 id = id, name = name, city = selectedCity, district = district,
-                neighborhood = address?.optString("neighbourhood")?.takeIf(String::isNotBlank),
+                neighborhood = address?.let {
+                    listOf(
+                        "neighbourhood",
+                        "quarter",
+                        "suburb",
+                        "village",
+                        "hamlet",
+                    ).firstNotNullOfOrNull { key ->
+                        it.optString(key).trim().takeIf(String::isNotBlank)
+                    }
+                },
                 source = contract.descriptor, verifiedAtEpochMs = verifiedAtEpochMs,
                 latitude = item.optString("lat").toDoubleOrNull(), longitude = item.optString("lon").toDoubleOrNull(),
                 category = item.optString("type").takeIf(String::isNotBlank),

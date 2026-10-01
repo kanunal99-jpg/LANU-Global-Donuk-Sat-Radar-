@@ -1,6 +1,8 @@
 package com.lanu.globaldonuksatisradari.data
 
 import android.content.Context
+import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -13,6 +15,7 @@ import java.util.Locale
 /** Discovers Turkish district (admin_level=6) names from OSM with real endpoint fallback. */
 class DistrictCatalogRepository(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences("district_catalog_cache", Context.MODE_PRIVATE)
+    private val primary = TurkiyeAdministrativeApi()
     private val endpoints = listOf(
         OverpassBusinessSource.BASE_URL,
         *OverpassBusinessSource.FALLBACK_URLS.toTypedArray(),
@@ -22,14 +25,40 @@ class DistrictCatalogRepository(context: Context) {
         if (city.isBlank()) return@withContext fallback
         val key = "districts:" + BusinessDeduplication.normalizeForComparison(city)
         readCache(key)?.takeIf { it.isNotEmpty() }?.let { return@withContext it }
+
+        try {
+            val primaryResult = primary.districts(city)
+                .map { it.name }
+                .distinctBy(BusinessDeduplication::normalizeForComparison)
+                .sortedWith(String.CASE_INSENSITIVE_ORDER)
+            if (primaryResult.isNotEmpty()) {
+                writeCache(key, primaryResult)
+                return@withContext primaryResult
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Log.w("LanuLocation", "TurkiyeAPI ilçe listesi alınamadı: $city", error)
+        }
+
         for (endpoint in endpoints.distinct()) {
-            val result = runCatching { fetch(endpoint, city) }.getOrNull().orEmpty()
+            val result = try {
+                fetch(endpoint, city)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w("LanuLocation", "OSM ilçe fallback başarısız: $city @ $endpoint", error)
+                emptyList()
+            }
             if (result.isNotEmpty()) {
                 writeCache(key, result)
                 return@withContext result
             }
         }
-        return@withContext fallback.distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
+
+        return@withContext fallback
+            .distinctBy(BusinessDeduplication::normalizeForComparison)
+            .sortedWith(String.CASE_INSENSITIVE_ORDER)
     }
 
     private fun fetch(endpoint: String, city: String): List<String> {
@@ -64,7 +93,7 @@ class DistrictCatalogRepository(context: Context) {
     private fun readCache(key: String): List<String>? {
         val raw = preferences.getString(key, null) ?: return null
         val root = runCatching { JSONObject(raw) }.getOrNull() ?: return null
-        if (System.currentTimeMillis() - root.optLong("savedAt", 0L) > 7L * 24 * 60 * 60 * 1000) return null
+        if (System.currentTimeMillis() - root.optLong("savedAt", 0L) > 30L * 24 * 60 * 60 * 1000) return null
         val array = root.optJSONArray("districts") ?: return null
         return buildList { for (i in 0 until array.length()) array.optString(i).takeIf(String::isNotBlank)?.let(::add) }
     }
