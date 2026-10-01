@@ -66,4 +66,13 @@ class OverpassBusinessSourceAdapterTest {
         assertTrue(playstation.contains("""["amenity"="internet_cafe"]"""))
         assertTrue(cigkofte.contains("""["cuisine"~"cig_kofte|çiğ_köfte"""))
     }
+    @Test
+    fun genericCategoryQueriesReachTourismAndLeisureTags() {
+        val hotel = OverpassQueryBuilder.build("İstanbul", "Pendik", "hotel")
+        val gaming = OverpassQueryBuilder.build("İstanbul", "Pendik", "adult_gaming_centre")
+
+        assertTrue(hotel.contains("""["tourism"~"hotel",i]"""))
+        assertTrue(gaming.contains("""["leisure"~"adult_gaming_centre",i]"""))
+    }
+
 }
