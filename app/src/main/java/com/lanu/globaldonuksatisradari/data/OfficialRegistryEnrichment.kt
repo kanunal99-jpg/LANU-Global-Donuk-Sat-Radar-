@@ -812,6 +812,13 @@ object OfficialRegistryImportParser {
         "isyeri adresi",
         "merkez adresi",
         "firma adresi",
+        "tescilli adresi",
+        "isyeri adres",
+        "is yeri adres",
+        "buro adresi",
+        "buro adres",
+        "uretim yeri adresi",
+        "uretim adresi",
     )
     private val PHONE_HEADERS = setOf(
         "telefon",
@@ -827,6 +834,12 @@ object OfficialRegistryImportParser {
         "firma tel",
         "firma telefonu",
         "is telefonu",
+        "isyeri tel",
+        "is yeri tel",
+        "isyeri telefonu",
+        "is yeri telefonu",
+        "buro tel",
+        "buro telefonu",
         "iletisim telefonu",
         "gsm",
         "gsm no",
@@ -837,6 +850,9 @@ object OfficialRegistryImportParser {
         "mobil",
         "mobil telefon",
         "mobile",
+        "telefon kodlu",
+        "isyeri tel kodlu",
+        "buro tel kodlu",
     )
     private val WEBSITE_HEADERS = setOf(
         "web",
