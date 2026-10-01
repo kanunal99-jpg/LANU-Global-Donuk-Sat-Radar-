@@ -116,9 +116,9 @@ fun OfficialRegistryImportCard(
             }
 
             Text(
-                "Kayıtlar: İTO \${counts[OfficialRegistrySource.ITO] ?: 0} • " +
-                    "MERSİS \${counts[OfficialRegistrySource.MERSIS] ?: 0} • " +
-                    "ESBİS \${counts[OfficialRegistrySource.ESBIS] ?: 0}",
+                "Kayıtlar: İTO ${counts[OfficialRegistrySource.ITO] ?: 0} • " +
+                    "MERSİS ${counts[OfficialRegistrySource.MERSIS] ?: 0} • " +
+                    "ESBİS ${counts[OfficialRegistrySource.ESBIS] ?: 0}",
                 style = MaterialTheme.typography.bodySmall,
             )
 
@@ -138,7 +138,7 @@ fun OfficialRegistryImportCard(
                 enabled = !importing,
                 modifier = Modifier.fillMaxWidth().testTag("official_registry_import_button"),
             ) {
-                Text(if (importing) "İçe aktarılıyor…" else "\${selectedSource.shortLabel()} dosyası içe aktar")
+                Text(if (importing) "İçe aktarılıyor…" else "${selectedSource.shortLabel()} dosyası içe aktar")
             }
 
             status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
