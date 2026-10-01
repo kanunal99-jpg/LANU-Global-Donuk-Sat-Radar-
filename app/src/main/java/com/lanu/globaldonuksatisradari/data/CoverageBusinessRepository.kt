@@ -55,6 +55,7 @@ class CoverageBusinessRepository(
     private val overpass = OverpassBusinessSourceAdapter()
     private val nominatim = NominatimBusinessSourceAdapter()
     private val districtCatalog = DistrictCatalogRepository(context)
+    private val officialRegistryStore = OfficialRegistryStore(context)
 
     private val engine = BusinessCoverageEngine(
         sources = listOf(
@@ -115,10 +116,14 @@ class CoverageBusinessRepository(
         )
 
         val scans = engine.scanAll(scopes)
-        return CoverageResultMerger.merge(
+        val discovered = CoverageResultMerger.merge(
             scans = scans,
             localCache = localCache,
             nowEpochMs = System.currentTimeMillis(),
+        )
+        return OfficialRegistryEnricher.enrich(
+            businesses = discovered,
+            records = officialRegistryStore.recordsFor(city, normalizedDistrict),
         )
     }
 
