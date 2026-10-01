@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.lanu.globaldonuksatisradari.crm.CrmCustomer
 import com.lanu.globaldonuksatisradari.crm.CrmRoutePlanner
+import com.lanu.globaldonuksatisradari.crm.MonthlyRoutinePlanner
+import com.lanu.globaldonuksatisradari.crm.RoutineDayPlan
 import com.lanu.globaldonuksatisradari.crm.RouteStop
 
 @Composable
@@ -33,6 +35,9 @@ fun RoutineScreen(
     val route = remember(routable, startId) {
         CrmRoutePlanner.plan(routable, startId)
     }
+    val monthlyPlan = remember(routable, startId) {
+        MonthlyRoutinePlanner.plan(routable, startId)
+    }
     val missingCoordinates = scopedCustomers.size - routable.size
     val startName = route.firstOrNull()?.customer?.businessName ?: "Otomatik başlangıç"
 
@@ -42,7 +47,9 @@ fun RoutineScreen(
     ) {
         item {
             Text("Yakınlık Bazlı Rutin", style = MaterialTheme.typography.headlineSmall)
-            Text("Aynı şehir/ilçe içindeki koordinatlı müşteriler, bir önceki noktaya en yakın sıraya göre dizilir.")
+            Text(
+                "Başlangıç noktasına göre yakın müşteriler aynı güne kümelenir; aylık plan 4 hafta × Pazartesi–Cuma olarak dengeli dağıtılır.",
+            )
         }
         item {
             Card(modifier = Modifier.fillMaxWidth()) {
@@ -58,8 +65,41 @@ fun RoutineScreen(
                 }
             }
         }
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("Aylık Rutin Planı", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "4 hafta • 20 iş günü • Pazartesi–Cuma • ${monthlyPlan.totalPointCount} planlanan nokta",
+                    )
+                    Text(
+                        "Günlük rotalarda kümülatif uzaklık sıfırdan başlar; birbirine yakın noktalar aynı gün içinde tutulur.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    RoutineExportActions(monthlyPlan)
+                }
+            }
+        }
+        item {
+            Text("4 haftalık dağılım", style = MaterialTheme.typography.titleMedium)
+        }
+        items((1..MonthlyRoutinePlanner.WEEKS).toList()) { week ->
+            WeekPlanCard(
+                week = week,
+                days = monthlyPlan.days.filter { it.weekNumber == week },
+            )
+        }
         if (routable.size >= 2) {
-            item { Text("Başlangıç seçmek için aşağıdaki sıradaki müşteriyi kullanabilirsiniz.") }
+            item {
+                Text("Başlangıç noktası seçimi", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Aşağıdaki listeden başlangıç seçtiğinizde hem tek rota hem 4 haftalık aylık plan yeniden hesaplanır.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
         items(route, key = { it.customer.id }) { stop ->
             RouteStopCard(stop = stop, onChooseStart = { startId = stop.customer.id })
@@ -102,6 +142,43 @@ private fun RouteStopCard(stop: RouteStop, onChooseStart: () -> Unit) {
             )
             OutlinedButton(onClick = onChooseStart, modifier = Modifier.fillMaxWidth()) {
                 Text("Rutine bu noktadan başla")
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeekPlanCard(
+    week: Int,
+    days: List<RoutineDayPlan>,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text("$week. Hafta", style = MaterialTheme.typography.titleMedium)
+            days.forEach { day ->
+                val first = day.stops.firstOrNull()?.customer?.businessName
+                val last = day.stops.lastOrNull()?.customer?.businessName
+                Text(
+                    buildString {
+                        append(day.weekday)
+                        append(" • ")
+                        append(day.stops.size)
+                        append(" nokta • ")
+                        append("%.2f".format(day.totalDistanceKm))
+                        append(" km")
+                    },
+                )
+                if (first != null) {
+                    Text(
+                        if (first == last) first else "$first → $last",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                } else {
+                    Text("Planlanan nokta yok.", style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
     }

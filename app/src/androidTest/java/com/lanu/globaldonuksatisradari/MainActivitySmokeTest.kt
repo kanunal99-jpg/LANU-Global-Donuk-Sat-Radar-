@@ -257,6 +257,39 @@ class MainActivitySmokeTest {
     }
 
     @Test(timeout = 60_000)
+    fun routineMonthlyExcelActions_areAvailableForRoutablePoints() {
+        runBlocking {
+            val context = composeRule.activity
+            val repository = LocalCrmRepository(LanuCrmDatabase.getInstance(context))
+            repository.addManualCustomerPoint(
+                businessName = "Rutin Excel Smoke",
+                address = "Test adres",
+                city = "İstanbul",
+                district = "Kadıköy",
+                neighborhood = "Caferağa",
+                latitude = 40.99,
+                longitude = 29.03,
+                contactName = "Rutin Test",
+                businessType = "Restoran",
+                taxOrNationalId = "1111111111",
+                phone = "05551112233",
+            )
+        }
+
+        composeRule.activityRule.scenario.recreate()
+        waitForText("Rutin").performClick()
+        waitForText("Aylık Rutin Planı").assertIsDisplayed()
+        waitForTag("routine_excel_save")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .assertHasClickAction()
+        waitForTag("routine_excel_share")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .assertHasClickAction()
+    }
+
+    @Test(timeout = 60_000)
     fun aiAssistant_localFallbackWorksWithoutApiKey() {
         waitForTag("nav_ai").assertHasClickAction().performClick()
         waitForTag("ai_screen").assertIsDisplayed()
