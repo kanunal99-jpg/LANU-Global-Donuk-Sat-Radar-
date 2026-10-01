@@ -31,12 +31,14 @@ import com.lanu.globaldonuksatisradari.data.BusinessDeduplication
 import com.lanu.globaldonuksatisradari.data.BusinessQualityEvaluator
 import com.lanu.globaldonuksatisradari.data.DistrictCatalogRepository
 import com.lanu.globaldonuksatisradari.data.NeighborhoodCatalogRepository
+import com.lanu.globaldonuksatisradari.data.OfficialRegistryStore
 import com.lanu.globaldonuksatisradari.data.CoverageBusinessRepository
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 
@@ -153,6 +155,23 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     }
     val localCrmRepository = remember(context) { LocalCrmRepository(LanuCrmDatabase.getInstance(context)) }
     val productCatalogRepository = remember(context) { ProductCatalogRepository(context) }
+    val officialRegistryStore = remember(context) { OfficialRegistryStore(context) }
+
+    LaunchedEffect(Unit) {
+        runCatching {
+            val records = withContext(Dispatchers.IO) { officialRegistryStore.allRecords() }
+            if (records.isEmpty()) return@runCatching null
+            localCrmRepository.enrichCustomersFromOfficialRegistry(records)
+        }.onSuccess { enriched ->
+            if (enriched != null && enriched.updated > 0) {
+                crmMessage = "Mevcut resmî sicil kayıtları CRM'e uygulandı: " +
+                    "${enriched.updated} müşteri adres/telefon kaydı güncellendi."
+            }
+        }.onFailure { error ->
+            Log.w("LanuRegistry", "Başlangıç resmî sicil zenginleştirmesi tamamlanamadı.", error)
+        }
+    }
+
     val crmCustomers by localCrmRepository.observeCustomers(null).collectAsState(initial = emptyList())
     val pendingSyncCount by localCrmRepository.observePendingSyncCount().collectAsState(initial = 0)
     val filteredCrmCustomers = remember(crmCustomers, selectedCity.name, selectedDistrict) {
