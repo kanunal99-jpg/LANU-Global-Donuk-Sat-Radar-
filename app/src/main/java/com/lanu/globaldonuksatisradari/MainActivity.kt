@@ -40,7 +40,7 @@ import kotlinx.coroutines.withTimeout
 
 data class City(val name: String, val districts: List<String>)
 
-enum class AppSection { RADAR, PRODUCT_CATALOG, MANUAL_POINT, ROUTINE }
+enum class AppSection { RADAR, PRODUCT_CATALOG, MANUAL_POINT, ROUTINE, AI_ASSISTANT }
 
 private val cities = TurkeyCityCatalog.ALL.map { entry -> City(entry.name, entry.fallbackDistricts) }
 private fun matchesInventoryPresence(value: String?, filter: String): Boolean = when (filter) {
@@ -174,6 +174,24 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val dashboardMetrics = remember(filteredCrmCustomers, regionActivities, regionNextActions, regionOpportunities) {
         CrmDashboardMetrics.from(filteredCrmCustomers, regionActivities, regionNextActions, regionOpportunities)
     }
+    val salesAiContext = remember(
+        selectedCity.name,
+        selectedDistrict,
+        crmCustomers,
+        visibleResults,
+        scanDelta,
+    ) {
+        SalesAiContext(
+            city = selectedCity.name,
+            district = selectedDistrict,
+            crmCount = crmCustomers.size,
+            prospectCount = crmCustomers.count { it.stage == CrmStage.PROSPECT },
+            activeCustomerCount = crmCustomers.count { it.stage == CrmStage.ACTIVE_CUSTOMER },
+            radarResultCount = visibleResults.size,
+            newBusinessCount = scanDelta?.newCount ?: 0,
+            sampleBusinessNames = visibleResults.take(8).map { it.name },
+        )
+    }
     fun resetFilters() {
         selectedNeighborhood = "Tümü"
         categoryFilter = "Tümü"
@@ -197,6 +215,13 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                     NavigationBarItem(section == AppSection.PRODUCT_CATALOG && selectedCrmCustomer == null, { selectedCustomerId = null; navigateTo(AppSection.PRODUCT_CATALOG) }, { Text("₺") }, label = { Text("Ürünler") })
                     NavigationBarItem(section == AppSection.MANUAL_POINT && selectedCrmCustomer == null, { selectedCustomerId = null; navigateTo(AppSection.MANUAL_POINT) }, { Text("+") }, label = { Text("Nokta") })
                     NavigationBarItem(section == AppSection.ROUTINE && selectedCrmCustomer == null, { selectedCustomerId = null; navigateTo(AppSection.ROUTINE) }, { Text("↗") }, label = { Text("Rutin") })
+                    NavigationBarItem(
+                        selected = section == AppSection.AI_ASSISTANT && selectedCrmCustomer == null,
+                        onClick = { selectedCustomerId = null; navigateTo(AppSection.AI_ASSISTANT) },
+                        icon = { Text("AI") },
+                        label = { Text("Asistan") },
+                        modifier = Modifier.testTag("nav_ai"),
+                    )
                 }
             },
         ) { padding ->
@@ -446,6 +471,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                     AppSection.PRODUCT_CATALOG -> ProductCatalogScreen(productCatalogRepository)
                     AppSection.MANUAL_POINT -> ManualPointScreen(localCrmRepository, selectedCity.name) { navigateTo(AppSection.ROUTINE) }
                     AppSection.ROUTINE -> RoutineScreen(crmCustomers, selectedCity.name, selectedDistrict)
+                    AppSection.AI_ASSISTANT -> SalesAiScreen(salesAiContext)
                     }
                 } else {
                     selectedCrmCustomer?.let { customer ->
