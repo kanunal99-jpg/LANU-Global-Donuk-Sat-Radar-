@@ -294,8 +294,54 @@ class OfficialRegistryEnrichmentTest {
     }
 
     @Test
+    fun chamberExportCollectsMultiplePhoneColumnsWithoutDuplicates() {
+        val csv = """
+            Oda Sicil No;Ünvan;İl;İlçe;Telefon 1;Telefon 2;GSM;Cep Telefonu;Durum
+            765432;Örnek Ticaret;Ankara;Çankaya;0312 111 22 33;0312 444 55 66;0532 777 88 99;0532 777 88 99;Faal
+        """.trimIndent()
+
+        val record = OfficialRegistryImportParser.parse(
+            bytes = csv.toByteArray(Charsets.UTF_8),
+            fileName = "oda-uye-listesi.csv",
+            source = OfficialRegistrySource.CHAMBER,
+            importedAtEpochMs = 600L,
+        ).single()
+
+        assertEquals("765432", record.registrationNumber)
+        assertEquals(
+            "0312 111 22 33 / 0312 444 55 66 / 0532 777 88 99",
+            record.phone,
+        )
+        assertTrue(OfficialRegistryTrust.isIdentityVerified(record))
+    }
+
+    @Test
+    fun matcherAcceptsAnyPhoneFromMultiPhoneChamberRecord() {
+        val match = OfficialRegistryMatcher.bestMatch(
+            name = "Farklı Yazılmış Ünvan",
+            city = "Ankara",
+            district = "Çankaya",
+            address = null,
+            phone = "0532 777 88 99",
+            records = listOf(
+                record(
+                    source = OfficialRegistrySource.CHAMBER,
+                    name = "Örnek Ticaret Limited Şirketi",
+                    phone = "0312 111 22 33 / 0532 777 88 99",
+                    city = "Ankara",
+                    district = "Çankaya",
+                ),
+            ),
+        )
+
+        assertEquals("123456", match?.registrationNumber)
+    }
+
+    @Test
     fun officialSourceContractsRequireAuthorizedImportInsteadOfAnonymousScraping() {
         assertEquals(SourceAccessMethod.OFFICIAL_BULK_REQUEST, OfficialRegistrySource.ITO.contract.accessMethod)
+        assertEquals(SourceAccessMethod.OFFICIAL_BULK_REQUEST, OfficialRegistrySource.CHAMBER.contract.accessMethod)
+        assertEquals(SourceAccessMethod.AUTHENTICATED_EXPORT, OfficialRegistrySource.TOBB.contract.accessMethod)
         assertEquals(SourceAccessMethod.AUTHENTICATED_EXPORT, OfficialRegistrySource.MERSIS.contract.accessMethod)
         assertEquals(SourceAccessMethod.AUTHENTICATED_EXPORT, OfficialRegistrySource.ESBIS.contract.accessMethod)
         assertTrue(OfficialRegistrySource.entries.all { it.contract.permittedUseVerified })
