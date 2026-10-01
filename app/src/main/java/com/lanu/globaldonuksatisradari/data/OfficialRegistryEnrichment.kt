@@ -182,6 +182,7 @@ class OfficialRegistryStore(
         fileName: String,
         bytes: ByteArray,
         importedAtEpochMs: Long = System.currentTimeMillis(),
+        defaultCity: String? = null,
     ): OfficialRegistryImportSummary {
         require(source.contract.validate().isSuccess) { "Resmî kaynak sözleşmesi doğrulanamadı." }
         require(bytes.isNotEmpty()) { "İçe aktarılacak dosya boş." }
@@ -193,6 +194,7 @@ class OfficialRegistryStore(
             fileName = fileName,
             source = source,
             importedAtEpochMs = importedAtEpochMs,
+            defaultCity = defaultCity,
         ).distinctBy { record ->
             listOf(
                 record.source.name,
@@ -529,6 +531,7 @@ object OfficialRegistryImportParser {
         fileName: String,
         source: OfficialRegistrySource,
         importedAtEpochMs: Long,
+        defaultCity: String? = null,
     ): List<OfficialRegistryRecord> {
         val rows = when {
             fileName.endsWith(".xlsx", ignoreCase = true) -> parseXlsx(bytes)
@@ -544,7 +547,7 @@ object OfficialRegistryImportParser {
                 }
             }
         }
-        return rowsToRecords(rows, source, importedAtEpochMs)
+        return rowsToRecords(rows, source, importedAtEpochMs, defaultCity)
     }
 
     internal fun parseDelimited(text: String): List<List<String>> {
@@ -559,6 +562,7 @@ object OfficialRegistryImportParser {
         rows: List<List<String>>,
         source: OfficialRegistrySource,
         importedAtEpochMs: Long,
+        defaultCity: String? = null,
     ): List<OfficialRegistryRecord> {
         if (rows.isEmpty()) return emptyList()
         val headerIndex = rows.indexOfFirst { row ->
@@ -604,7 +608,12 @@ object OfficialRegistryImportParser {
                 registrationNumber = value(row, REGISTRATION_HEADERS),
                 businessName = name,
                 status = value(row, STATUS_HEADERS),
-                city = value(row, CITY_HEADERS) ?: if (source == OfficialRegistrySource.ITO) "İstanbul" else null,
+                city = value(row, CITY_HEADERS)
+                    ?: when (source) {
+                        OfficialRegistrySource.ITO -> "İstanbul"
+                        OfficialRegistrySource.CHAMBER -> defaultCity?.trim()?.takeIf(String::isNotBlank)
+                        else -> null
+                    },
                 district = value(row, DISTRICT_HEADERS) ?: value(row, SEMT_HEADERS),
                 neighborhood = value(row, NEIGHBORHOOD_HEADERS),
                 address = value(row, ADDRESS_HEADERS),
