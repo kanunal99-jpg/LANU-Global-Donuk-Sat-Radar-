@@ -133,9 +133,9 @@ data class OfficialRegistryImportSummary(
 
 object OfficialRegistryTrust {
     /**
-     * Selecting an İTO/MERSİS/ESBİS button is only a source declaration.
+     * Selecting an İTO/ODA/TOBB/MERSİS/ESBİS source is only a source declaration.
      * A record is treated as official identity evidence only when the imported
-     * file contains a registry identifier (İTO sicil, MERSİS no, ESBİS sicil).
+     * file contains a registry identifier (oda sicil, MERSİS no, ESBİS sicil, etc.).
      */
     fun isIdentityVerified(record: OfficialRegistryRecord): Boolean =
         !record.registrationNumber.isNullOrBlank()
@@ -589,15 +589,15 @@ object OfficialRegistryImportParser {
         fun phoneValue(row: List<String>): String? {
             val seen = linkedSetOf<String>()
             val display = mutableListOf<String>()
-            values(row, PHONE_HEADERS).forEach { raw ->
-                raw.split(Regex("[|;/,\\n]+")).forEach { part ->
-                    val cleaned = sanitizePhone(part) ?: return@forEach
+            values(row, PHONE_HEADERS)
+                .flatMap { raw -> raw.split(Regex("[|;/,\\n]+")) }
+                .mapNotNull(::sanitizePhone)
+                .forEach { cleaned ->
                     val normalized = OfficialRegistryNormalizer.phone(cleaned)
                     if (normalized.isNotBlank() && seen.add(normalized)) {
                         display += cleaned
                     }
                 }
-            }
             return display.takeIf { it.isNotEmpty() }?.joinToString(" / ")
         }
 
