@@ -28,6 +28,7 @@ import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.data.BusinessQualityEvaluator
 import com.lanu.globaldonuksatisradari.data.DistrictCatalogRepository
+import com.lanu.globaldonuksatisradari.data.NeighborhoodCatalogRepository
 import com.lanu.globaldonuksatisradari.data.CoverageBusinessRepository
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +40,7 @@ import kotlinx.coroutines.withTimeout
 
 data class City(val name: String, val districts: List<String>)
 
-enum class AppSection { RADAR, PRODUCT_CATALOG, MANUAL_POINT, ROUTINE }
+enum class AppSection { RADAR, PRODUCT_CATALOG, MANUAL_POINT, ROUTINE, AI_ASSISTANT }
 
 private val cities = TurkeyCityCatalog.ALL.map { entry -> City(entry.name, entry.fallbackDistricts) }
 private fun matchesInventoryPresence(value: String?, filter: String): Boolean = when (filter) {
@@ -76,6 +77,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var districtMenu by remember { mutableStateOf(false) }
     var availableDistricts by remember { mutableStateOf(selectedCity.districts) }
     var districtLoading by remember { mutableStateOf(false) }
+    var availableNeighborhoods by remember { mutableStateOf<List<String>>(emptyList()) }
+    var neighborhoodLoading by remember { mutableStateOf(false) }
     var neighborhoodMenu by remember { mutableStateOf(false) }
     var selectedDistrict by remember { mutableStateOf("Tümü") }
     var selectedNeighborhood by remember { mutableStateOf("Tümü") }
@@ -87,12 +90,17 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var selectedBusiness by remember { mutableStateOf<VerifiedBusiness?>(null) }
     var selectedCustomerId by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
+    var bulkSaving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var crmMessage by remember { mutableStateOf<String?>(null) }
+    var scanDelta by remember { mutableStateOf<RadarScanDelta?>(null) }
+    var newBusinessKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
     var searchRequestId by remember { mutableLongStateOf(0L) }
     fun invalidateSearch() {
         searchRequestId++
         loading = false
+        scanDelta = null
+        newBusinessKeys = emptySet()
     }
 
     BackHandler(enabled = selectedCustomerId != null || backStack.isNotEmpty()) { if (selectedCustomerId != null) selectedCustomerId = null else goBack() }
@@ -100,6 +108,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val context = LocalContext.current
     val repository = remember(context) { CoverageBusinessRepository(context) }
     val districtRepository = remember(context) { DistrictCatalogRepository(context) }
+    val neighborhoodRepository = remember(context) { NeighborhoodCatalogRepository(context) }
+    val scanHistoryRepository = remember(context) { RadarScanHistoryRepository(context) }
     LaunchedEffect(selectedCity.name) {
         districtLoading = true
         availableDistricts = runCatching {
@@ -110,6 +120,24 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
             selectedCity.districts
         }
         districtLoading = false
+    }
+    LaunchedEffect(selectedCity.name, selectedDistrict) {
+        selectedNeighborhood = "Tümü"
+        neighborhoodMenu = false
+        availableNeighborhoods = emptyList()
+        if (selectedDistrict == "Tümü") {
+            neighborhoodLoading = false
+            return@LaunchedEffect
+        }
+        neighborhoodLoading = true
+        availableNeighborhoods = runCatching {
+            neighborhoodRepository.getNeighborhoods(selectedCity.name, selectedDistrict)
+        }.getOrElse { throwable ->
+            if (throwable is CancellationException) throw throwable
+            Log.w("LanuRadar", "Mahalle kataloğu yenilenemedi: ${selectedCity.name}/$selectedDistrict", throwable)
+            emptyList()
+        }
+        neighborhoodLoading = false
     }
     val localCrmRepository = remember(context) { LocalCrmRepository(LanuCrmDatabase.getInstance(context)) }
     val productCatalogRepository = remember(context) { ProductCatalogRepository(context) }
@@ -146,6 +174,24 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val dashboardMetrics = remember(filteredCrmCustomers, regionActivities, regionNextActions, regionOpportunities) {
         CrmDashboardMetrics.from(filteredCrmCustomers, regionActivities, regionNextActions, regionOpportunities)
     }
+    val salesAiContext = remember(
+        selectedCity.name,
+        selectedDistrict,
+        crmCustomers,
+        visibleResults,
+        scanDelta,
+    ) {
+        SalesAiContext(
+            city = selectedCity.name,
+            district = selectedDistrict,
+            crmCount = crmCustomers.size,
+            prospectCount = crmCustomers.count { it.stage == CrmStage.PROSPECT },
+            activeCustomerCount = crmCustomers.count { it.stage == CrmStage.ACTIVE_CUSTOMER },
+            radarResultCount = visibleResults.size,
+            newBusinessCount = scanDelta?.newCount ?: 0,
+            sampleBusinessNames = visibleResults.take(8).map { it.name },
+        )
+    }
     fun resetFilters() {
         selectedNeighborhood = "Tümü"
         categoryFilter = "Tümü"
@@ -169,6 +215,13 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                     NavigationBarItem(section == AppSection.PRODUCT_CATALOG && selectedCrmCustomer == null, { selectedCustomerId = null; navigateTo(AppSection.PRODUCT_CATALOG) }, { Text("₺") }, label = { Text("Ürünler") })
                     NavigationBarItem(section == AppSection.MANUAL_POINT && selectedCrmCustomer == null, { selectedCustomerId = null; navigateTo(AppSection.MANUAL_POINT) }, { Text("+") }, label = { Text("Nokta") })
                     NavigationBarItem(section == AppSection.ROUTINE && selectedCrmCustomer == null, { selectedCustomerId = null; navigateTo(AppSection.ROUTINE) }, { Text("↗") }, label = { Text("Rutin") })
+                    NavigationBarItem(
+                        selected = section == AppSection.AI_ASSISTANT && selectedCrmCustomer == null,
+                        onClick = { selectedCustomerId = null; navigateTo(AppSection.AI_ASSISTANT) },
+                        icon = { Text("AI") },
+                        label = { Text("Asistan") },
+                        modifier = Modifier.testTag("nav_ai"),
+                    )
                 }
             },
         ) { padding ->
@@ -204,10 +257,42 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             }
                         }
                         item {
-                            val neighborhoods = listOf("Tümü") + results.mapNotNull { it.neighborhood }.distinct().sorted()
+                            val neighborhoods = remember(availableNeighborhoods, results) {
+                                listOf("Tümü") +
+                                    (availableNeighborhoods + results.mapNotNull { it.neighborhood })
+                                        .filter { it.isNotBlank() }
+                                        .distinct()
+                                        .sortedWith(String.CASE_INSENSITIVE_ORDER)
+                            }
+                            val districtSelected = selectedDistrict != "Tümü"
                             Box {
-                                OutlinedButton(onClick = { if (neighborhoods.size > 1) neighborhoodMenu = true }, modifier = Modifier.fillMaxWidth()) { Text("Mahalle: $selectedNeighborhood") }
-                                DropdownMenu(neighborhoodMenu && neighborhoods.size > 1, { neighborhoodMenu = false }) { neighborhoods.forEach { n -> DropdownMenuItem({ Text(n) }, onClick = { selectedNeighborhood = n; neighborhoodMenu = false }) } }
+                                OutlinedButton(
+                                    onClick = { if (districtSelected && neighborhoods.size > 1) neighborhoodMenu = true },
+                                    enabled = districtSelected && (!neighborhoodLoading || neighborhoods.size > 1),
+                                    modifier = Modifier.fillMaxWidth().testTag("neighborhood_filter"),
+                                ) {
+                                    Text(
+                                        when {
+                                            !districtSelected -> "Mahalle: Önce ilçe seçin"
+                                            neighborhoodLoading && neighborhoods.size <= 1 -> "Mahalleler yükleniyor…"
+                                            else -> "Mahalle: $selectedNeighborhood"
+                                        },
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = neighborhoodMenu && neighborhoods.size > 1,
+                                    onDismissRequest = { neighborhoodMenu = false },
+                                ) {
+                                    neighborhoods.forEach { neighborhood ->
+                                        DropdownMenuItem(
+                                            text = { Text(neighborhood) },
+                                            onClick = {
+                                                selectedNeighborhood = neighborhood
+                                                neighborhoodMenu = false
+                                            },
+                                        )
+                                    }
+                                }
                             }
                         }
                         item {
@@ -240,8 +325,27 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         runCatching { withTimeout(SEARCH_TIMEOUT_MS) { repository.search(requestQuery, requestCity, requestDistrict) } }
                                             .onSuccess { records ->
                                                 if (requestId == searchRequestId) {
+                                                    val delta = scanHistoryRepository.compareAndRecord(
+                                                        city = requestCity,
+                                                        district = requestDistrict,
+                                                        query = requestQuery,
+                                                        records = records,
+                                                    )
                                                     results = records
-                                                    if (records.isEmpty()) error = "Seçilen kapsamda kayıt bulunamadı." else crmMessage = "${records.size} gerçek işletme kaydı getirildi."
+                                                    scanDelta = delta
+                                                    newBusinessKeys = delta.newBusinessKeys
+                                                    if (records.isEmpty()) {
+                                                        error = "Seçilen kapsamda kayıt bulunamadı."
+                                                    } else {
+                                                        crmMessage = when {
+                                                            delta.isFirstScan ->
+                                                                "${records.size} işletme bulundu. Bu tarama sonraki karşılaştırmalar için baz olarak kaydedildi."
+                                                            delta.newCount > 0 ->
+                                                                "${records.size} işletme bulundu. Son taramadan beri ${delta.newCount} yeni işletme bulundu."
+                                                            else ->
+                                                                "${records.size} işletme bulundu. Son taramadan beri yeni işletme yok."
+                                                        }
+                                                    }
                                                 }
                                             }
                                             .onFailure { throwable ->
@@ -262,15 +366,64 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 enabled = !loading,
                             ) { Text(if (loading) "İşletmeler aranıyor…" else "İşletmeleri getir") }
                         }
+                        if (results.isNotEmpty()) {
+                            item {
+                                Button(
+                                    modifier = Modifier.fillMaxWidth().testTag("crm_save_all_results"),
+                                    enabled = !bulkSaving,
+                                    onClick = {
+                                        bulkSaving = true
+                                        scope.launch {
+                                            runCatching { localCrmRepository.addBusinessesAsCustomers(results) }
+                                                .onSuccess { saved ->
+                                                    crmMessage = if (saved.alreadyExisting > 0) {
+                                                        "${saved.inserted} yeni nokta CRM'e kaydedildi; ${saved.alreadyExisting} nokta zaten kayıtlıydı."
+                                                    } else {
+                                                        "${saved.inserted} noktanın tamamı CRM'e kaydedildi."
+                                                    }
+                                                }
+                                                .onFailure { throwable ->
+                                                    Log.e("LanuCrm", "Toplu CRM kaydı başarısız oldu.", throwable)
+                                                    crmMessage = "Toplu CRM kaydı tamamlanamadı. Lütfen tekrar deneyin."
+                                                }
+                                            bulkSaving = false
+                                        }
+                                    },
+                                ) {
+                                    Text(if (bulkSaving) "CRM'e kaydediliyor…" else "Tüm Sonuçları CRM'e Kaydet (${results.size})")
+                                }
+                            }
+                        }
                         error?.let { message -> item { Card { Text(message, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error) } } }
                         crmMessage?.let { message -> item { Card { Text(message, Modifier.padding(16.dp)) } } }
+                        scanDelta?.let { delta ->
+                            item {
+                                Card(Modifier.fillMaxWidth().testTag("new_business_scan_summary")) {
+                                    Column(
+                                        Modifier.padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        Text("Tarama karşılaştırması", style = MaterialTheme.typography.titleMedium)
+                                        Text(
+                                            if (delta.isFirstScan) {
+                                                "İlk tarama baz olarak kaydedildi. Sonraki taramalarda yeni açılan/kaynağa yeni eklenen işletmeler ayrıca gösterilecek."
+                                            } else {
+                                                "Önceki tarama: ${delta.previousCount} • Şimdi: ${delta.currentCount} • Yeni: ${delta.newCount}"
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                        }
                         selectedBusiness?.let { business -> item { BusinessDetailCard(business, { selectedBusiness = null }) } }
                         item { SalesDashboard(selectedCity.name, selectedDistrict, availableDistricts, dashboardMetrics) { invalidateSearch(); selectedDistrict = it; results = emptyList(); selectedBusiness = null; selectedCustomerId = null } }
                         item {
                             Card(Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text("Senkronizasyon", style = MaterialTheme.typography.titleMedium)
+                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("CRM ve Excel", style = MaterialTheme.typography.titleMedium)
+                                    Text("${crmCustomers.size} CRM noktası")
                                     Text(if (pendingSyncCount == 0) "Tüm yerel değişiklikler işlendi." else "$pendingSyncCount değişiklik bağlantı bekliyor.")
+                                    CrmExportActions(crmCustomers)
                                 }
                             }
                         }
@@ -287,8 +440,19 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             item { BusinessMapPreview(visibleResults) }
                         }
                         items(visibleResults, key = { it.id }) { business ->
-                            BusinessResultCard(business, { selectedBusiness = business }) {
-                                scope.launch { runCatching { localCrmRepository.addBusinessAsCustomer(business) }.onSuccess { crmMessage = "${it.businessName} CRM'e kaydedildi." }.onFailure { crmMessage = "CRM kaydı yapılamadı: ${it.message.orEmpty()}" } }
+                            BusinessResultCard(
+                                business = business,
+                                isNew = RadarScanHistoryRepository.businessKey(business) in newBusinessKeys,
+                                onClick = { selectedBusiness = business },
+                            ) {
+                                scope.launch {
+                                    runCatching { localCrmRepository.addBusinessAsCustomer(business) }
+                                        .onSuccess { crmMessage = "${it.businessName} CRM'e kaydedildi." }
+                                        .onFailure {
+                                            Log.e("LanuCrm", "CRM kaydı başarısız oldu.", it)
+                                            crmMessage = "CRM kaydı yapılamadı. Lütfen tekrar deneyin."
+                                        }
+                                }
                             }
                         }
                         if (filteredCrmCustomers.isNotEmpty()) {
@@ -297,7 +461,10 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 Card(Modifier.fillMaxWidth()) {
                                     Row(Modifier.padding(14.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Column(Modifier.weight(1f)) { Text(customer.businessName, style = MaterialTheme.typography.titleMedium); Text("${customer.city} • ${customer.district} • ${customer.stage.name}", style = MaterialTheme.typography.bodySmall) }
-                                        OutlinedButton(onClick = { selectedCustomerId = customer.id }) { Text("Aç") }
+                                        OutlinedButton(
+                                            onClick = { selectedCustomerId = customer.id },
+                                            modifier = Modifier.testTag("crm_open_${customer.businessSourceId}"),
+                                        ) { Text("Aç") }
                                     }
                                 }
                             }
@@ -307,6 +474,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                     AppSection.PRODUCT_CATALOG -> ProductCatalogScreen(productCatalogRepository)
                     AppSection.MANUAL_POINT -> ManualPointScreen(localCrmRepository, selectedCity.name) { navigateTo(AppSection.ROUTINE) }
                     AppSection.ROUTINE -> RoutineScreen(crmCustomers, selectedCity.name, selectedDistrict)
+                    AppSection.AI_ASSISTANT -> SalesAiScreen(salesAiContext)
                     }
                 } else {
                     selectedCrmCustomer?.let { customer ->
@@ -336,7 +504,12 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
 private const val SEARCH_TIMEOUT_MS = 120_000L
 
 @Composable
-private fun BusinessResultCard(business: VerifiedBusiness, onClick: () -> Unit, onSaveToCrm: () -> Unit) {
+private fun BusinessResultCard(
+    business: VerifiedBusiness,
+    isNew: Boolean,
+    onClick: () -> Unit,
+    onSaveToCrm: () -> Unit,
+) {
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -344,7 +517,21 @@ private fun BusinessResultCard(business: VerifiedBusiness, onClick: () -> Unit, 
                     Text(business.name, style = MaterialTheme.typography.titleMedium)
                     Text("${business.city} • ${business.district}${business.neighborhood?.let { " • $it" } ?: ""}", style = MaterialTheme.typography.bodySmall)
                 }
-                Text("${BusinessQualityEvaluator.evaluate(business).score}/100", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+                Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+                    if (isNew) {
+                        Text(
+                            "YENİ",
+                            modifier = Modifier.testTag("new_business_badge"),
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
+                    Text(
+                        "${BusinessQualityEvaluator.evaluate(business).score}/100",
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
             }
             business.category?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             business.phone?.let { Text("Telefon: $it", style = MaterialTheme.typography.bodySmall) }

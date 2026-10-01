@@ -153,7 +153,10 @@ class MainActivitySmokeTest {
 
         composeRule.activityRule.scenario.recreate()
         scrollMainToText("Smoke CRM Kafe").assertIsDisplayed()
-        waitForText("Aç").assertHasClickAction().performClick()
+        waitForTag("crm_open_instrumentation-ui-crm-detail")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
         waitForTag("crm_detail_back").assertIsDisplayed()
         waitForText("Açık takipler").assertExists()
         waitForText("Aktivite geçmişi").assertExists()
@@ -187,6 +190,86 @@ class MainActivitySmokeTest {
         composeRule.waitForIdle()
 
         waitForText("Ad, adres, il ve ilçe zorunludur.")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test(timeout = 60_000)
+    fun bulkCrmSave_deduplicatesSourceRecords() {
+        runBlocking {
+            val context = composeRule.activity
+            val repository = LocalCrmRepository(LanuCrmDatabase.getInstance(context))
+            val source = DataSourceDescriptor(
+                id = "osm-overpass",
+                name = "OpenStreetMap Overpass",
+                publisher = "OpenStreetMap",
+                licenseOrTerms = "ODbL",
+                sourceUrl = "https://overpass-api.de/api/interpreter",
+                lastVerifiedAtEpochMs = 1L,
+            )
+            val business = VerifiedBusiness(
+                id = "bulk-smoke-1",
+                name = "Toplu CRM Smoke",
+                city = "İstanbul",
+                district = "Kadıköy",
+                neighborhood = "Caferağa",
+                source = source,
+                verifiedAtEpochMs = 1L,
+                phone = "05550000000",
+                category = "Kafe",
+            )
+
+            val first = repository.addBusinessesAsCustomers(listOf(business, business))
+            val second = repository.addBusinessesAsCustomers(listOf(business))
+
+            assertTrue(first.inserted == 1)
+            assertTrue(second.alreadyExisting == 1)
+            val saved = repository.observeCustomers("İstanbul").first().first { it.businessSourceId == "bulk-smoke-1" }
+            assertTrue(saved.phone == "05550000000")
+            assertTrue(saved.businessType == "Kafe")
+        }
+    }
+
+    @Test(timeout = 60_000)
+    fun crmExcelActions_areAvailableForPersistedPoints() {
+        runBlocking {
+            val context = composeRule.activity
+            val repository = LocalCrmRepository(LanuCrmDatabase.getInstance(context))
+            repository.addManualCustomerPoint(
+                businessName = "Excel Smoke Nokta",
+                address = "Test adres",
+                city = "İstanbul",
+                district = "Kadıköy",
+                neighborhood = "Caferağa",
+                latitude = 40.99,
+                longitude = 29.03,
+                contactName = "Test Kullanıcı",
+                businessType = "Restoran",
+                taxOrNationalId = "1234567890",
+                phone = "05551112233",
+            )
+        }
+
+        composeRule.activityRule.scenario.recreate()
+        scrollMainToTag("crm_excel_save")
+        waitForTag("crm_excel_save").assertIsDisplayed().assertHasClickAction()
+        waitForTag("crm_excel_share").assertIsDisplayed().assertHasClickAction()
+    }
+
+    @Test(timeout = 60_000)
+    fun aiAssistant_localFallbackWorksWithoutApiKey() {
+        waitForTag("nav_ai").assertHasClickAction().performClick()
+        waitForTag("ai_screen").assertIsDisplayed()
+        waitForTag("ai_local_summary")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
+        composeRule.waitForIdle()
+        waitForTag("ai_answer")
+            .performScrollTo()
+            .assertIsDisplayed()
+        waitForText("Ücretsiz yerel mod")
             .performScrollTo()
             .assertIsDisplayed()
     }
