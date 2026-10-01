@@ -227,6 +227,11 @@ class OfficialRegistryStore(
         }
     }
 
+    fun records(source: OfficialRegistrySource): List<OfficialRegistryRecord> = readSource(source)
+
+    fun allRecords(): List<OfficialRegistryRecord> =
+        OfficialRegistrySource.entries.flatMap(::readSource)
+
     fun count(source: OfficialRegistrySource): Int = readSource(source).size
 
     private fun readSource(source: OfficialRegistrySource): List<OfficialRegistryRecord> {
@@ -292,7 +297,14 @@ object OfficialRegistryEnricher {
 
         val result = mutableListOf<VerifiedBusiness>()
         businesses.forEach { business ->
-            val match = bestMatch(business, records)
+            val match = OfficialRegistryMatcher.bestMatch(
+                name = business.name,
+                city = business.city,
+                district = business.district,
+                address = business.address,
+                phone = business.phone,
+                records = records,
+            )
             if (match == null) {
                 result += business
                 return@forEach
@@ -333,12 +345,19 @@ object OfficialRegistryEnricher {
         return result
     }
 
-    private fun bestMatch(
-        business: VerifiedBusiness,
+}
+ 
+object OfficialRegistryMatcher {
+    fun bestMatch(
+        name: String,
+        city: String?,
+        district: String?,
+        address: String?,
+        phone: String?,
         records: List<OfficialRegistryRecord>,
     ): OfficialRegistryRecord? {
         val scored = records.mapNotNull { record ->
-            val score = matchScore(business, record)
+            val score = matchScore(name, city, district, address, phone, record)
             score.takeIf { it >= MIN_MATCH_SCORE }?.let { record to it }
         }.sortedByDescending { it.second }
 
@@ -353,35 +372,39 @@ object OfficialRegistryEnricher {
     }
 
     private fun matchScore(
-        business: VerifiedBusiness,
+        name: String,
+        city: String?,
+        district: String?,
+        address: String?,
+        phone: String?,
         record: OfficialRegistryRecord,
     ): Int {
         var score = 0
-        val businessPhone = OfficialRegistryNormalizer.phone(business.phone)
+        val subjectPhone = OfficialRegistryNormalizer.phone(phone)
         val officialPhone = OfficialRegistryNormalizer.phone(record.phone)
-        if (businessPhone.isNotEmpty() && officialPhone.isNotEmpty() && businessPhone == officialPhone) {
+        if (subjectPhone.isNotEmpty() && officialPhone.isNotEmpty() && subjectPhone == officialPhone) {
             score += 100
         }
 
-        val businessName = OfficialRegistryNormalizer.text(business.name)
+        val subjectName = OfficialRegistryNormalizer.text(name)
         val officialName = OfficialRegistryNormalizer.text(record.businessName)
-        if (businessName.isNotEmpty() && businessName == officialName) score += 60
+        if (subjectName.isNotEmpty() && subjectName == officialName) score += 60
 
-        val businessCity = OfficialRegistryNormalizer.text(business.city)
+        val subjectCity = OfficialRegistryNormalizer.text(city.orEmpty())
         val officialCity = OfficialRegistryNormalizer.text(record.city.orEmpty())
-        if (officialCity.isNotEmpty() && businessCity == officialCity) score += 10
+        if (officialCity.isNotEmpty() && subjectCity == officialCity) score += 10
 
-        val businessDistrict = OfficialRegistryNormalizer.text(business.district)
+        val subjectDistrict = OfficialRegistryNormalizer.text(district.orEmpty())
         val officialDistrict = OfficialRegistryNormalizer.text(record.district.orEmpty())
-        if (officialDistrict.isNotEmpty() && businessDistrict == officialDistrict) score += 20
+        if (officialDistrict.isNotEmpty() && subjectDistrict == officialDistrict) score += 20
 
-        val businessAddress = OfficialRegistryNormalizer.text(business.address.orEmpty())
+        val subjectAddress = OfficialRegistryNormalizer.text(address.orEmpty())
         val officialAddress = OfficialRegistryNormalizer.text(record.address.orEmpty())
-        if (businessAddress.isNotEmpty() && officialAddress.isNotEmpty()) {
-            val businessTokens = businessAddress.split(" ").filter { it.length >= 4 }.toSet()
+        if (subjectAddress.isNotEmpty() && officialAddress.isNotEmpty()) {
+            val subjectTokens = subjectAddress.split(" ").filter { it.length >= 4 }.toSet()
             val officialTokens = officialAddress.split(" ").filter { it.length >= 4 }.toSet()
-            if (businessTokens.isNotEmpty() && officialTokens.isNotEmpty() &&
-                businessTokens.intersect(officialTokens).size >= 2
+            if (subjectTokens.isNotEmpty() && officialTokens.isNotEmpty() &&
+                subjectTokens.intersect(officialTokens).size >= 2
             ) {
                 score += 10
             }
