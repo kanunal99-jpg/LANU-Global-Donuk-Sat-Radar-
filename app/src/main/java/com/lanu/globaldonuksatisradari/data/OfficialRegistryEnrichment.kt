@@ -12,6 +12,8 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 enum class OfficialRegistrySource {
     ITO,
+    CHAMBER,
+    TOBB,
     MERSIS,
     ESBIS;
 
@@ -23,6 +25,22 @@ enum class OfficialRegistrySource {
                 publisher = "İstanbul Ticaret Odası",
                 licenseOrTerms = "https://bilgibankasi.ito.org.tr/tr/bilgi-bankasi/toplu-bilgi-talebi/meslek-gruplari",
                 sourceUrl = "https://bilgibankasi.ito.org.tr/",
+                lastVerifiedAtEpochMs = SOURCE_POLICY_REVIEWED_AT,
+            )
+            CHAMBER -> DataSourceDescriptor(
+                id = "official-chamber",
+                name = "Yerel Ticaret / Ticaret ve Sanayi Odası Resmî Üye Kaydı",
+                publisher = "TOBB'a bağlı yerel Ticaret / Ticaret ve Sanayi Odası",
+                licenseOrTerms = "https://www.tobb.org.tr/OdaveBorsalarDB/Sayfalar/oda--borsa-sorgulama.php",
+                sourceUrl = "https://www.tobb.org.tr/OdaveBorsalarDB/Sayfalar/oda--borsa-sorgulama.php",
+                lastVerifiedAtEpochMs = SOURCE_POLICY_REVIEWED_AT,
+            )
+            TOBB -> DataSourceDescriptor(
+                id = "official-tobb",
+                name = "TOBB Resmî Üye / Sanayi Kaydı",
+                publisher = "Türkiye Odalar ve Borsalar Birliği",
+                licenseOrTerms = "https://uye.tobb.org.tr/organizasyon/firma-index.jsp",
+                sourceUrl = "https://www.tobb.org.tr/",
                 lastVerifiedAtEpochMs = SOURCE_POLICY_REVIEWED_AT,
             )
             MERSIS -> DataSourceDescriptor(
@@ -47,8 +65,8 @@ enum class OfficialRegistrySource {
         get() = BusinessSourceContract(
             descriptor = descriptor,
             accessMethod = when (this) {
-                ITO -> SourceAccessMethod.OFFICIAL_BULK_REQUEST
-                MERSIS, ESBIS -> SourceAccessMethod.AUTHENTICATED_EXPORT
+                ITO, CHAMBER -> SourceAccessMethod.OFFICIAL_BULK_REQUEST
+                TOBB, MERSIS, ESBIS -> SourceAccessMethod.AUTHENTICATED_EXPORT
             },
             scope = "Kullanıcının resmî kanaldan temin ettiği firma/esnaf çıktısındaki işletme adı, sicil durumu, adres, telefon ve web alanları",
             permittedUseVerified = true,
@@ -181,7 +199,7 @@ class OfficialRegistryStore(
                 record.registrationNumber.orEmpty(),
                 OfficialRegistryNormalizer.text(record.businessName),
                 OfficialRegistryNormalizer.text(record.district.orEmpty()),
-                OfficialRegistryNormalizer.phone(record.phone),
+                OfficialRegistryNormalizer.phones(record.phone).sorted().joinToString(","),
             ).joinToString("|")
         }.take(MAX_RECORDS)
 
@@ -413,9 +431,11 @@ object OfficialRegistryMatcher {
         record: OfficialRegistryRecord,
     ): Int {
         var score = 0
-        val subjectPhone = OfficialRegistryNormalizer.phone(phone)
-        val officialPhone = OfficialRegistryNormalizer.phone(record.phone)
-        if (subjectPhone.isNotEmpty() && officialPhone.isNotEmpty() && subjectPhone == officialPhone) {
+        val subjectPhones = OfficialRegistryNormalizer.phones(phone)
+        val officialPhones = OfficialRegistryNormalizer.phones(record.phone)
+        if (subjectPhones.isNotEmpty() && officialPhones.isNotEmpty() &&
+            subjectPhones.intersect(officialPhones).isNotEmpty()
+        ) {
             score += 100
         }
 
@@ -487,10 +507,20 @@ internal object OfficialRegistryNormalizer {
             .trim()
             .replace(Regex("\\s+"), " ")
 
-    fun phone(value: String?): String {
-        val digits = value.orEmpty().filter(Char::isDigit)
-        return if (digits.length >= 10) digits.takeLast(10) else digits
-    }
+    fun phones(value: String?): Set<String> =
+        value.orEmpty()
+            .split(Regex("[|;/,\\n]+"))
+            .map { part -> part.filter(Char::isDigit) }
+            .mapNotNull { digits ->
+                when {
+                    digits.length >= 10 -> digits.takeLast(10)
+                    digits.length >= 7 -> digits
+                    else -> null
+                }
+            }
+            .toSet()
+
+    fun phone(value: String?): String = phones(value).firstOrNull().orEmpty()
 }
 
 object OfficialRegistryImportParser {
@@ -546,6 +576,27 @@ object OfficialRegistryImportParser {
             return row.getOrNull(index)?.let(::sanitizeCell)?.takeIf(String::isNotBlank)
         }
 
+        fun values(row: List<String>, aliases: Set<String>): List<String> =
+            headers.mapIndexedNotNull { index, header ->
+                if (header !in aliases) return@mapIndexedNotNull null
+                row.getOrNull(index)?.let(::sanitizeCell)?.takeIf(String::isNotBlank)
+            }
+
+        fun phoneValue(row: List<String>): String? {
+            val seen = linkedSetOf<String>()
+            val display = mutableListOf<String>()
+            values(row, PHONE_HEADERS).forEach { raw ->
+                raw.split(Regex("[|;/,\\n]+")).forEach { part ->
+                    val cleaned = sanitizePhone(part) ?: return@forEach
+                    val normalized = OfficialRegistryNormalizer.phone(cleaned)
+                    if (normalized.isNotBlank() && seen.add(normalized)) {
+                        display += cleaned
+                    }
+                }
+            }
+            return display.takeIf(List<String>::isNotEmpty)?.joinToString(" / ")
+        }
+
         return rows.drop(headerIndex + 1).mapNotNull { row ->
             val name = value(row, NAME_HEADERS) ?: return@mapNotNull null
             OfficialRegistryRecord(
@@ -557,7 +608,7 @@ object OfficialRegistryImportParser {
                 district = value(row, DISTRICT_HEADERS) ?: value(row, SEMT_HEADERS),
                 neighborhood = value(row, NEIGHBORHOOD_HEADERS),
                 address = value(row, ADDRESS_HEADERS),
-                phone = value(row, PHONE_HEADERS)?.let(::sanitizePhone),
+                phone = phoneValue(row),
                 website = value(row, WEBSITE_HEADERS)?.let(::sanitizeWebsite),
                 importedAtEpochMs = importedAtEpochMs,
                 naceCode = value(row, NACE_HEADERS),
@@ -766,9 +817,26 @@ object OfficialRegistryImportParser {
         "telefon",
         "telefon no",
         "telefon numarasi",
+        "telefon 1",
+        "telefon 2",
+        "telefon1",
+        "telefon2",
         "tel",
-        "is telefonu",
+        "tel 1",
+        "tel 2",
+        "firma tel",
         "firma telefonu",
+        "is telefonu",
+        "iletisim telefonu",
+        "gsm",
+        "gsm no",
+        "gsm numarasi",
+        "cep",
+        "cep telefonu",
+        "cep telefon",
+        "mobil",
+        "mobil telefon",
+        "mobile",
     )
     private val WEBSITE_HEADERS = setOf(
         "web",
