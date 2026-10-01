@@ -274,6 +274,26 @@ class OfficialRegistryEnrichmentTest {
     }
 
     @Test
+    fun lanuExportWithoutRegistryNumberStaysUnverifiedWhenReimported() {
+        val csv = """
+            Nokta Adı;Telefon No;İl;İlçe;Mahalle;Açık Adres;Kaynak;Durum
+            Test Market;+90 555 111 22 33;İstanbul;Ataşehir;İçerenköy;Örnek Cadde;İTO;Durum belirtilmemiş
+        """.trimIndent()
+
+        val record = OfficialRegistryImportParser.parse(
+            bytes = csv.toByteArray(Charsets.UTF_8),
+            fileName = "lanu-ito-export.csv",
+            source = OfficialRegistrySource.ITO,
+            importedAtEpochMs = 500L,
+        ).single()
+
+        assertEquals("Test Market", record.businessName)
+        assertEquals("+90 555 111 22 33", record.phone)
+        assertNull(record.registrationNumber)
+        assertFalse(OfficialRegistryTrust.isIdentityVerified(record))
+    }
+
+    @Test
     fun officialSourceContractsRequireAuthorizedImportInsteadOfAnonymousScraping() {
         assertEquals(SourceAccessMethod.OFFICIAL_BULK_REQUEST, OfficialRegistrySource.ITO.contract.accessMethod)
         assertEquals(SourceAccessMethod.AUTHENTICATED_EXPORT, OfficialRegistrySource.MERSIS.contract.accessMethod)
