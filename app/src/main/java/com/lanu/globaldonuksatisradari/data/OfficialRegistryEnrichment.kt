@@ -12,6 +12,8 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 enum class OfficialRegistrySource {
     ITO,
+    CHAMBER,
+    TOBB,
     MERSIS,
     ESBIS;
 
@@ -23,6 +25,22 @@ enum class OfficialRegistrySource {
                 publisher = "İstanbul Ticaret Odası",
                 licenseOrTerms = "https://bilgibankasi.ito.org.tr/tr/bilgi-bankasi/toplu-bilgi-talebi/meslek-gruplari",
                 sourceUrl = "https://bilgibankasi.ito.org.tr/",
+                lastVerifiedAtEpochMs = SOURCE_POLICY_REVIEWED_AT,
+            )
+            CHAMBER -> DataSourceDescriptor(
+                id = "official-chamber",
+                name = "Yerel Ticaret / Ticaret ve Sanayi Odası Resmî Üye Kaydı",
+                publisher = "TOBB'a bağlı yerel Ticaret / Ticaret ve Sanayi Odası",
+                licenseOrTerms = "https://www.tobb.org.tr/OdaveBorsalarDB/Sayfalar/oda--borsa-sorgulama.php",
+                sourceUrl = "https://www.tobb.org.tr/OdaveBorsalarDB/Sayfalar/oda--borsa-sorgulama.php",
+                lastVerifiedAtEpochMs = SOURCE_POLICY_REVIEWED_AT,
+            )
+            TOBB -> DataSourceDescriptor(
+                id = "official-tobb",
+                name = "TOBB Resmî Üye / Sanayi Kaydı",
+                publisher = "Türkiye Odalar ve Borsalar Birliği",
+                licenseOrTerms = "https://uye.tobb.org.tr/organizasyon/firma-index.jsp",
+                sourceUrl = "https://www.tobb.org.tr/",
                 lastVerifiedAtEpochMs = SOURCE_POLICY_REVIEWED_AT,
             )
             MERSIS -> DataSourceDescriptor(
@@ -47,8 +65,8 @@ enum class OfficialRegistrySource {
         get() = BusinessSourceContract(
             descriptor = descriptor,
             accessMethod = when (this) {
-                ITO -> SourceAccessMethod.OFFICIAL_BULK_REQUEST
-                MERSIS, ESBIS -> SourceAccessMethod.AUTHENTICATED_EXPORT
+                ITO, CHAMBER -> SourceAccessMethod.OFFICIAL_BULK_REQUEST
+                TOBB, MERSIS, ESBIS -> SourceAccessMethod.AUTHENTICATED_EXPORT
             },
             scope = "Kullanıcının resmî kanaldan temin ettiği firma/esnaf çıktısındaki işletme adı, sicil durumu, adres, telefon ve web alanları",
             permittedUseVerified = true,
@@ -115,9 +133,9 @@ data class OfficialRegistryImportSummary(
 
 object OfficialRegistryTrust {
     /**
-     * Selecting an İTO/MERSİS/ESBİS button is only a source declaration.
+     * Selecting an İTO/ODA/TOBB/MERSİS/ESBİS source is only a source declaration.
      * A record is treated as official identity evidence only when the imported
-     * file contains a registry identifier (İTO sicil, MERSİS no, ESBİS sicil).
+     * file contains a registry identifier (oda sicil, MERSİS no, ESBİS sicil, etc.).
      */
     fun isIdentityVerified(record: OfficialRegistryRecord): Boolean =
         !record.registrationNumber.isNullOrBlank()
@@ -164,6 +182,7 @@ class OfficialRegistryStore(
         fileName: String,
         bytes: ByteArray,
         importedAtEpochMs: Long = System.currentTimeMillis(),
+        defaultCity: String? = null,
     ): OfficialRegistryImportSummary {
         require(source.contract.validate().isSuccess) { "Resmî kaynak sözleşmesi doğrulanamadı." }
         require(bytes.isNotEmpty()) { "İçe aktarılacak dosya boş." }
@@ -175,13 +194,14 @@ class OfficialRegistryStore(
             fileName = fileName,
             source = source,
             importedAtEpochMs = importedAtEpochMs,
+            defaultCity = defaultCity,
         ).distinctBy { record ->
             listOf(
                 record.source.name,
                 record.registrationNumber.orEmpty(),
                 OfficialRegistryNormalizer.text(record.businessName),
                 OfficialRegistryNormalizer.text(record.district.orEmpty()),
-                OfficialRegistryNormalizer.phone(record.phone),
+                OfficialRegistryNormalizer.phones(record.phone).sorted().joinToString(","),
             ).joinToString("|")
         }.take(MAX_RECORDS)
 
@@ -413,9 +433,11 @@ object OfficialRegistryMatcher {
         record: OfficialRegistryRecord,
     ): Int {
         var score = 0
-        val subjectPhone = OfficialRegistryNormalizer.phone(phone)
-        val officialPhone = OfficialRegistryNormalizer.phone(record.phone)
-        if (subjectPhone.isNotEmpty() && officialPhone.isNotEmpty() && subjectPhone == officialPhone) {
+        val subjectPhones = OfficialRegistryNormalizer.phones(phone)
+        val officialPhones = OfficialRegistryNormalizer.phones(record.phone)
+        if (subjectPhones.isNotEmpty() && officialPhones.isNotEmpty() &&
+            subjectPhones.intersect(officialPhones).isNotEmpty()
+        ) {
             score += 100
         }
 
@@ -487,10 +509,20 @@ internal object OfficialRegistryNormalizer {
             .trim()
             .replace(Regex("\\s+"), " ")
 
-    fun phone(value: String?): String {
-        val digits = value.orEmpty().filter(Char::isDigit)
-        return if (digits.length >= 10) digits.takeLast(10) else digits
-    }
+    fun phones(value: String?): Set<String> =
+        value.orEmpty()
+            .split(Regex("[|;/,\\n]+"))
+            .map { part -> part.filter(Char::isDigit) }
+            .mapNotNull { digits ->
+                when {
+                    digits.length >= 10 -> digits.takeLast(10)
+                    digits.length >= 7 -> digits
+                    else -> null
+                }
+            }
+            .toSet()
+
+    fun phone(value: String?): String = phones(value).firstOrNull().orEmpty()
 }
 
 object OfficialRegistryImportParser {
@@ -499,6 +531,7 @@ object OfficialRegistryImportParser {
         fileName: String,
         source: OfficialRegistrySource,
         importedAtEpochMs: Long,
+        defaultCity: String? = null,
     ): List<OfficialRegistryRecord> {
         val rows = when {
             fileName.endsWith(".xlsx", ignoreCase = true) -> parseXlsx(bytes)
@@ -514,7 +547,7 @@ object OfficialRegistryImportParser {
                 }
             }
         }
-        return rowsToRecords(rows, source, importedAtEpochMs)
+        return rowsToRecords(rows, source, importedAtEpochMs, defaultCity)
     }
 
     internal fun parseDelimited(text: String): List<List<String>> {
@@ -529,6 +562,7 @@ object OfficialRegistryImportParser {
         rows: List<List<String>>,
         source: OfficialRegistrySource,
         importedAtEpochMs: Long,
+        defaultCity: String? = null,
     ): List<OfficialRegistryRecord> {
         if (rows.isEmpty()) return emptyList()
         val headerIndex = rows.indexOfFirst { row ->
@@ -546,6 +580,27 @@ object OfficialRegistryImportParser {
             return row.getOrNull(index)?.let(::sanitizeCell)?.takeIf(String::isNotBlank)
         }
 
+        fun values(row: List<String>, aliases: Set<String>): List<String> =
+            headers.mapIndexedNotNull { index, header ->
+                if (header !in aliases) return@mapIndexedNotNull null
+                row.getOrNull(index)?.let(::sanitizeCell)?.takeIf(String::isNotBlank)
+            }
+
+        fun phoneValue(row: List<String>): String? {
+            val seen = linkedSetOf<String>()
+            val display = mutableListOf<String>()
+            values(row, PHONE_HEADERS)
+                .flatMap { raw -> raw.split(Regex("[|;/,\\n]+")) }
+                .mapNotNull(::sanitizePhone)
+                .forEach { cleaned ->
+                    val normalized = OfficialRegistryNormalizer.phone(cleaned)
+                    if (normalized.isNotBlank() && seen.add(normalized)) {
+                        display += cleaned
+                    }
+                }
+            return display.takeIf { it.isNotEmpty() }?.joinToString(" / ")
+        }
+
         return rows.drop(headerIndex + 1).mapNotNull { row ->
             val name = value(row, NAME_HEADERS) ?: return@mapNotNull null
             OfficialRegistryRecord(
@@ -553,11 +608,16 @@ object OfficialRegistryImportParser {
                 registrationNumber = value(row, REGISTRATION_HEADERS),
                 businessName = name,
                 status = value(row, STATUS_HEADERS),
-                city = value(row, CITY_HEADERS) ?: if (source == OfficialRegistrySource.ITO) "İstanbul" else null,
+                city = value(row, CITY_HEADERS)
+                    ?: when (source) {
+                        OfficialRegistrySource.ITO -> "İstanbul"
+                        OfficialRegistrySource.CHAMBER -> defaultCity?.trim()?.takeIf(String::isNotBlank)
+                        else -> null
+                    },
                 district = value(row, DISTRICT_HEADERS) ?: value(row, SEMT_HEADERS),
                 neighborhood = value(row, NEIGHBORHOOD_HEADERS),
                 address = value(row, ADDRESS_HEADERS),
-                phone = value(row, PHONE_HEADERS)?.let(::sanitizePhone),
+                phone = phoneValue(row),
                 website = value(row, WEBSITE_HEADERS)?.let(::sanitizeWebsite),
                 importedAtEpochMs = importedAtEpochMs,
                 naceCode = value(row, NACE_HEADERS),
@@ -761,14 +821,47 @@ object OfficialRegistryImportParser {
         "isyeri adresi",
         "merkez adresi",
         "firma adresi",
+        "tescilli adresi",
+        "isyeri adres",
+        "is yeri adres",
+        "buro adresi",
+        "buro adres",
+        "uretim yeri adresi",
+        "uretim adresi",
     )
     private val PHONE_HEADERS = setOf(
         "telefon",
         "telefon no",
         "telefon numarasi",
+        "telefon 1",
+        "telefon 2",
+        "telefon1",
+        "telefon2",
         "tel",
-        "is telefonu",
+        "tel 1",
+        "tel 2",
+        "firma tel",
         "firma telefonu",
+        "is telefonu",
+        "isyeri tel",
+        "is yeri tel",
+        "isyeri telefonu",
+        "is yeri telefonu",
+        "buro tel",
+        "buro telefonu",
+        "iletisim telefonu",
+        "gsm",
+        "gsm no",
+        "gsm numarasi",
+        "cep",
+        "cep telefonu",
+        "cep telefon",
+        "mobil",
+        "mobil telefon",
+        "mobile",
+        "telefon kodlu",
+        "isyeri tel kodlu",
+        "buro tel kodlu",
     )
     private val WEBSITE_HEADERS = setOf(
         "web",

@@ -113,6 +113,8 @@ object OfficialRegistryExcelExporter {
 
     private fun sourceLabel(source: OfficialRegistrySource): String = when (source) {
         OfficialRegistrySource.ITO -> "İTO"
+        OfficialRegistrySource.CHAMBER -> "ODA"
+        OfficialRegistrySource.TOBB -> "TOBB"
         OfficialRegistrySource.MERSIS -> "MERSİS"
         OfficialRegistrySource.ESBIS -> "ESBİS"
     }

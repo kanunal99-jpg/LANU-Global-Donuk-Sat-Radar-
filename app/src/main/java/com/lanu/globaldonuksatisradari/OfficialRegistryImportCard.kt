@@ -38,6 +38,7 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun OfficialRegistryImportCard(
+    defaultCity: String? = null,
     onImported: (OfficialRegistryImportSummary, List<OfficialRegistryRecord>) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
@@ -74,6 +75,7 @@ fun OfficialRegistryImportCard(
                         source = source,
                         fileName = fileName,
                         bytes = bytes,
+                        defaultCity = if (source == OfficialRegistrySource.CHAMBER) defaultCity else null,
                     )
                 }
             }.onSuccess { summary ->
@@ -122,34 +124,39 @@ fun OfficialRegistryImportCard(
         ) {
             Text("Resmî sicil doğrulaması", style = MaterialTheme.typography.titleMedium)
             Text(
-                "İTO / MERSİS / ESBİS üzerinden resmî olarak temin ettiğiniz CSV veya XLSX çıktısını içe aktarın. " +
-                    "Radar işletmeyi OSM ile bulur; eşleşen telefon, açık adres ve sicil durumu resmî kayıttan kullanılır.",
+                "İTO, diğer Ticaret/Ticaret ve Sanayi Odaları, TOBB, MERSİS veya ESBİS üzerinden resmî olarak " +
+                    "temin ettiğiniz CSV/XLSX çıktısını içe aktarın. Telefon 1/2, GSM, Cep ve Mobil alanları da okunur.",
                 style = MaterialTheme.typography.bodySmall,
             )
 
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                OfficialRegistrySource.entries.forEach { source ->
-                    FilterChip(
-                        selected = selectedSource == source,
-                        onClick = {
-                            selectedSource = source
-                            showRecords = false
-                            recordQuery = ""
-                            phonePresenceFilter = "Tümü"
-                        },
-                        label = { Text(source.shortLabel()) },
-                        modifier = Modifier.weight(1f),
-                    )
+            OfficialRegistrySource.entries.chunked(3).forEach { rowSources ->
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    rowSources.forEach { source ->
+                        FilterChip(
+                            selected = selectedSource == source,
+                            onClick = {
+                                selectedSource = source
+                                showRecords = false
+                                recordQuery = ""
+                                phonePresenceFilter = "Tümü"
+                            },
+                            label = { Text(source.shortLabel()) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    repeat(3 - rowSources.size) {
+                        androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                    }
                 }
             }
 
             Text(
-                "Kayıtlar: İTO ${counts[OfficialRegistrySource.ITO] ?: 0} • " +
-                    "MERSİS ${counts[OfficialRegistrySource.MERSIS] ?: 0} • " +
-                    "ESBİS ${counts[OfficialRegistrySource.ESBIS] ?: 0}",
+                "Kayıtlar: " + OfficialRegistrySource.entries.joinToString(" • ") { source ->
+                    "${source.shortLabel()} ${counts[source] ?: 0}"
+                },
                 style = MaterialTheme.typography.bodySmall,
             )
 
@@ -320,8 +327,13 @@ fun OfficialRegistryImportCard(
 
             status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             Text(
-                "Not: Kaynak düğmesi dosyanın nereden alındığını beyan eder; tek başına resmî doğrulama değildir. " +
-                    "Resmî kimlik için sicil/kayıt numarası aranır. Uygulama MERSİS/ESBİS oturumunu veya İTO sitesini otomatik kazımaz.",
+                buildString {
+                    append("Not: ODA/TOBB dahil kaynak seçimi dosyanın nereden alındığını beyan eder; resmî kimlik için sicil/kayıt numarası aranır. ")
+                    append("Giriş gerektiren oda/TOBB sistemleri otomatik kazınmaz; yetkili çıktı içe aktarılır.")
+                    if (!defaultCity.isNullOrBlank()) {
+                        append(" ODA dosyasında İl sütunu yoksa seçili şehir ($defaultCity) kullanılır.")
+                    }
+                },
                 style = MaterialTheme.typography.labelSmall,
             )
         }
@@ -330,12 +342,16 @@ fun OfficialRegistryImportCard(
 
 private fun OfficialRegistrySource.shortLabel(): String = when (this) {
     OfficialRegistrySource.ITO -> "İTO"
+    OfficialRegistrySource.CHAMBER -> "ODA"
+    OfficialRegistrySource.TOBB -> "TOBB"
     OfficialRegistrySource.MERSIS -> "MERSİS"
     OfficialRegistrySource.ESBIS -> "ESBİS"
 }
 
 private fun OfficialRegistrySource.displayName(): String = when (this) {
     OfficialRegistrySource.ITO -> "İstanbul Ticaret Odası"
+    OfficialRegistrySource.CHAMBER -> "Yerel Ticaret / Ticaret ve Sanayi Odası"
+    OfficialRegistrySource.TOBB -> "TOBB"
     OfficialRegistrySource.MERSIS -> "MERSİS"
     OfficialRegistrySource.ESBIS -> "ESBİS"
 }
