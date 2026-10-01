@@ -4,6 +4,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import java.io.ByteArrayOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import kotlin.test.assertTrue
 
 class OfficialRegistryEnrichmentTest {
@@ -134,6 +137,52 @@ class OfficialRegistryEnrichmentTest {
         assertEquals("Moda Cad. No:10", record.address)
         assertEquals("0216 555 44 33", record.phone)
         assertEquals("https://example.com", record.website)
+    }
+
+    @Test
+    fun xlsxImportReadsInlineStringOfficialColumns() {
+        val sheet = """<?xml version="1.0" encoding="UTF-8"?>
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheetData>
+                <row r="1">
+                  <c r="A1" t="inlineStr"><is><t>Firma Ünvanı</t></is></c>
+                  <c r="B1" t="inlineStr"><is><t>Durum</t></is></c>
+                  <c r="C1" t="inlineStr"><is><t>İl</t></is></c>
+                  <c r="D1" t="inlineStr"><is><t>İlçe</t></is></c>
+                  <c r="E1" t="inlineStr"><is><t>Açık Adres</t></is></c>
+                  <c r="F1" t="inlineStr"><is><t>Telefon</t></is></c>
+                </row>
+                <row r="2">
+                  <c r="A2" t="inlineStr"><is><t>Test Lokanta</t></is></c>
+                  <c r="B2" t="inlineStr"><is><t>Faal</t></is></c>
+                  <c r="C2" t="inlineStr"><is><t>İstanbul</t></is></c>
+                  <c r="D2" t="inlineStr"><is><t>Kadıköy</t></is></c>
+                  <c r="E2" t="inlineStr"><is><t>Rıhtım Cad. No:1</t></is></c>
+                  <c r="F2" t="inlineStr"><is><t>0216 000 00 00</t></is></c>
+                </row>
+              </sheetData>
+            </worksheet>
+        """.trimIndent()
+
+        val bytes = ByteArrayOutputStream().also { output ->
+            ZipOutputStream(output).use { zip ->
+                zip.putNextEntry(ZipEntry("xl/worksheets/sheet1.xml"))
+                zip.write(sheet.toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+            }
+        }.toByteArray()
+
+        val records = OfficialRegistryImportParser.parse(
+            bytes = bytes,
+            fileName = "resmi.xlsx",
+            source = OfficialRegistrySource.MERSIS,
+            importedAtEpochMs = 200L,
+        )
+
+        assertEquals(1, records.size)
+        assertEquals("Test Lokanta", records.single().businessName)
+        assertEquals("Rıhtım Cad. No:1", records.single().address)
+        assertEquals("0216 000 00 00", records.single().phone)
     }
 
     @Test
