@@ -3,6 +3,46 @@ package com.lanu.globaldonuksatisradari.data
 import android.content.Context
 import com.lanu.globaldonuksatisradari.IstanbulDistricts
 
+internal fun planCoverageScopes(
+    city: String,
+    selectedDistrict: String?,
+    query: String,
+    discoveredDistricts: List<String>,
+): List<CoverageScope> {
+    val category = query.ifBlank { "*" }
+    if (selectedDistrict != null) {
+        return listOf(
+            CoverageScope(
+                city = city,
+                district = selectedDistrict,
+                category = category,
+            ),
+        )
+    }
+
+    val canonicalDistricts = discoveredDistricts
+        .filter { it.isNotBlank() && !it.equals("Tümü", ignoreCase = true) }
+        .distinctBy(BusinessDeduplication::normalizeForComparison)
+
+    return if (canonicalDistricts.isNotEmpty()) {
+        canonicalDistricts.map { districtName ->
+            CoverageScope(
+                city = city,
+                district = districtName,
+                category = category,
+            )
+        }
+    } else {
+        listOf(
+            CoverageScope(
+                city = city,
+                district = "Tümü",
+                category = category,
+            ),
+        )
+    }
+}
+
 /**
  * Production wiring: Coverage Engine -> real OSM adapters -> local cache -> safe empty.
  * Successful empty responses remain authoritative; local cache is used only after source failures.
@@ -57,39 +97,22 @@ class CoverageBusinessRepository(
     ): List<VerifiedBusiness> {
         val normalizedDistrict = district?.takeUnless { it.isBlank() || it.equals("Tümü", true) }
 
-        val scopes = if (normalizedDistrict == null) {
-            val fallbackDistricts = if (city.equals("İstanbul", true)) {
-                IstanbulDistricts.ALL
-            } else {
-                emptyList()
-            }
-            val discoveredDistricts = districtCatalog.getDistricts(city, fallbackDistricts)
-            if (discoveredDistricts.isNotEmpty()) {
-                discoveredDistricts.map { districtName ->
-                    CoverageScope(
-                        city = city,
-                        district = districtName,
-                        category = query.ifBlank { "*" },
-                    )
-                }
-            } else {
-                listOf(
-                    CoverageScope(
-                        city = city,
-                        district = "Tümü",
-                        category = query.ifBlank { "*" },
-                    ),
-                )
-            }
+        val fallbackDistricts = if (city.equals("İstanbul", true)) {
+            IstanbulDistricts.ALL
         } else {
-            listOf(
-                CoverageScope(
-                    city = city,
-                    district = normalizedDistrict,
-                    category = query.ifBlank { "*" },
-                ),
-            )
+            emptyList()
         }
+        val discoveredDistricts = if (normalizedDistrict == null) {
+            districtCatalog.getDistricts(city, fallbackDistricts)
+        } else {
+            emptyList()
+        }
+        val scopes = planCoverageScopes(
+            city = city,
+            selectedDistrict = normalizedDistrict,
+            query = query,
+            discoveredDistricts = discoveredDistricts,
+        )
 
         val scans = engine.scanAll(scopes)
         return CoverageResultMerger.merge(
