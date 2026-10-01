@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap
 internal data class OsmLookupAddress(
     val osmKey: String,
     val displayName: String?,
+    val structuredAddress: String?,
     val provinceCandidates: List<String>,
     val districtCandidates: List<String>,
     val neighborhoodCandidates: List<String>,
@@ -218,6 +219,10 @@ internal class CrmLocationEnrichmentService(
                 city = customer.city,
                 district = district,
             ) ?: CrmLocationSanitizer.sanitizeAddress(
+                value = lookup.structuredAddress,
+                city = customer.city,
+                district = district,
+            ) ?: CrmLocationSanitizer.sanitizeAddress(
                 value = lookup.displayName,
                 city = customer.city,
                 district = district,
@@ -363,6 +368,7 @@ internal class CrmLocationEnrichmentService(
         val encoded = JSONObject()
             .put("osmKey", value.osmKey)
             .put("displayName", value.displayName)
+            .put("structuredAddress", value.structuredAddress)
             .put("provinceCandidates", JSONArray(value.provinceCandidates))
             .put("districtCandidates", JSONArray(value.districtCandidates))
             .put("neighborhoodCandidates", JSONArray(value.neighborhoodCandidates))
@@ -381,6 +387,7 @@ internal class CrmLocationEnrichmentService(
         OsmLookupAddress(
             osmKey = item.optString("osmKey"),
             displayName = item.optString("displayName").trim().takeIf(String::isNotBlank),
+            structuredAddress = item.optString("structuredAddress").trim().takeIf(String::isNotBlank),
             provinceCandidates = item.optJSONArray("provinceCandidates").toStringList(),
             districtCandidates = item.optJSONArray("districtCandidates").toStringList(),
             neighborhoodCandidates = item.optJSONArray("neighborhoodCandidates").toStringList(),
@@ -409,6 +416,7 @@ internal class CrmLocationEnrichmentService(
                         OsmLookupAddress(
                             osmKey = osmKey,
                             displayName = item.optString("display_name").trim().takeIf(String::isNotBlank),
+                            structuredAddress = buildStructuredAddress(address),
                             provinceCandidates = address.valuesFor(
                                 "state",
                                 "province",
@@ -434,6 +442,52 @@ internal class CrmLocationEnrichmentService(
                     )
                 }
             }
+        }
+
+        private fun buildStructuredAddress(address: JSONObject?): String? {
+            if (address == null) return null
+
+            val street = address.valuesFor(
+                "road",
+                "pedestrian",
+                "residential",
+                "street",
+                "path",
+            ).firstOrNull()
+            val houseNumber = address.optString("house_number").trim().takeIf(String::isNotBlank)
+            val streetLine = listOfNotNull(street, houseNumber)
+                .joinToString(" ")
+                .takeIf(String::isNotBlank)
+
+            val neighborhood = address.valuesFor(
+                "neighbourhood",
+                "quarter",
+                "suburb",
+                "village",
+                "hamlet",
+            ).firstOrNull()
+            val district = address.valuesFor(
+                "district",
+                "city_district",
+                "town",
+                "municipality",
+                "county",
+                "state_district",
+                "city",
+            ).firstOrNull()
+            val province = address.valuesFor("state", "province", "region").firstOrNull()
+            val postcode = address.optString("postcode").trim().takeIf(String::isNotBlank)
+
+            return listOfNotNull(
+                streetLine,
+                neighborhood,
+                postcode,
+                district,
+                province,
+            )
+                .distinctBy(BusinessDeduplication::normalizeForComparison)
+                .joinToString(", ")
+                .takeIf(String::isNotBlank)
         }
 
         internal fun parseOsmKey(value: String): String? {
