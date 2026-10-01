@@ -322,11 +322,17 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                             append(summary.source.name)
                                             append(": ")
                                             append(summary.importedCount)
-                                            append(" resmî kayıt hazır.")
-                                            append(" CRM eşleşmesi ")
+                                            append(" kayıt içe alındı • sicil kimliği doğrulanan ")
+                                            append(summary.verifiedIdentityCount)
+                                            append(" • telefon bulunan ")
+                                            append(summary.phoneCount)
+                                            append(". CRM eşleşmesi ")
                                             append(enriched.matched)
                                             append(" • güncellenen ")
                                             append(enriched.updated)
+                                            if (summary.verifiedIdentityCount == 0) {
+                                                append(" • sicil numarası olmadığı için resmî CRM zenginleştirmesi yapılmadı")
+                                            }
                                             if (enriched.inactiveMatches > 0) {
                                                 append(" • aktif olmayan eşleşme ")
                                                 append(enriched.inactiveMatches)
@@ -404,7 +410,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         Column(Modifier.weight(1f)) {
                                             Text("Hızlı filtreler", style = MaterialTheme.typography.titleMedium)
                                             Text(
-                                                "Kategori seçimi kaynağa da uygulanır; telefon ve web filtreleri gelen sonuçları süzer.",
+                                                "81 il destekli. Tarama seçilen il/ilçe kapsamında yapılır; kategori seçimi kaynağa da uygulanır. " +
+                                                    "Telefon ve web filtreleri gelen sonuçları süzer.",
                                                 style = MaterialTheme.typography.bodySmall,
                                             )
                                         }
