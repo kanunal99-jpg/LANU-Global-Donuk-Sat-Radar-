@@ -25,10 +25,7 @@ fun RoutineScreen(
 ) {
     var startId by remember(customers) { mutableStateOf<String?>(null) }
     val scopedCustomers = remember(customers, selectedCity, selectedDistrict) {
-        customers.filter {
-            it.city == selectedCity &&
-                (selectedDistrict == "Tümü" || it.district == selectedDistrict)
-        }
+        scopeCrmCustomers(customers, selectedCity, selectedDistrict)
     }
     val routable = remember(scopedCustomers) {
         scopedCustomers.filter { it.latitude != null && it.longitude != null }
