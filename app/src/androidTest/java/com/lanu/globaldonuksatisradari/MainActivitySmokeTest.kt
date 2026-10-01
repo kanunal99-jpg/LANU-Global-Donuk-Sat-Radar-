@@ -153,7 +153,10 @@ class MainActivitySmokeTest {
 
         composeRule.activityRule.scenario.recreate()
         scrollMainToText("Smoke CRM Kafe").assertIsDisplayed()
-        waitForText("Aç").assertHasClickAction().performClick()
+        waitForTag("crm_open_instrumentation-ui-crm-detail")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
         waitForTag("crm_detail_back").assertIsDisplayed()
         waitForText("Açık takipler").assertExists()
         waitForText("Aktivite geçmişi").assertExists()
@@ -257,9 +260,18 @@ class MainActivitySmokeTest {
     fun aiAssistant_localFallbackWorksWithoutApiKey() {
         waitForTag("nav_ai").assertHasClickAction().performClick()
         waitForTag("ai_screen").assertIsDisplayed()
-        waitForTag("ai_local_summary").assertHasClickAction().performClick()
-        waitForTag("ai_answer").assertIsDisplayed()
-        waitForText("Ücretsiz yerel mod").assertIsDisplayed()
+        waitForTag("ai_local_summary")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
+        composeRule.waitForIdle()
+        waitForTag("ai_answer")
+            .performScrollTo()
+            .assertIsDisplayed()
+        waitForText("Ücretsiz yerel mod")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test(timeout = 60_000)
