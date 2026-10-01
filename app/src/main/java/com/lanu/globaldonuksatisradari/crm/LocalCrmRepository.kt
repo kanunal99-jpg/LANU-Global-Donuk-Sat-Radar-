@@ -2,11 +2,20 @@ package com.lanu.globaldonuksatisradari.crm
 
 import androidx.room.withTransaction
 import com.lanu.globaldonuksatisradari.data.BusinessCategoryLabels
+import com.lanu.globaldonuksatisradari.data.OfficialRegistryMatcher
+import com.lanu.globaldonuksatisradari.data.OfficialRegistryRecord
+import com.lanu.globaldonuksatisradari.data.OfficialRegistryStatus
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.json.JSONObject
 import java.util.UUID
+
+data class OfficialRegistryCrmEnrichmentResult(
+    val matched: Int = 0,
+    val updated: Int = 0,
+    val inactiveMatches: Int = 0,
+)
 
 class LocalCrmRepository(
     private val database: LanuCrmDatabase,
@@ -102,6 +111,73 @@ class LocalCrmRepository(
             }
         }
         BulkCrmSaveResult(inserted = inserted, alreadyExisting = alreadyExisting)
+    }
+
+    suspend fun enrichCustomersFromOfficialRegistry(
+        records: List<OfficialRegistryRecord>,
+    ): OfficialRegistryCrmEnrichmentResult = database.withTransaction {
+        if (records.isEmpty()) return@withTransaction OfficialRegistryCrmEnrichmentResult()
+
+        var matched = 0
+        var updated = 0
+        var inactiveMatches = 0
+        val customers = database.customerDao().all()
+
+        customers.forEach { existing ->
+            val match = OfficialRegistryMatcher.bestMatch(
+                name = existing.businessName,
+                city = existing.city,
+                district = existing.district,
+                address = existing.address,
+                phone = existing.phone,
+                records = records,
+            ) ?: return@forEach
+
+            matched++
+            if (match.status?.let(OfficialRegistryStatus::isInactive) == true) {
+                inactiveMatches++
+                return@forEach
+            }
+
+            val candidate = existing.copy(
+                city = match.city?.trim()?.takeIf(String::isNotEmpty) ?: existing.city,
+                district = match.district?.trim()?.takeIf(String::isNotEmpty) ?: existing.district,
+                neighborhood = match.neighborhood?.trim()?.takeIf(String::isNotEmpty) ?: existing.neighborhood,
+                address = match.address?.trim()?.takeIf(String::isNotEmpty) ?: existing.address,
+                phone = match.phone?.trim()?.takeIf(String::isNotEmpty) ?: existing.phone,
+                dataQuality = DataQuality.OBSERVED.name,
+            )
+
+            if (candidate == existing) return@forEach
+
+            val timestamp = now()
+            val enriched = candidate.copy(
+                updatedAtEpochMs = timestamp,
+                version = existing.version + 1L,
+                syncState = SyncState.PENDING_UPLOAD.name,
+            )
+            database.customerDao().upsert(enriched)
+            database.syncOperationDao().insert(
+                SyncOperationEntity(
+                    id = idGenerator(),
+                    entityType = ENTITY_CUSTOMER,
+                    entityId = enriched.id,
+                    operation = OP_UPDATE,
+                    payloadVersion = enriched.version,
+                    payloadJson = CrmPayloads.customer(CrmMappings.toDomain(enriched)),
+                    createdAtEpochMs = timestamp,
+                    attemptCount = 0,
+                    lastError = null,
+                ),
+            )
+            updated++
+        }
+
+        OfficialRegistryCrmEnrichmentResult(
+            matched = matched,
+            updated = updated,
+            inactiveMatches = inactiveMatches,
+        )
     }
 
     private suspend fun enrichBusinessMetadata(

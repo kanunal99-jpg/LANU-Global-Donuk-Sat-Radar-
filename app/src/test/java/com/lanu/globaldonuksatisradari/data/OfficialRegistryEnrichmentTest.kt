@@ -46,14 +46,17 @@ class OfficialRegistryEnrichmentTest {
         phone: String? = "0216 555 44 33",
         address: String? = "Caferağa Mah. Moda Cad. No:10 Kadıköy / İstanbul",
         registrationNumber: String? = "123456",
+        city: String = "İstanbul",
+        district: String = "Kadıköy",
+        neighborhood: String? = "Caferağa",
     ) = OfficialRegistryRecord(
         source = source,
         registrationNumber = registrationNumber,
         businessName = name,
         status = status,
-        city = "İstanbul",
-        district = "Kadıköy",
-        neighborhood = "Caferağa",
+        city = city,
+        district = district,
+        neighborhood = neighborhood,
         address = address,
         phone = phone,
         website = "https://example.com",
@@ -183,6 +186,27 @@ class OfficialRegistryEnrichmentTest {
         assertEquals("Test Lokanta", records.single().businessName)
         assertEquals("Rıhtım Cad. No:1", records.single().address)
         assertEquals("0216 000 00 00", records.single().phone)
+    }
+
+    @Test
+    fun legalTitleCanMatchShortTradeNameWhenRegionAlsoMatches() {
+        val match = OfficialRegistryMatcher.bestMatch(
+            name = "Arslan Gıda",
+            city = "İstanbul",
+            district = "Sultanbeyli",
+            address = "Dilber Sokak",
+            phone = null,
+            records = listOf(
+                record(
+                    name = "ARSLAN GIDA SANAYİ VE TİCARET LİMİTED ŞİRKETİ",
+                    address = "Dilber Sokak No:10 Sultanbeyli İstanbul",
+                    district = "Sultanbeyli",
+                    neighborhood = null,
+                ),
+            ),
+        )
+
+        assertEquals("123456", match?.registrationNumber)
     }
 
     @Test

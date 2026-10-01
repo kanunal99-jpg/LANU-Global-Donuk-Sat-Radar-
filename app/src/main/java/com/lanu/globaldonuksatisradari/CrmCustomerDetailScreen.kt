@@ -100,7 +100,25 @@ fun CrmCustomerDetailScreen(
                 Text(customer.businessName, style = MaterialTheme.typography.headlineSmall)
                 Text("${customer.city} • ${customer.district}${customer.neighborhood?.let { " • ${it}" } ?: ""}")
                 Text("CRM aşaması: ${stageLabel(customer.stage)}")
-                customer.address?.let { Text("Adres: " + it, style = MaterialTheme.typography.bodySmall) }
+                customer.businessType?.takeIf(String::isNotBlank)?.let {
+                    Text("İşletme türü: $it", style = MaterialTheme.typography.bodySmall)
+                }
+                customer.contactName?.takeIf(String::isNotBlank)?.let {
+                    Text("Yetkili: $it", style = MaterialTheme.typography.bodySmall)
+                }
+                customer.phone?.takeIf(String::isNotBlank)?.let {
+                    Text("Telefon: $it", style = MaterialTheme.typography.bodySmall)
+                }
+                customer.taxOrNationalId?.takeIf(String::isNotBlank)?.let {
+                    Text("Vergi / TC No: $it", style = MaterialTheme.typography.bodySmall)
+                }
+                customer.address?.takeIf(String::isNotBlank)?.let {
+                    Text("Açık adres: $it", style = MaterialTheme.typography.bodySmall)
+                } ?: Text("Açık adres: kayıtlı değil", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "Veri kaynağı: ${dataQualityLabel(customer.dataQuality.name)}",
+                    style = MaterialTheme.typography.labelSmall,
+                )
                 if (customer.latitude != null && customer.longitude != null) {
                     Text(
                         "Koordinat: X %.6f • Y %.6f".format(customer.longitude, customer.latitude),
@@ -434,6 +452,13 @@ fun CrmCustomerDetailScreen(
             }
         }
     }
+}
+
+private fun dataQualityLabel(value: String): String = when (value) {
+    "OBSERVED" -> "Kaynak verisi"
+    "USER_ENTERED" -> "Kullanıcı girişi"
+    "ESTIMATED" -> "Tahmini"
+    else -> "Bilinmiyor"
 }
 
 private fun parseOpportunityAmountMinor(raw: String): Long? {

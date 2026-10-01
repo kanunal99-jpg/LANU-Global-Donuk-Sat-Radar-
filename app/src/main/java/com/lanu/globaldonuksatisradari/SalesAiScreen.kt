@@ -15,6 +15,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +38,10 @@ fun SalesAiScreen(context: SalesAiContext) {
 
     DisposableEffect(engine) {
         onDispose { engine.close() }
+    }
+
+    LaunchedEffect(engine) {
+        availability = engine.availability()
     }
 
     Column(
@@ -149,14 +154,31 @@ fun SalesAiScreen(context: SalesAiContext) {
                 onClick = {
                     scope.launch {
                         loading = true
+                        if (availability == FreeAiAvailability.DOWNLOADABLE) {
+                            availability = FreeAiAvailability.DOWNLOADING
+                            availability = engine.prepareOnDeviceModel()
+                        }
                         val result = engine.answer(question, context)
                         answer = result.text
                         mode = result.mode
+                        if (result.mode == FreeAiMode.GEMINI_NANO) {
+                            availability = FreeAiAvailability.AVAILABLE
+                        } else if (availability == FreeAiAvailability.UNKNOWN ||
+                            availability == FreeAiAvailability.DOWNLOADING
+                        ) {
+                            availability = engine.availability()
+                        }
                         loading = false
                     }
                 },
             ) {
-                Text(if (loading) "Hazırlanıyor…" else "AI'ya Sor")
+                Text(
+                    when {
+                        loading && availability == FreeAiAvailability.DOWNLOADING -> "Nano hazırlanıyor…"
+                        loading -> "Hazırlanıyor…"
+                        else -> "AI'ya Sor"
+                    },
+                )
             }
             OutlinedButton(
                 modifier = Modifier.weight(1f).testTag("ai_local_summary"),
@@ -197,5 +219,5 @@ private fun availabilityLabel(value: FreeAiAvailability): String = when (value) 
     FreeAiAvailability.AVAILABLE -> "Durum: Gemini Nano hazır • cihaz üzerinde AI aktif"
     FreeAiAvailability.DOWNLOADABLE -> "Durum: Gemini Nano bu cihazda destekleniyor ve indirilebilir"
     FreeAiAvailability.DOWNLOADING -> "Durum: Gemini Nano hazırlanıyor"
-    FreeAiAvailability.UNAVAILABLE -> "Durum: Gemini Nano desteklenmiyor • ücretsiz yerel mod aktif"
+    FreeAiAvailability.UNAVAILABLE -> "Durum: Bu cihazda Gemini Nano kullanılamıyor • güvenli yerel mod aktif"
 }

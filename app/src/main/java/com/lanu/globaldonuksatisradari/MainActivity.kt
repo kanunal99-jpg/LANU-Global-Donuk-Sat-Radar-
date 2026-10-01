@@ -1,5 +1,6 @@
 package com.lanu.globaldonuksatisradari
 
+import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -31,12 +32,14 @@ import com.lanu.globaldonuksatisradari.data.BusinessDeduplication
 import com.lanu.globaldonuksatisradari.data.BusinessQualityEvaluator
 import com.lanu.globaldonuksatisradari.data.DistrictCatalogRepository
 import com.lanu.globaldonuksatisradari.data.NeighborhoodCatalogRepository
+import com.lanu.globaldonuksatisradari.data.OfficialRegistryStore
 import com.lanu.globaldonuksatisradari.data.CoverageBusinessRepository
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 
@@ -77,7 +80,17 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
-    var selectedCity by remember { mutableStateOf(cities.first()) }
+    val context = LocalContext.current
+    val uiPreferences = remember(context) {
+        context.getSharedPreferences("lanu_ui_state", Context.MODE_PRIVATE)
+    }
+    val initialCity = remember {
+        val savedCity = uiPreferences.getString("selected_city", null)
+        cities.firstOrNull { it.name.equals(savedCity, ignoreCase = true) }
+            ?: cities.firstOrNull { it.name == "İstanbul" }
+            ?: cities.first()
+    }
+    var selectedCity by remember { mutableStateOf(initialCity) }
     var section by remember { mutableStateOf(AppSection.RADAR) }
     val backStack = remember { mutableStateListOf<AppSection>() }
     val forwardStack = remember { mutableStateListOf<AppSection>() }
@@ -92,7 +105,13 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var availableNeighborhoods by remember { mutableStateOf<List<String>>(emptyList()) }
     var neighborhoodLoading by remember { mutableStateOf(false) }
     var neighborhoodMenu by remember { mutableStateOf(false) }
-    var selectedDistrict by remember { mutableStateOf("Tümü") }
+    var selectedDistrict by remember {
+        mutableStateOf(
+            uiPreferences.getString("selected_district", "Tümü")
+                ?.takeIf(String::isNotBlank)
+                ?: "Tümü",
+        )
+    }
     var selectedNeighborhood by remember { mutableStateOf("Tümü") }
     var categoryFilter by remember { mutableStateOf("Tümü") }
     var phoneFilter by remember { mutableStateOf("Tümü") }
@@ -117,7 +136,6 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
 
     BackHandler(enabled = selectedCustomerId != null || backStack.isNotEmpty()) { if (selectedCustomerId != null) selectedCustomerId = null else goBack() }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
     val repository = remember(context) { CoverageBusinessRepository(context) }
     val districtRepository = remember(context) { DistrictCatalogRepository(context) }
     val neighborhoodRepository = remember(context) { NeighborhoodCatalogRepository(context) }
@@ -130,6 +148,11 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
             if (throwable is CancellationException) throw throwable
             Log.w("LanuRadar", "İlçe kataloğu yenilenemedi; yerel liste kullanılıyor.", throwable)
             selectedCity.districts
+        }
+        if (selectedDistrict != "Tümü" &&
+            availableDistricts.none { it.equals(selectedDistrict, ignoreCase = true) }
+        ) {
+            selectedDistrict = "Tümü"
         }
         districtLoading = false
     }
@@ -151,11 +174,38 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         }
         neighborhoodLoading = false
     }
+
+    LaunchedEffect(selectedCity.name, selectedDistrict) {
+        uiPreferences.edit()
+            .putString("selected_city", selectedCity.name)
+            .putString("selected_district", selectedDistrict)
+            .apply()
+    }
+
     val localCrmRepository = remember(context) { LocalCrmRepository(LanuCrmDatabase.getInstance(context)) }
     val productCatalogRepository = remember(context) { ProductCatalogRepository(context) }
+    val officialRegistryStore = remember(context) { OfficialRegistryStore(context) }
+
+    LaunchedEffect(Unit) {
+        runCatching {
+            val records = withContext(Dispatchers.IO) { officialRegistryStore.allRecords() }
+            if (records.isEmpty()) return@runCatching null
+            localCrmRepository.enrichCustomersFromOfficialRegistry(records)
+        }.onSuccess { enriched ->
+            if (enriched != null && enriched.updated > 0) {
+                crmMessage = "Mevcut resmî sicil kayıtları CRM'e uygulandı: " +
+                    "${enriched.updated} müşteri adres/telefon kaydı güncellendi."
+            }
+        }.onFailure { error ->
+            Log.w("LanuRegistry", "Başlangıç resmî sicil zenginleştirmesi tamamlanamadı.", error)
+        }
+    }
+
     val crmCustomers by localCrmRepository.observeCustomers(null).collectAsState(initial = emptyList())
     val pendingSyncCount by localCrmRepository.observePendingSyncCount().collectAsState(initial = 0)
-    val filteredCrmCustomers = crmCustomers
+    val filteredCrmCustomers = remember(crmCustomers, selectedCity.name, selectedDistrict) {
+        scopeCrmCustomers(crmCustomers, selectedCity.name, selectedDistrict)
+    }
     val selectedCrmCustomer = selectedCustomerId?.let { id -> crmCustomers.firstOrNull { it.id == id } }
     val selectedCustomerKey = selectedCustomerId.orEmpty()
     val selectedCustomerActivities by remember(selectedCustomerKey) { localCrmRepository.observeActivities(selectedCustomerKey) }.collectAsState(initial = emptyList())
@@ -211,9 +261,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         SalesAiContext(
             city = selectedCity.name,
             district = selectedDistrict,
-            crmCount = crmCustomers.size,
-            prospectCount = crmCustomers.count { it.stage == CrmStage.PROSPECT },
-            activeCustomerCount = crmCustomers.count { it.stage == CrmStage.ACTIVE_CUSTOMER },
+            crmCount = filteredCrmCustomers.size,
+            prospectCount = filteredCrmCustomers.count { it.stage == CrmStage.PROSPECT },
+            activeCustomerCount = filteredCrmCustomers.count { it.stage == CrmStage.ACTIVE_CUSTOMER },
             radarResultCount = visibleResults.size,
             newBusinessCount = scanDelta?.newCount ?: 0,
             sampleBusinessNames = visibleResults.take(8).map { it.name },
@@ -266,7 +316,32 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             Text("Gerçek işletmeleri bulun, kaliteyi kontrol edin ve CRM'e aktarın.", style = MaterialTheme.typography.bodyMedium)
                         }
                         item {
-                            OfficialRegistryImportCard { message -> crmMessage = message }
+                            OfficialRegistryImportCard { summary, records ->
+                                scope.launch {
+                                    runCatching {
+                                        localCrmRepository.enrichCustomersFromOfficialRegistry(records)
+                                    }.onSuccess { enriched ->
+                                        crmMessage = buildString {
+                                            append(summary.source.name)
+                                            append(": ")
+                                            append(summary.importedCount)
+                                            append(" resmî kayıt hazır.")
+                                            append(" CRM eşleşmesi ")
+                                            append(enriched.matched)
+                                            append(" • güncellenen ")
+                                            append(enriched.updated)
+                                            if (enriched.inactiveMatches > 0) {
+                                                append(" • aktif olmayan eşleşme ")
+                                                append(enriched.inactiveMatches)
+                                            }
+                                        }
+                                    }.onFailure { error ->
+                                        Log.e("LanuRegistry", "Resmî sicil CRM zenginleştirmesi başarısız.", error)
+                                        crmMessage = "Resmî kayıt içe aktarıldı; CRM zenginleştirmesi tamamlanamadı: " +
+                                            error.message.orEmpty()
+                                    }
+                                }
+                            }
                         }
                         item {
                             OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(), label = { Text("İşletme veya HORECA ara") }, singleLine = true)
@@ -456,9 +531,15 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             Card(Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Text("CRM ve Excel", style = MaterialTheme.typography.titleMedium)
-                                    Text("${crmCustomers.size} CRM noktası")
-                                    Text(if (pendingSyncCount == 0) "Tüm yerel değişiklikler işlendi." else "$pendingSyncCount değişiklik bağlantı bekliyor.")
-                                    CrmExportActions(crmCustomers)
+                                    Text("Seçili bölgede ${filteredCrmCustomers.size} CRM noktası • cihaz toplamı ${crmCustomers.size}")
+                                    Text(
+                                        if (pendingSyncCount == 0) {
+                                            "Tüm yerel değişiklikler işlendi."
+                                        } else {
+                                            "$pendingSyncCount yerel değişiklik bulut aktarımı bekliyor; oturum yoksa cihazda güvenle saklanır."
+                                        },
+                                    )
+                                    CrmExportActions(filteredCrmCustomers)
                                 }
                             }
                         }

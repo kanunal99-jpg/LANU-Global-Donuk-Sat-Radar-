@@ -76,7 +76,10 @@ class FreeSalesAiEngine {
 
     suspend fun answer(question: String, context: SalesAiContext): FreeAiAnswer {
         val local = { FreeAiAnswer(LocalSalesAssistant.answer(question, context), FreeAiMode.LOCAL_FALLBACK) }
-        val status = availability()
+        var status = availability()
+        if (status == FreeAiAvailability.DOWNLOADABLE) {
+            status = prepareOnDeviceModel()
+        }
         if (status != FreeAiAvailability.AVAILABLE) return local()
 
         val prompt = buildPrompt(question, context)

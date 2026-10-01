@@ -23,6 +23,9 @@ interface CrmCustomerDao {
     @Query("SELECT * FROM crm_customer ORDER BY updatedAtEpochMs DESC")
     fun observeAll(): Flow<List<CrmCustomerEntity>>
 
+    @Query("SELECT * FROM crm_customer ORDER BY updatedAtEpochMs DESC")
+    suspend fun all(): List<CrmCustomerEntity>
+
     @Query("UPDATE crm_customer SET syncState = :state WHERE id = :id")
     suspend fun updateSyncState(id: String, state: String)
 

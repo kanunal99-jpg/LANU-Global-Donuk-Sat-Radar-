@@ -153,8 +153,18 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         if (filteredProducts.isEmpty()) {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(if (products.isEmpty()) "Katalog henüz boş" else "Eşleşen ürün bulunamadı", style = MaterialTheme.typography.titleMedium)
-                    Text(if (products.isEmpty()) "İlk ürünü ekleyerek fiyat kataloğunu oluşturmaya başlayın." else "Arama metnini değiştirerek tekrar deneyin.")
+                    Text(
+                        if (products.isEmpty()) "Doğrulanmış ürün kataloğu henüz yüklenmedi" else "Eşleşen ürün bulunamadı",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        if (products.isEmpty()) {
+                            "Yetkili SKU/fiyat kaynağı olmadan ürün veya fiyat uydurulmaz. " +
+                                "Doğrulanmış bir ürünü “Yeni ürün ekle” ile kaydedebilirsiniz."
+                        } else {
+                            "Arama metnini değiştirerek tekrar deneyin."
+                        },
+                    )
                 }
             }
         }
