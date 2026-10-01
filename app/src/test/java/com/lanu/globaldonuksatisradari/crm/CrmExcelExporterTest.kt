@@ -54,6 +54,28 @@ class CrmExcelExporterTest {
     }
 
     @Test
+    fun weakLocationPlaceholdersAreNotWrittenToWorkbook() {
+        val customer = CrmCustomer(
+            id = "weak-location",
+            businessSourceId = "node:123",
+            businessName = "Zayıf Adres Testi",
+            city = "Ağrı",
+            district = "Bilinmiyor",
+            neighborhood = "Bilinmiyor",
+            address = "Ağrı",
+            latitude = 39.7,
+            longitude = 43.0,
+            createdAtEpochMs = 1L,
+            updatedAtEpochMs = 1L,
+        )
+
+        val sheetXml = workbookSheetXml(CrmExcelExporter.build(listOf(customer)))
+
+        assertTrue(!sheetXml.contains(">Bilinmiyor<"))
+        assertTrue(sheetXml.contains("Zayıf Adres Testi"))
+    }
+
+    @Test
     fun rawOsmBusinessTypeIsHumanReadableInWorkbook() {
         val customer = CrmCustomer(
             id = "2",
@@ -84,5 +106,17 @@ class CrmExcelExporterTest {
 
         assertTrue(sheetXml.contains("Süpermarket"))
         assertTrue(!sheetXml.contains(">supermarket<"))
+    }
+
+    private fun workbookSheetXml(bytes: ByteArray): String {
+        ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                if (entry.name == "xl/worksheets/sheet1.xml") {
+                    return zip.bufferedReader(Charsets.UTF_8).readText()
+                }
+            }
+        }
+        error("Worksheet bulunamadı")
     }
 }

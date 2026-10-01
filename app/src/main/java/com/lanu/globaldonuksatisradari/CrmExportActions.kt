@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.lanu.globaldonuksatisradari.crm.CrmCustomer
 import com.lanu.globaldonuksatisradari.crm.CrmExcelExporter
+import com.lanu.globaldonuksatisradari.crm.CrmLocationEnrichmentService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -36,6 +37,8 @@ fun CrmExportActions(customers: List<CrmCustomer>) {
     val scope = rememberCoroutineScope()
     var pendingWorkbook by remember { mutableStateOf<ByteArray?>(null) }
     var status by remember { mutableStateOf<String?>(null) }
+    var exporting by remember { mutableStateOf(false) }
+    val locationEnrichment = remember(context) { CrmLocationEnrichmentService(context) }
 
     val fileName = remember(customers.size) {
         "LANU-CRM-Noktalari-" +
@@ -68,23 +71,36 @@ fun CrmExportActions(customers: List<CrmCustomer>) {
         ) {
             Button(
                 modifier = Modifier.weight(1f).testTag("crm_excel_save"),
-                enabled = customers.isNotEmpty(),
+                enabled = customers.isNotEmpty() && !exporting,
                 onClick = {
                     scope.launch {
-                        val bytes = withContext(Dispatchers.Default) { CrmExcelExporter.build(customers) }
-                        pendingWorkbook = bytes
-                        saveLauncher.launch(fileName)
+                        exporting = true
+                        status = "Konum bilgileri doğrulanıyor ve Excel hazırlanıyor…"
+                        runCatching {
+                            val enriched = locationEnrichment.enrich(customers)
+                            withContext(Dispatchers.Default) { CrmExcelExporter.build(enriched) }
+                        }.onSuccess { bytes ->
+                            pendingWorkbook = bytes
+                            status = "Excel hazır. Kaydedilecek konumu seçin."
+                            saveLauncher.launch(fileName)
+                        }.onFailure {
+                            status = "Excel hazırlanamadı. Lütfen bağlantınızı kontrol edip tekrar deneyin."
+                        }
+                        exporting = false
                     }
                 },
-            ) { Text("Excel indir / kaydet") }
+            ) { Text(if (exporting) "Hazırlanıyor…" else "Excel indir / kaydet") }
 
             OutlinedButton(
                 modifier = Modifier.weight(1f).testTag("crm_excel_share"),
-                enabled = customers.isNotEmpty(),
+                enabled = customers.isNotEmpty() && !exporting,
                 onClick = {
                     scope.launch {
+                        exporting = true
+                        status = "Konum bilgileri doğrulanıyor ve paylaşım dosyası hazırlanıyor…"
                         runCatching {
-                            val bytes = withContext(Dispatchers.Default) { CrmExcelExporter.build(customers) }
+                            val enriched = locationEnrichment.enrich(customers)
+                            val bytes = withContext(Dispatchers.Default) { CrmExcelExporter.build(enriched) }
                             val file = withContext(Dispatchers.IO) {
                                 val exportDir = File(context.cacheDir, "crm_exports").apply { mkdirs() }
                                 File(exportDir, fileName).apply { writeBytes(bytes) }
@@ -105,6 +121,7 @@ fun CrmExportActions(customers: List<CrmCustomer>) {
                         }.onFailure {
                             status = "Excel paylaşımı hazırlanamadı. Lütfen tekrar deneyin."
                         }
+                        exporting = false
                     }
                 },
             ) { Text("Excel paylaş") }
