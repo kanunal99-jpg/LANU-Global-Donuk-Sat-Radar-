@@ -24,6 +24,7 @@ object CrmExcelExporter {
     )
 
     fun build(customers: List<CrmCustomer>): ByteArray {
+        val sanitizedCustomers = customers.map(CrmLocationSanitizer::sanitizeWithoutNetwork)
         val output = ByteArrayOutputStream()
         ZipOutputStream(output).use { zip ->
             zip.putXml("[Content_Types].xml", contentTypes())
@@ -31,7 +32,7 @@ object CrmExcelExporter {
             zip.putXml("xl/workbook.xml", workbook())
             zip.putXml("xl/_rels/workbook.xml.rels", workbookRelationships())
             zip.putXml("xl/styles.xml", styles())
-            zip.putXml("xl/worksheets/sheet1.xml", worksheet(customers))
+            zip.putXml("xl/worksheets/sheet1.xml", worksheet(sanitizedCustomers))
         }
         return output.toByteArray()
     }
