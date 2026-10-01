@@ -84,13 +84,20 @@ class BusinessCoverageEngine(
                     success = true,
                     resultCount = value.businesses.size,
                 )
-                return CoverageScanResult(
-                    scope = scope,
-                    businesses = value.businesses,
-                    attempts = attempts,
-                    selectedSourceId = value.source.id,
-                    completedAtEpochMs = value.completedAtEpochMs,
-                )
+
+                if (value.businesses.isNotEmpty() || scope.category == "*") {
+                    return CoverageScanResult(
+                        scope = scope,
+                        businesses = value.businesses,
+                        attempts = attempts,
+                        selectedSourceId = value.source.id,
+                        completedAtEpochMs = value.completedAtEpochMs,
+                    )
+                }
+
+                // A targeted empty result may be incomplete. Try the next real source
+                // instead of treating zero matches from one provider as authoritative.
+                continue
             }
 
             attempts += CoverageAttempt(

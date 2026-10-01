@@ -31,6 +31,7 @@ import com.lanu.globaldonuksatisradari.data.OfficialRegistryRecord
 import com.lanu.globaldonuksatisradari.data.OfficialRegistrySource
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryStatus
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryStore
+import com.lanu.globaldonuksatisradari.data.OfficialRegistryTrust
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -48,6 +49,7 @@ fun OfficialRegistryImportCard(
     var status by remember { mutableStateOf<String?>(null) }
     var showRecords by remember { mutableStateOf(false) }
     var recordQuery by remember { mutableStateOf("") }
+    var phonePresenceFilter by remember { mutableStateOf("Tümü") }
     var registryRecords by remember { mutableStateOf<List<OfficialRegistryRecord>>(emptyList()) }
     var loadingRecords by remember { mutableStateOf(false) }
     var counts by remember {
@@ -80,6 +82,7 @@ fun OfficialRegistryImportCard(
                 registryRecords = records
                 showRecords = true
                 recordQuery = ""
+                phonePresenceFilter = "Tümü"
                 val message = buildString {
                     append(summary.source.displayName())
                     append(": ")
@@ -91,7 +94,16 @@ fun OfficialRegistryImportCard(
                         append(" • aktif değil ")
                         append(summary.inactiveCount)
                     }
-                    append(". Kayıtlar aşağıda görüntülenebilir; eşleşen CRM adres/telefonları resmî veriyle güncellenecek.")
+                    append(" • sicil kimliği doğrulanan ")
+                    append(summary.verifiedIdentityCount)
+                    append(" • telefon bulunan ")
+                    append(summary.phoneCount)
+                    append(". ")
+                    if (summary.verifiedIdentityCount > 0) {
+                        append("Sicil kimliği doğrulanan eşleşmeler CRM'i güvenli şekilde zenginleştirebilir.")
+                    } else {
+                        append("Sicil/kayıt numarası bulunmadığı için bu dosya resmî kimlik kanıtı olarak kullanılmayacak.")
+                    }
                 }
                 status = message
                 onImported(summary, records)
@@ -126,6 +138,7 @@ fun OfficialRegistryImportCard(
                             selectedSource = source
                             showRecords = false
                             recordQuery = ""
+                            phonePresenceFilter = "Tümü"
                         },
                         label = { Text(source.shortLabel()) },
                         modifier = Modifier.weight(1f),
@@ -168,6 +181,7 @@ fun OfficialRegistryImportCard(
                         scope.launch {
                             registryRecords = withContext(Dispatchers.IO) { store.records(selectedSource) }
                             recordQuery = ""
+                            phonePresenceFilter = "Tümü"
                             showRecords = true
                             loadingRecords = false
                         }
@@ -185,7 +199,7 @@ fun OfficialRegistryImportCard(
 
             if (showRecords) {
                 val normalizedQuery = recordQuery.trim().lowercase()
-                val filteredRecords = if (normalizedQuery.isBlank()) {
+                val searchedRecords = if (normalizedQuery.isBlank()) {
                     registryRecords
                 } else {
                     registryRecords.filter { record ->
@@ -197,16 +211,57 @@ fun OfficialRegistryImportCard(
                             record.city.orEmpty(),
                             record.district.orEmpty(),
                             record.neighborhood.orEmpty(),
+                            record.naceCode.orEmpty(),
                         ).any { it.lowercase().contains(normalizedQuery) }
                     }
                 }
+                val filteredRecords = searchedRecords.filter { record ->
+                    when (phonePresenceFilter) {
+                        "Var" -> !record.phone.isNullOrBlank()
+                        "Eksik" -> record.phone.isNullOrBlank()
+                        else -> true
+                    }
+                }
+                val phoneCount = registryRecords.count { !it.phone.isNullOrBlank() }
+                val verifiedCount = registryRecords.count(OfficialRegistryTrust::isIdentityVerified)
+                val phonePercent = if (registryRecords.isEmpty()) 0 else phoneCount * 100 / registryRecords.size
                 OutlinedTextField(
                     value = recordQuery,
                     onValueChange = { recordQuery = it },
                     modifier = Modifier.fillMaxWidth().testTag("official_registry_search"),
-                    label = { Text("Resmî kayıtlarda ara") },
+                    label = { Text("Kayıtlarda ad, adres, telefon, sicil veya NACE ara") },
                     singleLine = true,
                 )
+                Text(
+                    "Telefon kapsamı: $phoneCount / ${registryRecords.size} (%$phonePercent) • " +
+                        "Sicil kimliği doğrulanan: $verifiedCount / ${registryRecords.size}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    listOf("Tümü", "Var", "Eksik").forEach { option ->
+                        FilterChip(
+                            selected = phonePresenceFilter == option,
+                            onClick = { phonePresenceFilter = option },
+                            label = { Text(if (option == "Tümü") "Telefon: Tümü" else "Telefon: $option") },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                if (registryRecords.isNotEmpty() && verifiedCount == 0) {
+                    Card(Modifier.fillMaxWidth().testTag("registry_unverified_warning")) {
+                        Text(
+                            "Uyarı: Bu dosyada sicil/kayıt numarası yok. Kaynak düğmesinde ${selectedSource.shortLabel()} seçilmiş olsa da " +
+                                "dosyanın resmî kimliği doğrulanamıyor. Kayıtlar görüntülenir ve Excel'e aktarılır; " +
+                                "ancak CRM'de resmî veri olarak mevcut bilgilerin üzerine yazılmaz.",
+                            Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
                 Text(
                     "${filteredRecords.size} eşleşme • ilk ${minOf(filteredRecords.size, 30)} kayıt gösteriliyor",
                     style = MaterialTheme.typography.bodySmall,
@@ -237,10 +292,21 @@ fun OfficialRegistryImportCard(
                             }
                             record.phone?.takeIf(String::isNotBlank)?.let {
                                 Text("Telefon: $it", style = MaterialTheme.typography.bodySmall)
-                            }
+                            } ?: Text("Telefon: kaynakta yok", style = MaterialTheme.typography.bodySmall)
                             record.registrationNumber?.takeIf(String::isNotBlank)?.let {
                                 Text("Sicil: $it", style = MaterialTheme.typography.labelSmall)
                             }
+                            record.naceCode?.takeIf(String::isNotBlank)?.let {
+                                Text("NACE: $it", style = MaterialTheme.typography.labelSmall)
+                            }
+                            Text(
+                                if (OfficialRegistryTrust.isIdentityVerified(record)) {
+                                    "Resmî kimlik: doğrulandı"
+                                } else {
+                                    "Resmî kimlik: sicil/kayıt no yok"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                            )
                             val stateLabel = when {
                                 record.status?.let(OfficialRegistryStatus::isActive) == true -> "FAAL"
                                 record.status?.let(OfficialRegistryStatus::isInactive) == true -> "AKTİF DEĞİL"
@@ -254,7 +320,8 @@ fun OfficialRegistryImportCard(
 
             status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             Text(
-                "Not: Uygulama MERSİS/ESBİS oturumunu veya İTO sitesini otomatik kazımaz; yalnızca sizin resmî/izinli yoldan temin ettiğiniz çıktıyı kullanır.",
+                "Not: Kaynak düğmesi dosyanın nereden alındığını beyan eder; tek başına resmî doğrulama değildir. " +
+                    "Resmî kimlik için sicil/kayıt numarası aranır. Uygulama MERSİS/ESBİS oturumunu veya İTO sitesini otomatik kazımaz.",
                 style = MaterialTheme.typography.labelSmall,
             )
         }

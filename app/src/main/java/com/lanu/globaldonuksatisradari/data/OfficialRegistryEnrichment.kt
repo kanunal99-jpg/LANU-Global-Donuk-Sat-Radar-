@@ -21,7 +21,7 @@ enum class OfficialRegistrySource {
                 id = "official-ito",
                 name = "İTO Resmî Üye/Firma Kaydı",
                 publisher = "İstanbul Ticaret Odası",
-                licenseOrTerms = "https://www.ito.org.tr/tr/iletisim/sikca-sorulan-sorular",
+                licenseOrTerms = "https://bilgibankasi.ito.org.tr/tr/bilgi-bankasi/toplu-bilgi-talebi/meslek-gruplari",
                 sourceUrl = "https://bilgibankasi.ito.org.tr/",
                 lastVerifiedAtEpochMs = SOURCE_POLICY_REVIEWED_AT,
             )
@@ -63,6 +63,7 @@ enum class OfficialRegistrySource {
                 "address",
                 "phone",
                 "website",
+                "nace_code",
             ),
         )
 
@@ -97,6 +98,7 @@ data class OfficialRegistryRecord(
     val phone: String?,
     val website: String?,
     val importedAtEpochMs: Long,
+    val naceCode: String? = null,
 )
 
 data class OfficialRegistryImportSummary(
@@ -106,7 +108,23 @@ data class OfficialRegistryImportSummary(
     val inactiveCount: Int,
     val unknownStatusCount: Int,
     val fileName: String,
+    val verifiedIdentityCount: Int = 0,
+    val phoneCount: Int = 0,
+    val addressCount: Int = 0,
 )
+
+object OfficialRegistryTrust {
+    /**
+     * Selecting an İTO/MERSİS/ESBİS button is only a source declaration.
+     * A record is treated as official identity evidence only when the imported
+     * file contains a registry identifier (İTO sicil, MERSİS no, ESBİS sicil).
+     */
+    fun isIdentityVerified(record: OfficialRegistryRecord): Boolean =
+        !record.registrationNumber.isNullOrBlank()
+
+    fun verified(records: List<OfficialRegistryRecord>): List<OfficialRegistryRecord> =
+        records.filter(::isIdentityVerified)
+}
 
 internal object OfficialRegistryStatus {
     fun isActive(value: String): Boolean {
@@ -203,6 +221,9 @@ class OfficialRegistryStore(
                         !OfficialRegistryStatus.isInactive(status))
             },
             fileName = fileName,
+            verifiedIdentityCount = parsed.count(OfficialRegistryTrust::isIdentityVerified),
+            phoneCount = parsed.count { !it.phone.isNullOrBlank() },
+            addressCount = parsed.count { !it.address.isNullOrBlank() },
         )
     }
 
@@ -260,6 +281,7 @@ class OfficialRegistryStore(
             put("address", record.address ?: JSONObject.NULL)
             put("phone", record.phone ?: JSONObject.NULL)
             put("website", record.website ?: JSONObject.NULL)
+            put("naceCode", record.naceCode ?: JSONObject.NULL)
             put("importedAtEpochMs", record.importedAtEpochMs)
         }
 
@@ -276,6 +298,7 @@ class OfficialRegistryStore(
             phone = optionalString(item, "phone"),
             website = optionalString(item, "website"),
             importedAtEpochMs = item.getLong("importedAtEpochMs"),
+            naceCode = optionalString(item, "naceCode"),
         )
 
     private fun optionalString(item: JSONObject, key: String): String? =
@@ -294,6 +317,8 @@ object OfficialRegistryEnricher {
         records: List<OfficialRegistryRecord>,
     ): List<VerifiedBusiness> {
         if (businesses.isEmpty() || records.isEmpty()) return businesses
+        val verifiedRecords = OfficialRegistryTrust.verified(records)
+        if (verifiedRecords.isEmpty()) return businesses
 
         val result = mutableListOf<VerifiedBusiness>()
         businesses.forEach { business ->
@@ -303,7 +328,7 @@ object OfficialRegistryEnricher {
                 district = business.district,
                 address = business.address,
                 phone = business.phone,
-                records = records,
+                records = verifiedRecords,
             )
             if (match == null) {
                 result += business
@@ -528,13 +553,14 @@ object OfficialRegistryImportParser {
                 registrationNumber = value(row, REGISTRATION_HEADERS),
                 businessName = name,
                 status = value(row, STATUS_HEADERS),
-                city = value(row, CITY_HEADERS),
-                district = value(row, DISTRICT_HEADERS),
+                city = value(row, CITY_HEADERS) ?: if (source == OfficialRegistrySource.ITO) "İstanbul" else null,
+                district = value(row, DISTRICT_HEADERS) ?: value(row, SEMT_HEADERS),
                 neighborhood = value(row, NEIGHBORHOOD_HEADERS),
                 address = value(row, ADDRESS_HEADERS),
                 phone = value(row, PHONE_HEADERS)?.let(::sanitizePhone),
                 website = value(row, WEBSITE_HEADERS)?.let(::sanitizeWebsite),
                 importedAtEpochMs = importedAtEpochMs,
+                naceCode = value(row, NACE_HEADERS),
             )
         }
     }
@@ -710,16 +736,23 @@ object OfficialRegistryImportParser {
         "mersis numarasi",
         "esnaf sicil no",
         "esnaf sicil numarasi",
+        "sicil kayit no",
+        "sicil kayit numarasi",
+        "kayit no",
+        "kayit numarasi",
     )
     private val STATUS_HEADERS = setOf(
         "durum",
         "uyelik durumu",
+        "uyelik durum",
         "tescil durumu",
         "faaliyet durumu",
         "sicil durumu",
     )
     private val CITY_HEADERS = setOf("il", "sehir", "city")
     private val DISTRICT_HEADERS = setOf("ilce", "district")
+    private val SEMT_HEADERS = setOf("semt", "bolge")
+    private val NACE_HEADERS = setOf("nace", "nace kodu", "nace kod", "nace code")
     private val NEIGHBORHOOD_HEADERS = setOf("mahalle", "mah", "neighborhood")
     private val ADDRESS_HEADERS = setOf(
         "adres",

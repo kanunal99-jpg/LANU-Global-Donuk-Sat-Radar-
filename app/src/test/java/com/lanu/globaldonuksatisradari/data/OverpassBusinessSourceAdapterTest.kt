@@ -11,6 +11,8 @@ class OverpassBusinessSourceAdapterTest {
         assertTrue(query.contains("restaurant|cafe|fast_food"))
         assertTrue(query.contains("supermarket|convenience|food|bakery"))
         assertTrue(query.contains("hotel|hostel|motel"))
+        assertTrue(query.contains("""["amenity"="internet_cafe"]"""))
+        assertTrue(query.contains("""["leisure"="adult_gaming_centre"]"""))
         assertTrue(!query.contains("place_of_worship"))
         assertTrue(!query.contains("healthcare"))
         assertTrue(!query.contains("school"))
@@ -64,4 +66,13 @@ class OverpassBusinessSourceAdapterTest {
         assertTrue(playstation.contains("""["amenity"="internet_cafe"]"""))
         assertTrue(cigkofte.contains("""["cuisine"~"cig_kofte|çiğ_köfte"""))
     }
+    @Test
+    fun genericCategoryQueriesReachTourismAndLeisureTags() {
+        val hotel = OverpassQueryBuilder.build("İstanbul", "Pendik", "hotel")
+        val gaming = OverpassQueryBuilder.build("İstanbul", "Pendik", "adult_gaming_centre")
+
+        assertTrue(hotel.contains("""["tourism"~"hotel",i]"""))
+        assertTrue(gaming.contains("""["leisure"~"adult_gaming_centre",i]"""))
+    }
+
 }

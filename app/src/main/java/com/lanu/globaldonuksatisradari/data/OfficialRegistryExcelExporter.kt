@@ -22,7 +22,9 @@ object OfficialRegistryExcelExporter {
         "Konum Bilgileri",
         "Kaynak",
         "Sicil / Kayıt No",
+        "NACE",
         "Durum",
+        "Resmî Kimlik",
         "Web Sitesi",
     )
 
@@ -67,7 +69,9 @@ object OfficialRegistryExcelExporter {
                     "",
                     sourceLabel(record.source),
                     record.registrationNumber.orEmpty(),
+                    record.naceCode.orEmpty(),
                     statusLabel(record.status),
+                    if (OfficialRegistryTrust.isIdentityVerified(record)) "Doğrulandı" else "Sicil/Kayıt No Yok",
                     record.website.orEmpty(),
                 )
                 append(
@@ -99,11 +103,11 @@ object OfficialRegistryExcelExporter {
     <col min="9" max="9" width="48" customWidth="1"/>
     <col min="10" max="11" width="16" customWidth="1"/>
     <col min="12" max="12" width="48" customWidth="1"/>
-    <col min="13" max="15" width="20" customWidth="1"/>
-    <col min="16" max="16" width="36" customWidth="1"/>
+    <col min="13" max="17" width="20" customWidth="1"/>
+    <col min="18" max="18" width="36" customWidth="1"/>
   </cols>
   <sheetData>${rows}</sheetData>
-  <autoFilter ref="A1:P${lastRow}"/>
+  <autoFilter ref="A1:R${lastRow}"/>
 </worksheet>"""
     }
 
