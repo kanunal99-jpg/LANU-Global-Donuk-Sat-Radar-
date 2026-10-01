@@ -594,7 +594,7 @@ object OfficialRegistryImportParser {
                     }
                 }
             }
-            return display.takeIf(List<String>::isNotEmpty)?.joinToString(" / ")
+            return display.takeIf { it.isNotEmpty() }?.joinToString(" / ")
         }
 
         return rows.drop(headerIndex + 1).mapNotNull { row ->
