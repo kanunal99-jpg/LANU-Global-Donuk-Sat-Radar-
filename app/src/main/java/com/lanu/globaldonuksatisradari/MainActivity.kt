@@ -313,7 +313,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             Text("Gerçek işletmeleri bulun, kaliteyi kontrol edin ve CRM'e aktarın.", style = MaterialTheme.typography.bodyMedium)
                         }
                         item {
-                            OfficialRegistryImportCard { summary, records ->
+                            OfficialRegistryImportCard(defaultCity = selectedCity.name) { summary, records ->
                                 scope.launch {
                                     runCatching {
                                         localCrmRepository.enrichCustomersFromOfficialRegistry(records)
