@@ -1,0 +1,19 @@
+package com.lanu.globaldonuksatisradari.data
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+
+class BusinessCategoryLabelsTest {
+    @Test
+    fun commonOsmCategoriesAreHumanReadableInExports() {
+        assertEquals("Restoran", BusinessCategoryLabels.displayName("restaurant"))
+        assertEquals("Süpermarket", BusinessCategoryLabels.displayName("supermarket"))
+        assertEquals("Otel", BusinessCategoryLabels.displayName("hotel"))
+        assertEquals("Kafe", BusinessCategoryLabels.displayName("cafe"))
+    }
+
+    @Test
+    fun unknownManualBusinessTypeIsPreserved() {
+        assertEquals("Kurumsal Yemekhane", BusinessCategoryLabels.displayName("Kurumsal Yemekhane"))
+    }
+}
