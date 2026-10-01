@@ -116,7 +116,7 @@ fun CrmCustomerDetailScreen(
                     Text("Açık adres: $it", style = MaterialTheme.typography.bodySmall)
                 } ?: Text("Açık adres: kayıtlı değil", style = MaterialTheme.typography.bodySmall)
                 Text(
-                    "Veri kalitesi: ${customer.dataQuality.name}",
+                    "Veri kaynağı: ${dataQualityLabel(customer.dataQuality.name)}",
                     style = MaterialTheme.typography.labelSmall,
                 )
                 if (customer.latitude != null && customer.longitude != null) {
@@ -452,6 +452,13 @@ fun CrmCustomerDetailScreen(
             }
         }
     }
+}
+
+private fun dataQualityLabel(value: String): String = when (value) {
+    "OBSERVED" -> "Kaynak verisi"
+    "USER_ENTERED" -> "Kullanıcı girişi"
+    "ESTIMATED" -> "Tahmini"
+    else -> "Bilinmiyor"
 }
 
 private fun parseOpportunityAmountMinor(raw: String): Long? {
