@@ -298,8 +298,8 @@ internal class CrmLocationEnrichmentService(
             readCache(key)?.let { result[key] = it } ?: missing.add(key)
         }
 
-        missing.chunked(MAX_LOOKUP_BATCH).forEachIndexed { index, batch ->
-            if (index > 0) LookupRateLimiter.await()
+        missing.chunked(MAX_LOOKUP_BATCH).forEach { batch ->
+            LookupRateLimiter.await()
             val fetched = try {
                 fetchBatch(batch)
             } catch (error: CancellationException) {
