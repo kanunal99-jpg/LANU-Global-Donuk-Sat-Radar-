@@ -122,7 +122,11 @@ fun OfficialRegistryImportCard(
                 OfficialRegistrySource.entries.forEach { source ->
                     FilterChip(
                         selected = selectedSource == source,
-                        onClick = { selectedSource = source },
+                        onClick = {
+                            selectedSource = source
+                            showRecords = false
+                            recordQuery = ""
+                        },
                         label = { Text(source.shortLabel()) },
                         modifier = Modifier.weight(1f),
                     )
