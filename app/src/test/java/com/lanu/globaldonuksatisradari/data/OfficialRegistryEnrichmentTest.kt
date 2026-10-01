@@ -358,6 +358,26 @@ class OfficialRegistryEnrichmentTest {
     }
 
     @Test
+    fun localChamberImportUsesSelectedCityWhenFileHasNoCityColumn() {
+        val csv = """
+            Oda Sicil No;Ünvan;İlçe;Telefon;Durum
+            998877;Örnek Oda Üyesi;Seyhan;0322 111 22 33;Faal
+        """.trimIndent()
+
+        val record = OfficialRegistryImportParser.parse(
+            bytes = csv.toByteArray(Charsets.UTF_8),
+            fileName = "yerel-oda.csv",
+            source = OfficialRegistrySource.CHAMBER,
+            importedAtEpochMs = 800L,
+            defaultCity = "Adana",
+        ).single()
+
+        assertEquals("Adana", record.city)
+        assertEquals("Seyhan", record.district)
+        assertEquals("0322 111 22 33", record.phone)
+    }
+
+    @Test
     fun officialSourceContractsRequireAuthorizedImportInsteadOfAnonymousScraping() {
         assertEquals(SourceAccessMethod.OFFICIAL_BULK_REQUEST, OfficialRegistrySource.ITO.contract.accessMethod)
         assertEquals(SourceAccessMethod.OFFICIAL_BULK_REQUEST, OfficialRegistrySource.CHAMBER.contract.accessMethod)
