@@ -356,19 +356,27 @@ object OfficialRegistryMatcher {
         phone: String?,
         records: List<OfficialRegistryRecord>,
     ): OfficialRegistryRecord? {
-        val scored = records.mapNotNull { record ->
-            val score = matchScore(name, city, district, address, phone, record)
-            score.takeIf { it >= MIN_MATCH_SCORE }?.let { record to it }
-        }.sortedByDescending { it.second }
+        var bestRecord: OfficialRegistryRecord? = null
+        var bestScore = Int.MIN_VALUE
+        var ambiguous = false
 
-        val best = scored.firstOrNull() ?: return null
-        val runnerUp = scored.getOrNull(1)
-        if (runnerUp != null && runnerUp.second == best.second &&
-            !equivalent(best.first, runnerUp.first)
-        ) {
-            return null
+        records.forEach { record ->
+            val score = matchScore(name, city, district, address, phone, record)
+            if (score < MIN_MATCH_SCORE) return@forEach
+
+            when {
+                score > bestScore -> {
+                    bestRecord = record
+                    bestScore = score
+                    ambiguous = false
+                }
+                score == bestScore && bestRecord != null && !equivalent(bestRecord!!, record) -> {
+                    ambiguous = true
+                }
+            }
         }
-        return best.first
+
+        return if (ambiguous) null else bestRecord
     }
 
     private fun matchScore(
