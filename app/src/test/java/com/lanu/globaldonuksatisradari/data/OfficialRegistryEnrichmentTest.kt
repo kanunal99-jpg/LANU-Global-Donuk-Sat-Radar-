@@ -338,6 +338,26 @@ class OfficialRegistryEnrichmentTest {
     }
 
     @Test
+    fun tobbStyleWorkplaceAndOfficePhonesAreCollected() {
+        val csv = """
+            Oda Sicil No;Firma Ünvanı;İl;İlçe;İşyeri Tel;Büro Tel;İşyeri Adresi
+            445566;Örnek Sanayi AŞ;Bursa;Nilüfer;0224 111 22 33;0224 444 55 66;Organize Sanayi Bölgesi No:1
+        """.trimIndent()
+
+        val record = OfficialRegistryImportParser.parse(
+            bytes = csv.toByteArray(Charsets.UTF_8),
+            fileName = "tobb-kapasite.csv",
+            source = OfficialRegistrySource.TOBB,
+            importedAtEpochMs = 700L,
+        ).single()
+
+        assertEquals("445566", record.registrationNumber)
+        assertEquals("0224 111 22 33 / 0224 444 55 66", record.phone)
+        assertEquals("Organize Sanayi Bölgesi No:1", record.address)
+        assertTrue(OfficialRegistryTrust.isIdentityVerified(record))
+    }
+
+    @Test
     fun officialSourceContractsRequireAuthorizedImportInsteadOfAnonymousScraping() {
         assertEquals(SourceAccessMethod.OFFICIAL_BULK_REQUEST, OfficialRegistrySource.ITO.contract.accessMethod)
         assertEquals(SourceAccessMethod.OFFICIAL_BULK_REQUEST, OfficialRegistrySource.CHAMBER.contract.accessMethod)
