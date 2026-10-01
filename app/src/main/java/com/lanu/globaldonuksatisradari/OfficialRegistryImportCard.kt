@@ -233,8 +233,8 @@ fun OfficialRegistryImportCard(
                     singleLine = true,
                 )
                 Text(
-                    "Telefon kapsamı: $phoneCount / \${registryRecords.size} (%$phonePercent) • " +
-                        "Sicil kimliği doğrulanan: $verifiedCount / \${registryRecords.size}",
+                    "Telefon kapsamı: $phoneCount / ${registryRecords.size} (%$phonePercent) • " +
+                        "Sicil kimliği doğrulanan: $verifiedCount / ${registryRecords.size}",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Row(
@@ -253,7 +253,7 @@ fun OfficialRegistryImportCard(
                 if (registryRecords.isNotEmpty() && verifiedCount == 0) {
                     Card(Modifier.fillMaxWidth().testTag("registry_unverified_warning")) {
                         Text(
-                            "Uyarı: Bu dosyada sicil/kayıt numarası yok. Kaynak düğmesinde \${selectedSource.shortLabel()} seçilmiş olsa da " +
+                            "Uyarı: Bu dosyada sicil/kayıt numarası yok. Kaynak düğmesinde ${selectedSource.shortLabel()} seçilmiş olsa da " +
                                 "dosyanın resmî kimliği doğrulanamıyor. Kayıtlar görüntülenir ve Excel'e aktarılır; " +
                                 "ancak CRM'de resmî veri olarak mevcut bilgilerin üzerine yazılmaz.",
                             Modifier.padding(12.dp),
