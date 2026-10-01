@@ -79,6 +79,8 @@ object OverpassQueryBuilder {
         """nwr["name"]["shop"~"supermarket|convenience|food|bakery|butcher|deli|greengrocer|seafood|wholesale"](area.searchArea);""",
         """nwr["name"]["craft"="caterer"](area.searchArea);""",
         """nwr["name"]["tourism"~"hotel|hostel|motel|guest_house|apartment"](area.searchArea);""",
+        """nwr["name"]["amenity"="internet_cafe"](area.searchArea);""",
+        """nwr["name"]["leisure"="adult_gaming_centre"](area.searchArea);""",
     ).joinToString("\n")
 
     private fun buildTermQuery(query: String): String {
@@ -121,6 +123,9 @@ object OverpassQueryBuilder {
                 """nwr["cuisine"~"$regex",i](area.searchArea);""",
                 """nwr["amenity"~"$regex",i](area.searchArea);""",
                 """nwr["shop"~"$regex",i](area.searchArea);""",
+                """nwr["tourism"~"$regex",i](area.searchArea);""",
+                """nwr["leisure"~"$regex",i](area.searchArea);""",
+                """nwr["craft"~"$regex",i](area.searchArea);""",
             )
         }
         return categoryClauses.joinToString("\n")
