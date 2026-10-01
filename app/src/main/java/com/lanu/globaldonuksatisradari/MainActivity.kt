@@ -322,7 +322,12 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     val requestDistrict = selectedDistrict.takeUnless { it == "Tümü" }
                                     val requestQuery = query.trim()
                                     scope.launch {
-                                        runCatching { withTimeout(SEARCH_TIMEOUT_MS) { repository.search(requestQuery, requestCity, requestDistrict) } }
+                                        val searchTimeoutMs = if (requestDistrict == null) {
+                                            CITY_WIDE_SEARCH_TIMEOUT_MS
+                                        } else {
+                                            SEARCH_TIMEOUT_MS
+                                        }
+                                        runCatching { withTimeout(searchTimeoutMs) { repository.search(requestQuery, requestCity, requestDistrict) } }
                                             .onSuccess { records ->
                                                 if (requestId == searchRequestId) {
                                                     val delta = scanHistoryRepository.compareAndRecord(
@@ -502,6 +507,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
 }
 
 private const val SEARCH_TIMEOUT_MS = 120_000L
+private const val CITY_WIDE_SEARCH_TIMEOUT_MS = 240_000L
 
 @Composable
 private fun BusinessResultCard(
