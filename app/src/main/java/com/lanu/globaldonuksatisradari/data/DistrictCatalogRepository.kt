@@ -23,7 +23,7 @@ class DistrictCatalogRepository(context: Context) {
 
     suspend fun getDistricts(city: String, fallback: List<String> = emptyList()): List<String> = withContext(Dispatchers.IO) {
         if (city.isBlank()) return@withContext fallback
-        val key = "districts:" + BusinessDeduplication.normalizeForComparison(city)
+        val key = "districts:v2:" + BusinessDeduplication.normalizeForComparison(city)
         readCache(key)?.takeIf { it.isNotEmpty() }?.let { return@withContext it }
 
         try {
