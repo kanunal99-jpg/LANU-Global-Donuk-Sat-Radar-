@@ -13,6 +13,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,7 +26,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.lanu.globaldonuksatisradari.data.OfficialRegistryImportSummary
+import com.lanu.globaldonuksatisradari.data.OfficialRegistryRecord
 import com.lanu.globaldonuksatisradari.data.OfficialRegistrySource
+import com.lanu.globaldonuksatisradari.data.OfficialRegistryStatus
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -32,7 +37,7 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun OfficialRegistryImportCard(
-    onImported: (String) -> Unit = {},
+    onImported: (OfficialRegistryImportSummary, List<OfficialRegistryRecord>) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -41,6 +46,10 @@ fun OfficialRegistryImportCard(
     var pendingSource by remember { mutableStateOf(OfficialRegistrySource.ITO) }
     var importing by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
+    var showRecords by remember { mutableStateOf(false) }
+    var recordQuery by remember { mutableStateOf("") }
+    var registryRecords by remember { mutableStateOf<List<OfficialRegistryRecord>>(emptyList()) }
+    var loadingRecords by remember { mutableStateOf(false) }
     var counts by remember {
         mutableStateOf(OfficialRegistrySource.entries.associateWith(store::count))
     }
@@ -67,6 +76,10 @@ fun OfficialRegistryImportCard(
                 }
             }.onSuccess { summary ->
                 counts = OfficialRegistrySource.entries.associateWith(store::count)
+                val records = withContext(Dispatchers.IO) { store.records(summary.source) }
+                registryRecords = records
+                showRecords = true
+                recordQuery = ""
                 val message = buildString {
                     append(summary.source.displayName())
                     append(": ")
@@ -78,12 +91,13 @@ fun OfficialRegistryImportCard(
                         append(" • aktif değil ")
                         append(summary.inactiveCount)
                     }
-                    append(". Radar aramalarında resmî telefon/adres önceliklendirilecek.")
+                    append(". Kayıtlar aşağıda görüntülenebilir; eşleşen CRM adres/telefonları resmî veriyle güncellenecek.")
                 }
                 status = message
-                onImported(message)
-            }.onFailure {
-                status = "Resmî sicil dosyası içe aktarılamadı. CSV/TSV/TXT veya XLSX ve uygun sütun başlıklarını kontrol edin."
+                onImported(summary, records)
+            }.onFailure { error ->
+                status = "Resmî sicil dosyası içe aktarılamadı: " +
+                    (error.message ?: "CSV/TSV/TXT veya XLSX sütunlarını kontrol edin.")
             }
             importing = false
         }
@@ -139,6 +153,91 @@ fun OfficialRegistryImportCard(
                 modifier = Modifier.fillMaxWidth().testTag("official_registry_import_button"),
             ) {
                 Text(if (importing) "İçe aktarılıyor…" else "${selectedSource.shortLabel()} dosyası içe aktar")
+            }
+
+            OutlinedButton(
+                onClick = {
+                    if (showRecords && registryRecords.firstOrNull()?.source == selectedSource) {
+                        showRecords = false
+                    } else {
+                        loadingRecords = true
+                        scope.launch {
+                            registryRecords = withContext(Dispatchers.IO) { store.records(selectedSource) }
+                            recordQuery = ""
+                            showRecords = true
+                            loadingRecords = false
+                        }
+                    }
+                },
+                enabled = !loadingRecords,
+                modifier = Modifier.fillMaxWidth().testTag("official_registry_view_button"),
+            ) {
+                Text(
+                    if (loadingRecords) "Kayıtlar yükleniyor…"
+                    else if (showRecords && registryRecords.firstOrNull()?.source == selectedSource) "Kayıtları gizle"
+                    else "${selectedSource.shortLabel()} kayıtlarını görüntüle",
+                )
+            }
+
+            if (showRecords) {
+                val normalizedQuery = recordQuery.trim().lowercase()
+                val filteredRecords = if (normalizedQuery.isBlank()) {
+                    registryRecords
+                } else {
+                    registryRecords.filter { record ->
+                        listOf(
+                            record.businessName,
+                            record.registrationNumber.orEmpty(),
+                            record.address.orEmpty(),
+                            record.phone.orEmpty(),
+                            record.city.orEmpty(),
+                            record.district.orEmpty(),
+                            record.neighborhood.orEmpty(),
+                        ).any { it.lowercase().contains(normalizedQuery) }
+                    }
+                }
+                OutlinedTextField(
+                    value = recordQuery,
+                    onValueChange = { recordQuery = it },
+                    modifier = Modifier.fillMaxWidth().testTag("official_registry_search"),
+                    label = { Text("Resmî kayıtlarda ara") },
+                    singleLine = true,
+                )
+                Text(
+                    "${filteredRecords.size} eşleşme • ilk ${minOf(filteredRecords.size, 30)} kayıt gösteriliyor",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                filteredRecords.take(30).forEach { record ->
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(
+                            Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            Text(record.businessName, style = MaterialTheme.typography.titleSmall)
+                            val location = listOfNotNull(
+                                record.neighborhood,
+                                record.district,
+                                record.city,
+                            ).filter(String::isNotBlank).joinToString(" • ")
+                            if (location.isNotBlank()) Text(location, style = MaterialTheme.typography.bodySmall)
+                            record.address?.takeIf(String::isNotBlank)?.let {
+                                Text("Açık adres: $it", style = MaterialTheme.typography.bodySmall)
+                            }
+                            record.phone?.takeIf(String::isNotBlank)?.let {
+                                Text("Telefon: $it", style = MaterialTheme.typography.bodySmall)
+                            }
+                            record.registrationNumber?.takeIf(String::isNotBlank)?.let {
+                                Text("Sicil: $it", style = MaterialTheme.typography.labelSmall)
+                            }
+                            val stateLabel = when {
+                                record.status?.let(OfficialRegistryStatus::isActive) == true -> "FAAL"
+                                record.status?.let(OfficialRegistryStatus::isInactive) == true -> "AKTİF DEĞİL"
+                                else -> record.status ?: "Durum belirtilmemiş"
+                            }
+                            Text(stateLabel, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
             }
 
             status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
