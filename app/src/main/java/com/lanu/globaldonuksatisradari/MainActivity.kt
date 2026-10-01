@@ -219,11 +219,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val regionNextActions by remember(regionKey) { localCrmRepository.observeOpenNextActionsForRegion(selectedCity.name, regionDistrict) }.collectAsState(initial = emptyList())
     val regionOpportunities by remember(regionKey) { localCrmRepository.observeOpportunitiesForRegion(selectedCity.name, regionDistrict) }.collectAsState(initial = emptyList())
     val presenceOptions = listOf("Tümü", "Var", "Yok")
-    val categoryOptions = remember(results) {
-        listOf("Tümü") +
-            results.mapNotNull { BusinessCategoryLabels.displayName(it.category) }
-                .distinct()
-                .sortedWith(String.CASE_INSENSITIVE_ORDER)
+    val categoryOptions = remember {
+        listOf("Tümü") + BusinessCategoryLabels.searchLabels
     }
     val visibleResults = remember(results, selectedDistrict, selectedNeighborhood, categoryFilter, phoneFilter, websiteFilter) {
         results.filter { business ->
@@ -406,7 +403,10 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Column(Modifier.weight(1f)) {
                                             Text("Hızlı filtreler", style = MaterialTheme.typography.titleMedium)
-                                            Text("Sadece karar vermede kullanılan alanlar.", style = MaterialTheme.typography.bodySmall)
+                                            Text(
+                                                "Kategori seçimi kaynağa da uygulanır; telefon ve web filtreleri gelen sonuçları süzer.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                            )
                                         }
                                         TextButton(onClick = { resetFilters() }) { Text("Temizle") }
                                     }
@@ -425,7 +425,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     val requestId = ++searchRequestId
                                     val requestCity = selectedCity.name
                                     val requestDistrict = selectedDistrict.takeUnless { it == "Tümü" }
-                                    val requestQuery = query.trim()
+                                    val requestQuery = query.trim().ifBlank {
+                                        BusinessCategoryLabels.searchQueryForLabel(categoryFilter).orEmpty()
+                                    }
                                     scope.launch {
                                         val searchTimeoutMs = if (requestDistrict == null) {
                                             CITY_WIDE_SEARCH_TIMEOUT_MS
@@ -474,7 +476,13 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     }
                                 },
                                 enabled = !loading,
-                            ) { Text(if (loading) "İşletmeler aranıyor…" else "İşletmeleri getir") }
+                            ) {
+                                Text(
+                                    if (loading) "İşletmeler aranıyor…"
+                                    else if (categoryFilter == "Tümü") "Tüm hedef kategorileri getir"
+                                    else "$categoryFilter işletmelerini getir",
+                                )
+                            }
                         }
                         if (results.isNotEmpty()) {
                             item {
