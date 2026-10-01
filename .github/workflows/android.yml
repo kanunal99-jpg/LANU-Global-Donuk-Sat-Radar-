@@ -255,3 +255,109 @@ jobs:
             "$SHA_PATH" \
             "$BUILD_INFO_PATH"
 
+
+
+      - name: Verify published APK clean install and cold start
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_NAME: com.lanu.globaldonuksatisradari
+          APK_NAME: Lanu-Global-Donuk-Satis-Radari-latest.apk
+          SHA_NAME: Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256
+        run: |
+          set -euo pipefail
+
+          rm -rf /tmp/lanu-release-verify
+          mkdir -p /tmp/lanu-release-verify
+
+          gh release download latest \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "$APK_NAME" \
+            --pattern "$SHA_NAME" \
+            --dir /tmp/lanu-release-verify
+
+          cd /tmp/lanu-release-verify
+          test -s "$APK_NAME"
+          test -s "$SHA_NAME"
+          sha256sum -c "$SHA_NAME"
+          cd "$GITHUB_WORKSPACE"
+
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT}}"
+          export PATH="$SDK_ROOT/platform-tools:$SDK_ROOT/emulator:$SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+          export ANDROID_HOME="$SDK_ROOT"
+          export ANDROID_SDK_HOME="$HOME/.android"
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
+
+          test -f "$ANDROID_AVD_HOME/ci-api35.ini"
+          test -f "$ANDROID_AVD_HOME/ci-api35.avd/config.ini"
+
+          rm -f /tmp/release-emulator.log
+          emulator -avd ci-api35 \
+            -no-window \
+            -no-audio \
+            -no-boot-anim \
+            -no-snapshot \
+            -no-snapshot-save \
+            -gpu swiftshader_indirect \
+            -accel on \
+            -camera-back none \
+            -camera-front none \
+            > /tmp/release-emulator.log 2>&1 &
+          EMULATOR_PID="$!"
+
+          cleanup_release_emulator() {
+            adb emu kill >/dev/null 2>&1 || true
+            kill "$EMULATOR_PID" >/dev/null 2>&1 || true
+          }
+          trap cleanup_release_emulator EXIT
+
+          sleep 5
+          kill -0 "$EMULATOR_PID"
+
+          adb kill-server >/dev/null 2>&1 || true
+          adb start-server
+
+          timeout 120s bash -c '
+            for _ in $(seq 1 120); do
+              if adb devices | grep -Eq "^emulator-[0-9]+[[:space:]]+device$"; then
+                exit 0
+              fi
+              sleep 1
+            done
+            exit 124
+          '
+
+          SERIAL="$(adb devices | awk '/^emulator-[0-9]+[[:space:]]+device$/{print $1; exit}')"
+          test -n "$SERIAL"
+
+          boot_completed=""
+          for _ in $(seq 1 180); do
+            boot_completed="$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+            [ "$boot_completed" = "1" ] && break
+            sleep 2
+          done
+          if [ "$boot_completed" != "1" ]; then
+            tail -n 1000 /tmp/release-emulator.log || true
+            exit 1
+          fi
+
+          adb -s "$SERIAL" uninstall "$PACKAGE_NAME" >/dev/null 2>&1 || true
+          adb -s "$SERIAL" install "/tmp/lanu-release-verify/$APK_NAME"
+
+          adb -s "$SERIAL" logcat -c
+          adb -s "$SERIAL" shell am force-stop "$PACKAGE_NAME"
+          adb -s "$SERIAL" shell am start -W -n "$PACKAGE_NAME/.MainActivity"
+          sleep 5
+
+          APP_PID="$(adb -s "$SERIAL" shell pidof "$PACKAGE_NAME" | tr -d '\r' || true)"
+          test -n "$APP_PID"
+
+          adb -s "$SERIAL" shell dumpsys activity activities | grep -F "$PACKAGE_NAME/.MainActivity"
+
+          if adb -s "$SERIAL" logcat -d -v brief | grep -E "FATAL EXCEPTION|Process: $PACKAGE_NAME" | grep -q "$PACKAGE_NAME"; then
+            echo "Release APK cold start produced a fatal exception."
+            adb -s "$SERIAL" logcat -d -v threadtime | tail -n 1200
+            exit 1
+          fi
+
+          echo "Release APK verified: downloaded, checksum OK, clean-installed, cold-started, and MainActivity resumed."
