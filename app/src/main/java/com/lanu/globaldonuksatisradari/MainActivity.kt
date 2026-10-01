@@ -1,5 +1,6 @@
 package com.lanu.globaldonuksatisradari
 
+import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -79,7 +80,17 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
-    var selectedCity by remember { mutableStateOf(cities.first()) }
+    val context = LocalContext.current
+    val uiPreferences = remember(context) {
+        context.getSharedPreferences("lanu_ui_state", Context.MODE_PRIVATE)
+    }
+    val initialCity = remember {
+        val savedCity = uiPreferences.getString("selected_city", null)
+        cities.firstOrNull { it.name.equals(savedCity, ignoreCase = true) }
+            ?: cities.firstOrNull { it.name == "İstanbul" }
+            ?: cities.first()
+    }
+    var selectedCity by remember { mutableStateOf(initialCity) }
     var section by remember { mutableStateOf(AppSection.RADAR) }
     val backStack = remember { mutableStateListOf<AppSection>() }
     val forwardStack = remember { mutableStateListOf<AppSection>() }
@@ -94,7 +105,13 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var availableNeighborhoods by remember { mutableStateOf<List<String>>(emptyList()) }
     var neighborhoodLoading by remember { mutableStateOf(false) }
     var neighborhoodMenu by remember { mutableStateOf(false) }
-    var selectedDistrict by remember { mutableStateOf("Tümü") }
+    var selectedDistrict by remember {
+        mutableStateOf(
+            uiPreferences.getString("selected_district", "Tümü")
+                ?.takeIf(String::isNotBlank)
+                ?: "Tümü",
+        )
+    }
     var selectedNeighborhood by remember { mutableStateOf("Tümü") }
     var categoryFilter by remember { mutableStateOf("Tümü") }
     var phoneFilter by remember { mutableStateOf("Tümü") }
@@ -119,7 +136,6 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
 
     BackHandler(enabled = selectedCustomerId != null || backStack.isNotEmpty()) { if (selectedCustomerId != null) selectedCustomerId = null else goBack() }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
     val repository = remember(context) { CoverageBusinessRepository(context) }
     val districtRepository = remember(context) { DistrictCatalogRepository(context) }
     val neighborhoodRepository = remember(context) { NeighborhoodCatalogRepository(context) }
@@ -132,6 +148,11 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
             if (throwable is CancellationException) throw throwable
             Log.w("LanuRadar", "İlçe kataloğu yenilenemedi; yerel liste kullanılıyor.", throwable)
             selectedCity.districts
+        }
+        if (selectedDistrict != "Tümü" &&
+            availableDistricts.none { it.equals(selectedDistrict, ignoreCase = true) }
+        ) {
+            selectedDistrict = "Tümü"
         }
         districtLoading = false
     }
@@ -153,6 +174,14 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         }
         neighborhoodLoading = false
     }
+
+    LaunchedEffect(selectedCity.name, selectedDistrict) {
+        uiPreferences.edit()
+            .putString("selected_city", selectedCity.name)
+            .putString("selected_district", selectedDistrict)
+            .apply()
+    }
+
     val localCrmRepository = remember(context) { LocalCrmRepository(LanuCrmDatabase.getInstance(context)) }
     val productCatalogRepository = remember(context) { ProductCatalogRepository(context) }
     val officialRegistryStore = remember(context) { OfficialRegistryStore(context) }
