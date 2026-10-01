@@ -21,7 +21,7 @@ enum class OfficialRegistrySource {
                 id = "official-ito",
                 name = "İTO Resmî Üye/Firma Kaydı",
                 publisher = "İstanbul Ticaret Odası",
-                licenseOrTerms = "https://www.ito.org.tr/tr/iletisim/sikca-sorulan-sorular",
+                licenseOrTerms = "https://bilgibankasi.ito.org.tr/tr/bilgi-bankasi/toplu-bilgi-talebi/meslek-gruplari",
                 sourceUrl = "https://bilgibankasi.ito.org.tr/",
                 lastVerifiedAtEpochMs = SOURCE_POLICY_REVIEWED_AT,
             )
@@ -63,6 +63,7 @@ enum class OfficialRegistrySource {
                 "address",
                 "phone",
                 "website",
+                "nace_code",
             ),
         )
 
