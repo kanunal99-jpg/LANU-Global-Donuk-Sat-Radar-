@@ -193,7 +193,10 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     }
     val qualitySummary = remember(visibleResults) {
         val scores = visibleResults.map { BusinessQualityEvaluator.evaluate(it).score }
-        Triple(if (scores.isEmpty()) 0 else scores.sum() / scores.size, scores.count { it < 65 }, visibleResults.map { it.source.name }.distinct().sorted())
+        val sources = visibleResults.flatMap { business ->
+            listOf(business.source.name) + listOfNotNull(business.officialRegistryEvidence?.source?.name)
+        }.distinct().sorted()
+        Triple(if (scores.isEmpty()) 0 else scores.sum() / scores.size, scores.count { it < 65 }, sources)
     }
     val dashboardMetrics = remember(filteredCrmCustomers, regionActivities, regionNextActions, regionOpportunities) {
         CrmDashboardMetrics.from(filteredCrmCustomers, regionActivities, regionNextActions, regionOpportunities)
@@ -261,6 +264,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             LanuHeroHeader()
                             Text("Satış & CRM Radarı", style = MaterialTheme.typography.headlineSmall)
                             Text("Gerçek işletmeleri bulun, kaliteyi kontrol edin ve CRM'e aktarın.", style = MaterialTheme.typography.bodyMedium)
+                        }
+                        item {
+                            OfficialRegistryImportCard { message -> crmMessage = message }
                         }
                         item {
                             OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(), label = { Text("İşletme veya HORECA ara") }, singleLine = true)
@@ -556,6 +562,14 @@ private fun BusinessResultCard(
                             style = MaterialTheme.typography.labelLarge,
                         )
                     }
+                    business.officialRegistryEvidence?.let { evidence ->
+                        Text(
+                            if (evidence.explicitlyActive) "RESMÎ • FAAL" else "RESMÎ",
+                            modifier = Modifier.testTag("official_registry_badge"),
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
                     Text(
                         "${BusinessQualityEvaluator.evaluate(business).score}/100",
                         color = MaterialTheme.colorScheme.primary,
@@ -564,6 +578,7 @@ private fun BusinessResultCard(
                 }
             }
             business.category?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            business.address?.let { Text("Adres: $it", style = MaterialTheme.typography.bodySmall) }
             business.phone?.let { Text("Telefon: $it", style = MaterialTheme.typography.bodySmall) }
             business.website?.let { Text("Web: $it", style = MaterialTheme.typography.bodySmall) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
