@@ -16,4 +16,12 @@ class BusinessCategoryLabelsTest {
     fun unknownManualBusinessTypeIsPreserved() {
         assertEquals("Kurumsal Yemekhane", BusinessCategoryLabels.displayName("Kurumsal Yemekhane"))
     }
+
+    @Test
+    fun searchCategoryLabelsCanDriveSourceQueriesBeforeResultsExist() {
+        assertEquals("restaurant", BusinessCategoryLabels.searchQueryForLabel("Restoran"))
+        assertEquals("hotel", BusinessCategoryLabels.searchQueryForLabel("Otel"))
+        assertEquals("internet cafe", BusinessCategoryLabels.searchQueryForLabel("İnternet Kafe"))
+        assertEquals("adult_gaming_centre", BusinessCategoryLabels.searchQueryForLabel("Oyun Salonu"))
+    }
 }
