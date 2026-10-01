@@ -14,6 +14,7 @@ class CoverageBusinessRepository(
 
     private val overpass = OverpassBusinessSourceAdapter()
     private val nominatim = NominatimBusinessSourceAdapter()
+    private val districtCatalog = DistrictCatalogRepository(context)
 
     private val engine = BusinessCoverageEngine(
         sources = listOf(
@@ -56,21 +57,37 @@ class CoverageBusinessRepository(
     ): List<VerifiedBusiness> {
         val normalizedDistrict = district?.takeUnless { it.isBlank() || it.equals("Tümü", true) }
 
-        val scopes = if (city.equals("İstanbul", true) && normalizedDistrict == null) {
-            IstanbulDistricts.ALL.map { districtName ->
-                CoverageScope(
-                    city = city,
-                    district = districtName,
-                    category = query.ifBlank { "*" },
+        val scopes = if (normalizedDistrict == null) {
+            val fallbackDistricts = if (city.equals("İstanbul", true)) {
+                IstanbulDistricts.ALL
+            } else {
+                emptyList()
+            }
+            val discoveredDistricts = districtCatalog.getDistricts(city, fallbackDistricts)
+            if (discoveredDistricts.isNotEmpty()) {
+                discoveredDistricts.map { districtName ->
+                    CoverageScope(
+                        city = city,
+                        district = districtName,
+                        category = query.ifBlank { "*" },
+                    )
+                }
+            } else {
+                listOf(
+                    CoverageScope(
+                        city = city,
+                        district = "Tümü",
+                        category = query.ifBlank { "*" },
+                    ),
                 )
             }
         } else {
             listOf(
                 CoverageScope(
                     city = city,
-                    district = normalizedDistrict ?: "Tümü",
+                    district = normalizedDistrict,
                     category = query.ifBlank { "*" },
-                )
+                ),
             )
         }
 
