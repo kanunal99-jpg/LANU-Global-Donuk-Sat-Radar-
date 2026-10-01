@@ -155,7 +155,12 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val productCatalogRepository = remember(context) { ProductCatalogRepository(context) }
     val crmCustomers by localCrmRepository.observeCustomers(null).collectAsState(initial = emptyList())
     val pendingSyncCount by localCrmRepository.observePendingSyncCount().collectAsState(initial = 0)
-    val filteredCrmCustomers = crmCustomers
+    val filteredCrmCustomers = remember(crmCustomers, selectedCity.name, selectedDistrict) {
+        crmCustomers.filter { customer ->
+            customer.city.equals(selectedCity.name, ignoreCase = true) &&
+                (selectedDistrict == "Tümü" || customer.district.equals(selectedDistrict, ignoreCase = true))
+        }
+    }
     val selectedCrmCustomer = selectedCustomerId?.let { id -> crmCustomers.firstOrNull { it.id == id } }
     val selectedCustomerKey = selectedCustomerId.orEmpty()
     val selectedCustomerActivities by remember(selectedCustomerKey) { localCrmRepository.observeActivities(selectedCustomerKey) }.collectAsState(initial = emptyList())
@@ -211,9 +216,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         SalesAiContext(
             city = selectedCity.name,
             district = selectedDistrict,
-            crmCount = crmCustomers.size,
-            prospectCount = crmCustomers.count { it.stage == CrmStage.PROSPECT },
-            activeCustomerCount = crmCustomers.count { it.stage == CrmStage.ACTIVE_CUSTOMER },
+            crmCount = filteredCrmCustomers.size,
+            prospectCount = filteredCrmCustomers.count { it.stage == CrmStage.PROSPECT },
+            activeCustomerCount = filteredCrmCustomers.count { it.stage == CrmStage.ACTIVE_CUSTOMER },
             radarResultCount = visibleResults.size,
             newBusinessCount = scanDelta?.newCount ?: 0,
             sampleBusinessNames = visibleResults.take(8).map { it.name },
@@ -266,7 +271,32 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             Text("Gerçek işletmeleri bulun, kaliteyi kontrol edin ve CRM'e aktarın.", style = MaterialTheme.typography.bodyMedium)
                         }
                         item {
-                            OfficialRegistryImportCard { message -> crmMessage = message }
+                            OfficialRegistryImportCard { summary, records ->
+                                scope.launch {
+                                    runCatching {
+                                        localCrmRepository.enrichCustomersFromOfficialRegistry(records)
+                                    }.onSuccess { enriched ->
+                                        crmMessage = buildString {
+                                            append(summary.source.name)
+                                            append(": ")
+                                            append(summary.importedCount)
+                                            append(" resmî kayıt hazır.")
+                                            append(" CRM eşleşmesi ")
+                                            append(enriched.matched)
+                                            append(" • güncellenen ")
+                                            append(enriched.updated)
+                                            if (enriched.inactiveMatches > 0) {
+                                                append(" • aktif olmayan eşleşme ")
+                                                append(enriched.inactiveMatches)
+                                            }
+                                        }
+                                    }.onFailure { error ->
+                                        Log.e("LanuRegistry", "Resmî sicil CRM zenginleştirmesi başarısız.", error)
+                                        crmMessage = "Resmî kayıt içe aktarıldı; CRM zenginleştirmesi tamamlanamadı: " +
+                                            error.message.orEmpty()
+                                    }
+                                }
+                            }
                         }
                         item {
                             OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(), label = { Text("İşletme veya HORECA ara") }, singleLine = true)
@@ -456,9 +486,15 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             Card(Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Text("CRM ve Excel", style = MaterialTheme.typography.titleMedium)
-                                    Text("${crmCustomers.size} CRM noktası")
-                                    Text(if (pendingSyncCount == 0) "Tüm yerel değişiklikler işlendi." else "$pendingSyncCount değişiklik bağlantı bekliyor.")
-                                    CrmExportActions(crmCustomers)
+                                    Text("Seçili bölgede ${filteredCrmCustomers.size} CRM noktası • cihaz toplamı ${crmCustomers.size}")
+                                    Text(
+                                        if (pendingSyncCount == 0) {
+                                            "Tüm yerel değişiklikler işlendi."
+                                        } else {
+                                            "$pendingSyncCount yerel değişiklik bulut aktarımı bekliyor; oturum yoksa cihazda güvenle saklanır."
+                                        },
+                                    )
+                                    CrmExportActions(filteredCrmCustomers)
                                 }
                             }
                         }
