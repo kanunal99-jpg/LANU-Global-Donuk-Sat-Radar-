@@ -388,7 +388,20 @@ object OfficialRegistryMatcher {
 
         val subjectName = OfficialRegistryNormalizer.text(name)
         val officialName = OfficialRegistryNormalizer.text(record.businessName)
-        if (subjectName.isNotEmpty() && subjectName == officialName) score += 60
+        if (subjectName.isNotEmpty() && officialName.isNotEmpty()) {
+            when {
+                subjectName == officialName -> score += 60
+                (subjectName.length >= 5 && officialName.contains(subjectName)) ||
+                    (officialName.length >= 5 && subjectName.contains(officialName)) -> score += 50
+                else -> {
+                    val subjectTokens = subjectName.split(" ").filter { it.length >= 3 }.toSet()
+                    val officialTokens = officialName.split(" ").filter { it.length >= 3 }.toSet()
+                    val overlap = subjectTokens.intersect(officialTokens).size
+                    val required = minOf(2, subjectTokens.size, officialTokens.size)
+                    if (required > 0 && overlap >= required) score += 45
+                }
+            }
+        }
 
         val subjectCity = OfficialRegistryNormalizer.text(city.orEmpty())
         val officialCity = OfficialRegistryNormalizer.text(record.city.orEmpty())
