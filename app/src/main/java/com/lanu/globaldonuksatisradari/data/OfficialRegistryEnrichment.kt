@@ -178,24 +178,29 @@ class OfficialRegistryStore(
                 writer.appendLine(encode(record).toString())
             }
         }
-        if (target.exists() && !target.delete()) {
+        val backup = File(directory, target.name + ".bak")
+        if (backup.exists()) backup.delete()
+        if (target.exists() && !target.renameTo(backup)) {
             temp.delete()
-            throw IOException("Eski resmî sicil önbelleği değiştirilemedi.")
+            throw IOException("Eski resmî sicil önbelleği güvenli yedeğe taşınamadı.")
         }
         if (!temp.renameTo(target)) {
             temp.delete()
-            throw IOException("Resmî sicil verisi güvenli şekilde kaydedilemedi.")
+            if (backup.exists()) backup.renameTo(target)
+            throw IOException("Resmî sicil verisi güvenli şekilde kaydedilemedi; önceki kayıt korundu.")
         }
+        if (backup.exists()) backup.delete()
 
         return OfficialRegistryImportSummary(
             source = source,
             importedCount = parsed.size,
             activeCount = parsed.count { it.status?.let(OfficialRegistryStatus::isActive) == true },
             inactiveCount = parsed.count { it.status?.let(OfficialRegistryStatus::isInactive) == true },
-            unknownStatusCount = parsed.count { status ->
-                status.status.isNullOrBlank() ||
-                    (!OfficialRegistryStatus.isActive(status.status) &&
-                        !OfficialRegistryStatus.isInactive(status.status))
+            unknownStatusCount = parsed.count { record ->
+                val status = record.status
+                status.isNullOrBlank() ||
+                    (!OfficialRegistryStatus.isActive(status) &&
+                        !OfficialRegistryStatus.isInactive(status))
             },
             fileName = fileName,
         )
