@@ -254,6 +254,15 @@ class MainActivitySmokeTest {
     }
 
     @Test(timeout = 60_000)
+    fun aiAssistant_localFallbackWorksWithoutApiKey() {
+        waitForTag("nav_ai").assertHasClickAction().performClick()
+        waitForTag("ai_screen").assertIsDisplayed()
+        waitForTag("ai_local_summary").assertHasClickAction().performClick()
+        waitForTag("ai_answer").assertIsDisplayed()
+        waitForText("Ücretsiz yerel mod").assertIsDisplayed()
+    }
+
+    @Test(timeout = 60_000)
     fun productCatalog_canOpenAndAddManualPrice() {
         waitForText("Ürünler").performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
