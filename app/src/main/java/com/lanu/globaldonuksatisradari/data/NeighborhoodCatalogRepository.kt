@@ -26,7 +26,7 @@ class NeighborhoodCatalogRepository(context: Context) {
     suspend fun getNeighborhoods(city: String, district: String): List<String> = withContext(Dispatchers.IO) {
         if (city.isBlank() || district.isBlank() || district == "Tümü") return@withContext emptyList()
 
-        val key = "neighborhoods:" +
+        val key = "neighborhoods:v2:" +
             BusinessDeduplication.normalizeForComparison(city) + ":" +
             BusinessDeduplication.normalizeForComparison(district)
 
