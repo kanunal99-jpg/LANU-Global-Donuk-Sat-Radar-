@@ -4,7 +4,7 @@ import android.content.Context
 import android.os.SystemClock
 import android.util.Log
 import com.lanu.globaldonuksatisradari.data.BusinessDeduplication
-import com.lanu.globaldonuksatisradari.data.TurkiyeAdministrativeApi
+import com.lanu.globaldonuksatisradari.data.DistrictCatalogRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -165,13 +165,13 @@ internal object CrmLocationSanitizer {
     )
 }
 
-class CrmLocationEnrichmentService(
+internal class CrmLocationEnrichmentService(
     context: Context,
-    private val administrativeApi: TurkiyeAdministrativeApi = TurkiyeAdministrativeApi(),
     private val lookupBaseUrlProvider: () -> String = { DEFAULT_LOOKUP_URL },
 ) {
     private val preferences =
         context.applicationContext.getSharedPreferences("crm_location_enrichment_cache", Context.MODE_PRIVATE)
+    private val districtCatalog = DistrictCatalogRepository(context)
     private val districtCache = ConcurrentHashMap<String, List<String>>()
 
     suspend fun enrich(customers: List<CrmCustomer>): List<CrmCustomer> = withContext(Dispatchers.IO) {
@@ -236,7 +236,7 @@ class CrmLocationEnrichmentService(
         districtCache[key]?.let { return it }
 
         val loaded = try {
-            administrativeApi.districts(city).map { it.name }
+            districtCatalog.getDistricts(city, emptyList())
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
