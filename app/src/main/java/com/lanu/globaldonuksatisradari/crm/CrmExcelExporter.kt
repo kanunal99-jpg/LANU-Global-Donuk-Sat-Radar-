@@ -1,5 +1,6 @@
 package com.lanu.globaldonuksatisradari.crm
 
+import com.lanu.globaldonuksatisradari.data.BusinessCategoryLabels
 import java.io.ByteArrayOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -51,7 +52,7 @@ object CrmExcelExporter {
                 val values = listOf(
                     customer.contactName.orEmpty(),
                     customer.businessName,
-                    customer.businessType.orEmpty(),
+                    BusinessCategoryLabels.displayName(customer.businessType).orEmpty(),
                     customer.taxOrNationalId.orEmpty(),
                     customer.phone.orEmpty(),
                     customer.city,
