@@ -26,6 +26,8 @@ import com.lanu.globaldonuksatisradari.crm.CrmSyncScheduler
 import com.lanu.globaldonuksatisradari.crm.SupabaseAuthClient
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
+import com.lanu.globaldonuksatisradari.data.BusinessCategoryLabels
+import com.lanu.globaldonuksatisradari.data.BusinessDeduplication
 import com.lanu.globaldonuksatisradari.data.BusinessQualityEvaluator
 import com.lanu.globaldonuksatisradari.data.DistrictCatalogRepository
 import com.lanu.globaldonuksatisradari.data.NeighborhoodCatalogRepository
@@ -48,6 +50,16 @@ private fun matchesInventoryPresence(value: String?, filter: String): Boolean = 
     "Var" -> !value.isNullOrBlank()
     "Yok" -> value.isNullOrBlank()
     else -> true
+}
+
+private fun normalizeNeighborhoodLabel(value: String?): String {
+    var normalized = BusinessDeduplication.normalizeForComparison(value.orEmpty())
+    listOf(" mahallesi", " mahallesi.", " mah.", " mah").forEach { suffix ->
+        if (normalized.endsWith(suffix)) {
+            normalized = normalized.removeSuffix(suffix).trim()
+        }
+    }
+    return normalized
 }
 
 class MainActivity : ComponentActivity() {
@@ -157,12 +169,24 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val regionNextActions by remember(regionKey) { localCrmRepository.observeOpenNextActionsForRegion(selectedCity.name, regionDistrict) }.collectAsState(initial = emptyList())
     val regionOpportunities by remember(regionKey) { localCrmRepository.observeOpportunitiesForRegion(selectedCity.name, regionDistrict) }.collectAsState(initial = emptyList())
     val presenceOptions = listOf("Tümü", "Var", "Yok")
-    val categoryOptions = remember(results) { listOf("Tümü") + results.mapNotNull { it.category?.trim()?.takeIf(String::isNotBlank) }.distinct().sorted() }
+    val categoryOptions = remember(results) {
+        listOf("Tümü") +
+            results.mapNotNull { BusinessCategoryLabels.displayName(it.category) }
+                .distinct()
+                .sortedWith(String.CASE_INSENSITIVE_ORDER)
+    }
     val visibleResults = remember(results, selectedDistrict, selectedNeighborhood, categoryFilter, phoneFilter, websiteFilter) {
         results.filter { business ->
             (selectedDistrict == "Tümü" || business.district.equals(selectedDistrict, true)) &&
-                (selectedNeighborhood == "Tümü" || business.neighborhood?.equals(selectedNeighborhood, true) == true) &&
-                (categoryFilter == "Tümü" || business.category.equals(categoryFilter, true)) &&
+                (
+                    selectedNeighborhood == "Tümü" ||
+                        normalizeNeighborhoodLabel(business.neighborhood) ==
+                            normalizeNeighborhoodLabel(selectedNeighborhood)
+                ) &&
+                (
+                    categoryFilter == "Tümü" ||
+                        BusinessCategoryLabels.displayName(business.category).equals(categoryFilter, true)
+                ) &&
                 matchesInventoryPresence(business.phone, phoneFilter) &&
                 matchesInventoryPresence(business.website, websiteFilter)
         }
