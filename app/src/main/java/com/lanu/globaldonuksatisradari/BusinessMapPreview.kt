@@ -14,7 +14,7 @@ import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import org.json.JSONObject
 
 private const val APP_USER_AGENT =
-    "LANU-Global-Donuk-Satis-Radari/0.1 (+https://github.com/kanunal99-jpg/LANU-Global-Donuk-Sat-Radar-)"
+    "LANU-Global-Donuk-Satis-Radari/0.3 (+https://github.com/kanunal99-jpg/LANU-Global-Donuk-Sat-Radar-)"
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -35,7 +35,11 @@ fun BusinessMapPreview(
         factory = { context ->
             WebView(context).apply {
                 settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
+                settings.domStorageEnabled = false
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
+                settings.javaScriptCanOpenWindowsAutomatically = false
+                settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                 settings.cacheMode = WebSettings.LOAD_DEFAULT
                 settings.userAgentString = APP_USER_AGENT
                 setBackgroundColor(0xFFF5F5F5.toInt())
@@ -59,7 +63,12 @@ fun BusinessMapPreview(
 }
 
 internal fun buildMapHtml(businesses: List<VerifiedBusiness>): String {
-    val valid = businesses.filter { it.latitude != null && it.longitude != null }
+    val valid = businesses.filter {
+        val latitude = it.latitude
+        val longitude = it.longitude
+        latitude != null && longitude != null &&
+            latitude in -90.0..90.0 && longitude in -180.0..180.0
+    }
     val points = valid.joinToString(",") { business ->
         """{
             name: ${JSONObject.quote(business.name)},
@@ -96,8 +105,17 @@ internal fun buildMapHtml(businesses: List<VerifiedBusiness>): String {
             const markers = [];
             businesses.forEach((business) => {
               const marker = L.marker([business.lat, business.lon]).addTo(map);
-              const category = business.category ? '<br>Kategori: ' + business.category : '';
-              marker.bindPopup('<strong>' + business.name + '</strong><br>' + business.district + category);
+              const popup = document.createElement('div');
+              const title = document.createElement('strong');
+              title.textContent = business.name;
+              popup.appendChild(title);
+              popup.appendChild(document.createElement('br'));
+              popup.appendChild(document.createTextNode(business.district));
+              if (business.category) {
+                popup.appendChild(document.createElement('br'));
+                popup.appendChild(document.createTextNode('Kategori: ' + business.category));
+              }
+              marker.bindPopup(popup);
               markers.push(marker);
             });
 
