@@ -648,6 +648,8 @@ class LocalCrmRepository(
     ): CrmNextAction {
         val current = database.nextActionDao().findById(actionId)
             ?: error("Takip aksiyonu bulunamadı: $actionId")
+        val customer = database.customerDao().findById(current.customerId)
+            ?: error("Takip aksiyonunun CRM müşterisi bulunamadı: ${current.customerId}")
         require(current.completedAtEpochMs == null) { "Takip aksiyonu zaten tamamlandı." }
 
         val timestamp = now()
@@ -656,13 +658,14 @@ class LocalCrmRepository(
                 id = actionId,
                 completedAtEpochMs = timestamp,
                 completedByUserId = completedByUserId,
-                syncState = SyncState.PENDING_UPLOAD.name,
+                syncState = syncStateFor(customer.ownerUserId).name,
             )
             check(updated == 1) { "Takip aksiyonu tamamlanamadı: $actionId" }
             val latest = database.nextActionDao().findById(actionId)
                 ?: error("Tamamlanan takip aksiyonu okunamadı: $actionId")
             val completedAction = CrmMappings.toDomain(latest)
-            database.syncOperationDao().insert(
+            enqueueIfCloudOwned(
+                customer.ownerUserId,
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_NEXT_ACTION,
@@ -685,10 +688,11 @@ class LocalCrmRepository(
                 createdByUserId = completedByUserId,
                 createdAtEpochMs = timestamp,
                 version = 1L,
-                syncState = SyncState.PENDING_UPLOAD,
+                syncState = syncStateFor(customer.ownerUserId),
             )
             database.activityDao().upsert(CrmMappings.toEntity(activity))
-            database.syncOperationDao().insert(
+            enqueueIfCloudOwned(
+                customer.ownerUserId,
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_ACTIVITY,
