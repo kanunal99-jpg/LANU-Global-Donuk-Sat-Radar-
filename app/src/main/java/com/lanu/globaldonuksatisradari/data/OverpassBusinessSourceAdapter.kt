@@ -125,6 +125,15 @@ object OverpassQueryBuilder {
         """nwr["name"]["healthcare"](area.searchArea);""",
         // Some commercial sites are mapped only as a building.
         """nwr["name"]["building"~"retail|commercial|industrial|warehouse|office|supermarket|kiosk|hotel"](area.searchArea);""",
+        // Commercial / industrial complexes and agricultural businesses sometimes
+        // exist only as a named landuse/place/product feature.
+        """nwr["name"]["landuse"~"retail|commercial|industrial|farmyard"](area.searchArea);""",
+        """nwr["name"]["place"="farm"](area.searchArea);""",
+        """nwr["name"]["product"](area.searchArea);""",
+        // Private operators may be mapped as schools, clinics or other POIs without
+        // one of the usual business keys. This keeps private operators discoverable
+        // without turning the query into every named map feature.
+        """nwr["name"]["operator:type"="private"](area.searchArea);""",
     ).joinToString("\n")
 
     private fun buildTermQuery(query: String): String {
@@ -195,6 +204,45 @@ object OverpassQueryBuilder {
                 listOf(
                     """nwr["name"]["building"="warehouse"](area.searchArea);""",
                     """nwr["name"]["shop"="wholesale"](area.searchArea);""",
+                    """nwr["name"]["office"~"logistics|transport|moving_company",i](area.searchArea);""",
+                )
+            normalized in setOf("education", "egitim", "eğitim", "kurs", "school") ->
+                listOf(
+                    """nwr["name"]["amenity"~"school|kindergarten|college|university|language_school|music_school|driving_school|training|childcare",i](area.searchArea);""",
+                )
+            normalized in setOf("automotive", "otomotiv", "oto") ->
+                listOf(
+                    """nwr["name"]["shop"~"car|car_repair|car_parts|tyres|motorcycle|bicycle",i](area.searchArea);""",
+                    """nwr["name"]["amenity"~"fuel|car_wash|car_rental",i](area.searchArea);""",
+                )
+            normalized in setOf("beauty", "guzellik", "güzellik", "bakim", "bakım") ->
+                listOf(
+                    """nwr["name"]["shop"~"hairdresser|beauty|cosmetics|massage|tattoo",i](area.searchArea);""",
+                    """nwr["name"]["leisure"~"sauna|spa",i](area.searchArea);""",
+                )
+            normalized in setOf("finance", "finans", "sigorta", "emlak") ->
+                listOf(
+                    """nwr["name"]["amenity"~"bank|bureau_de_change|money_transfer",i](area.searchArea);""",
+                    """nwr["name"]["office"~"financial|insurance|estate_agent|accountant",i](area.searchArea);""",
+                )
+            normalized in setOf("construction", "insaat", "inşaat", "yapi", "yapı", "teknik") ->
+                listOf(
+                    """nwr["name"]["office"~"construction|architect|engineer",i](area.searchArea);""",
+                    """nwr["name"]["shop"~"hardware|doityourself|building_materials|trade",i](area.searchArea);""",
+                    """nwr["name"]["craft"](area.searchArea);""",
+                )
+            normalized in setOf("agriculture", "tarim", "tarım", "ciftlik", "çiftlik", "farm") ->
+                listOf(
+                    """nwr["name"]["place"="farm"](area.searchArea);""",
+                    """nwr["name"]["landuse"="farmyard"](area.searchArea);""",
+                    """nwr["name"]["office"~"agricultural|forestry",i](area.searchArea);""",
+                    """nwr["name"]["shop"~"agrarian|farm",i](area.searchArea);""",
+                )
+            normalized in setOf("logistics", "lojistik", "nakliye", "transport") ->
+                listOf(
+                    """nwr["name"]["office"~"logistics|transport|moving_company",i](area.searchArea);""",
+                    """nwr["name"]["building"="warehouse"](area.searchArea);""",
+                    """nwr["name"]["shop"="wholesale"](area.searchArea);""",
                 )
             normalized in setOf("ticari bina", "commercial building", "commercial") ->
                 listOf(
@@ -225,6 +273,9 @@ object OverpassQueryBuilder {
                 """nwr["club"~"$regex",i](area.searchArea);""",
                 """nwr["healthcare"~"$regex",i](area.searchArea);""",
                 """nwr["building"~"$regex",i](area.searchArea);""",
+                """nwr["landuse"~"$regex",i](area.searchArea);""",
+                """nwr["place"~"$regex",i](area.searchArea);""",
+                """nwr["product"~"$regex",i](area.searchArea);""",
             )
         }
         return categoryClauses.joinToString("\n")
@@ -403,6 +454,9 @@ class OverpassBusinessSourceAdapter(
                 "man_made",
                 "club",
                 "building",
+                "landuse",
+                "place",
+                "product",
                 "cuisine",
             )
             val id = item.optString("type") + ":" + item.optLong("id")
