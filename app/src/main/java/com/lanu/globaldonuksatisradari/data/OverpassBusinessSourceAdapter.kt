@@ -52,7 +52,7 @@ object OverpassQueryBuilder {
         val body = if (query.isBlank()) buildBroadQuery() else buildTermQuery(query.trim())
 
         return """
-            [out:json][timeout:90][maxsize:33554432];
+            [out:json][timeout:90][maxsize:67108864];
             $scope
             (
             $body
@@ -309,7 +309,7 @@ class OverpassBusinessSourceAdapter(
                     val read = input.read(buffer)
                     if (read <= 0) break
                     total += read
-                    if (total > 32 * 1024 * 1024) {
+                    if (total > 64 * 1024 * 1024) {
                         throw IllegalStateException("Overpass yanıtı güvenli boyut sınırını aştı")
                     }
                     append(String(buffer, 0, read, Charsets.UTF_8))
