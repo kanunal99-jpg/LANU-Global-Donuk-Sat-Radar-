@@ -3,8 +3,51 @@ package com.lanu.globaldonuksatisradari.data
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import java.net.URLDecoder
 
 class NominatimBusinessSourceAdapterTest {
+    @Test
+    fun queryBuilderIncludesSelectedNeighborhoodBeforeDistrictAndCity() {
+        val url = NominatimQueryBuilder.build(
+            query = "market",
+            city = "İstanbul",
+            district = "Kadıköy",
+            neighborhood = "Caferağa",
+        )
+        val decoded = URLDecoder.decode(url, Charsets.UTF_8.name())
+
+        assertTrue(decoded.contains("market, Caferağa, Kadıköy, İstanbul, Türkiye"))
+    }
+
+    @Test
+    fun parseRejectsAlternativeResultOutsideSelectedNeighborhood() {
+        val payload = """
+            [{
+              "osm_type":"node",
+              "osm_id":"777",
+              "name":"Başka Mahalle Marketi",
+              "lat":"40.98",
+              "lon":"29.04",
+              "type":"supermarket",
+              "address":{
+                "neighbourhood":"Fenerbahçe",
+                "city_district":"Kadıköy"
+              }
+            }]
+        """.trimIndent()
+
+        val result = NominatimBusinessSourceAdapter().parse(
+            payload = payload,
+            selectedCity = "İstanbul",
+            selectedDistrict = "Kadıköy",
+            verifiedAtEpochMs = 99L,
+            selectedNeighborhood = "Caferağa",
+        )
+
+        assertTrue(result.isEmpty())
+    }
+
     @Test
     fun parse_maps_contact_fields_from_extratags() {
         val payload = """
