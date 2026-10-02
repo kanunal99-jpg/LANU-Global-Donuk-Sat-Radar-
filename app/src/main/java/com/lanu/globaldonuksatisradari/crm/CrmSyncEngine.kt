@@ -24,11 +24,89 @@ class RoomCrmSyncStateStore(
 
             LocalCrmRepository.ENTITY_OPPORTUNITY ->
                 database.opportunityDao().updateSyncState(entityId, state.name)
+
+            CommercialCrmSync.ENTITY_CONTACT ->
+                database.contactDao().updateSyncState(entityId, state.name)
+
+            CommercialCrmSync.ENTITY_QUOTE ->
+                database.quoteDao().updateSyncState(entityId, state.name)
+
+            CommercialCrmSync.ENTITY_QUOTE_LINE ->
+                database.quoteLineDao().updateSyncState(entityId, state.name)
+
+            CommercialCrmSync.ENTITY_ORDER ->
+                database.orderDao().updateSyncState(entityId, state.name)
+
+            CommercialCrmSync.ENTITY_ORDER_LINE ->
+                database.orderLineDao().updateSyncState(entityId, state.name)
         }
     }
 }
 
-/** Remote boundary for CRM synchronization. No concrete backend is assumed here. */
+/** Resolves local ownership before a queued operation may be pushed to an authenticated cloud user. */
+fun interface CrmSyncOwnershipResolver {
+    suspend fun isOwnedBy(operation: SyncOperationEntity, ownerUserId: String): Boolean
+}
+
+object AllowAllCrmSyncOwnershipResolver : CrmSyncOwnershipResolver {
+    override suspend fun isOwnedBy(operation: SyncOperationEntity, ownerUserId: String): Boolean = true
+}
+
+class RoomCrmSyncOwnershipResolver(
+    private val database: LanuCrmDatabase,
+) : CrmSyncOwnershipResolver {
+    override suspend fun isOwnedBy(operation: SyncOperationEntity, ownerUserId: String): Boolean {
+        val customer = when (operation.entityType) {
+            LocalCrmRepository.ENTITY_CUSTOMER ->
+                database.customerDao().findById(operation.entityId)
+
+            LocalCrmRepository.ENTITY_ACTIVITY ->
+                database.activityDao().findById(operation.entityId)?.customerId?.let {
+                    database.customerDao().findById(it)
+                }
+
+            LocalCrmRepository.ENTITY_NEXT_ACTION ->
+                database.nextActionDao().findById(operation.entityId)?.customerId?.let {
+                    database.customerDao().findById(it)
+                }
+
+            LocalCrmRepository.ENTITY_OPPORTUNITY ->
+                database.opportunityDao().findById(operation.entityId)?.customerId?.let {
+                    database.customerDao().findById(it)
+                }
+
+            CommercialCrmSync.ENTITY_CONTACT ->
+                database.contactDao().findById(operation.entityId)?.customerId?.let {
+                    database.customerDao().findById(it)
+                }
+
+            CommercialCrmSync.ENTITY_QUOTE ->
+                database.quoteDao().findById(operation.entityId)?.customerId?.let {
+                    database.customerDao().findById(it)
+                }
+
+            CommercialCrmSync.ENTITY_QUOTE_LINE ->
+                database.quoteLineDao().findById(operation.entityId)?.quoteId?.let { quoteId ->
+                    database.quoteDao().findById(quoteId)?.customerId
+                }?.let { database.customerDao().findById(it) }
+
+            CommercialCrmSync.ENTITY_ORDER ->
+                database.orderDao().findById(operation.entityId)?.customerId?.let {
+                    database.customerDao().findById(it)
+                }
+
+            CommercialCrmSync.ENTITY_ORDER_LINE ->
+                database.orderLineDao().findById(operation.entityId)?.orderId?.let { orderId ->
+                    database.orderDao().findById(orderId)?.customerId
+                }?.let { database.customerDao().findById(it) }
+
+            else -> null
+        }
+        return customer?.ownerUserId == ownerUserId
+    }
+}
+
+/** Remote boundary for CRM synchronization. */
 interface RemoteCrmDataSource {
     suspend fun apply(operation: SyncOperationEntity): RemoteSyncResult
     suspend fun pullInto(database: LanuCrmDatabase): RemotePullResult = RemotePullResult.NotConfigured
@@ -62,14 +140,35 @@ class CrmSyncEngine(
     private val remote: RemoteCrmDataSource,
     private val policy: CrmSyncRetryPolicy = CrmSyncRetryPolicy(),
     private val stateStore: CrmSyncStateStore = NoOpCrmSyncStateStore,
+    private val ownerUserId: String? = null,
+    private val ownershipResolver: CrmSyncOwnershipResolver = AllowAllCrmSyncOwnershipResolver,
 ) {
+    private suspend fun nextOperation(): SyncOperationEntity? {
+        val owner = ownerUserId
+        val candidates = if (owner == null) {
+            syncDao.pending(OWNERSHIP_SCAN_LIMIT)
+        } else {
+            // Owner filtering happens in SQLite before LIMIT. Another user's large offline queue can
+            // therefore never hide/starve this session's work behind the scan limit.
+            syncDao.pendingForOwner(owner, OWNERSHIP_SCAN_LIMIT)
+        }
+        return if (owner == null) {
+            candidates.firstOrNull()
+        } else {
+            // Keep the resolver as a second independent boundary in case a future DAO query regresses.
+            candidates.firstOrNull { ownershipResolver.isOwnedBy(it, owner) }
+        }
+    }
+
     suspend fun processOne(): SyncProcessResult {
-        val operation = syncDao.pending(1).firstOrNull() ?: return SyncProcessResult.NoWork
+        val operation = nextOperation() ?: return SyncProcessResult.NoWork
 
         return when (val result = remote.apply(operation)) {
             RemoteSyncResult.Success -> {
-                stateStore.mark(operation.entityType, operation.entityId, SyncState.SYNCED)
                 syncDao.delete(operation.id)
+                if (syncDao.countForEntity(operation.entityType, operation.entityId) == 0) {
+                    stateStore.mark(operation.entityType, operation.entityId, SyncState.SYNCED)
+                }
                 SyncProcessResult.Synced(operation.id)
             }
             RemoteSyncResult.NotConfigured -> SyncProcessResult.RemoteNotConfigured
@@ -105,11 +204,7 @@ class CrmSyncEngine(
                     id = operation.id,
                     attemptCount = nextAttempt,
                     lastError = result.reason,
-                    state = if (shouldRetry) {
-                        SyncOperationState.PENDING.name
-                    } else {
-                        SyncOperationState.FAILED.name
-                    },
+                    state = if (shouldRetry) SyncOperationState.PENDING.name else SyncOperationState.FAILED.name,
                 )
                 if (shouldRetry) {
                     SyncProcessResult.Deferred(operation.id, nextAttempt, result.reason)
@@ -140,6 +235,7 @@ class CrmSyncEngine(
 
     companion object {
         const val DEFAULT_BATCH_SIZE = 20
+        private const val OWNERSHIP_SCAN_LIMIT = 500
     }
 }
 
