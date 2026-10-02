@@ -13,15 +13,13 @@ class OverpassBusinessSourceAdapterTest {
         assertTrue(query.contains("""["craft"]"""))
         assertTrue(query.contains("""["industrial"]"""))
         assertTrue(query.contains("""["man_made"="works"]"""))
-        assertTrue(query.contains("nightclub"))
-        assertTrue(query.contains("mall").not())
-        assertTrue(query.contains("hotel|hostel|motel"))
-        assertTrue(query.contains("adult_gaming_centre"))
+        assertTrue(query.contains("""["amenity"]["amenity"!~"""))
+        assertTrue(query.contains("place_of_worship|school"))
+        assertTrue(query.contains("""["tourism"]"""))
+        assertTrue(query.contains("""["leisure"]"""))
         assertTrue(query.contains("""["club"]"""))
         assertTrue(query.contains("""["healthcare"]"""))
-        assertTrue(!query.contains("place_of_worship"))
-        assertTrue(!query.contains("school"))
-        assertTrue(!query.contains("community_centre"))
+        assertTrue(query.contains("""["building"~"retail|commercial|industrial|warehouse|office|supermarket|kiosk|hotel"]"""))
         assertTrue(!query.contains("map_to_area"))
     }
 
@@ -125,6 +123,21 @@ class OverpassBusinessSourceAdapterTest {
         assertTrue(nightclub.contains("""["amenity"="nightclub"]"""))
         assertTrue(nightclub.contains("""["club"]"""))
         assertTrue(office.contains("""["office"]"""))
+    }
+
+    @Test
+    fun exhaustiveBusinessFiltersReachServiceHealthIndustryWarehouseAndCommercialBuildings() {
+        val service = OverpassQueryBuilder.build("İstanbul", "Pendik", "amenity")
+        val health = OverpassQueryBuilder.build("İstanbul", "Pendik", "healthcare")
+        val industry = OverpassQueryBuilder.build("İstanbul", "Pendik", "industrial")
+        val warehouse = OverpassQueryBuilder.build("İstanbul", "Pendik", "warehouse")
+        val commercial = OverpassQueryBuilder.build("İstanbul", "Pendik", "commercial")
+
+        assertTrue(service.contains("""["amenity"]["amenity"!~"""))
+        assertTrue(health.contains("""["healthcare"]"""))
+        assertTrue(industry.contains("""["industrial"]"""))
+        assertTrue(warehouse.contains("""["building"="warehouse"]"""))
+        assertTrue(commercial.contains("""["building"~"retail|commercial|industrial|warehouse|office|supermarket|kiosk|hotel"]"""))
     }
 
     @Test

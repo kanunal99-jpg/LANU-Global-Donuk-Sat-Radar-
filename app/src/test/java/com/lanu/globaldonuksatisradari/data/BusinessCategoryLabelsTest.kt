@@ -25,6 +25,13 @@ class BusinessCategoryLabelsTest {
         assertEquals("nightclub", BusinessCategoryLabels.searchQueryForLabel("Gece Kulübü / Disko"))
         assertEquals("office", BusinessCategoryLabels.searchQueryForLabel("Şirket / Ofis"))
         assertEquals("shop", BusinessCategoryLabels.searchQueryForLabel("Mağaza"))
+        assertEquals("amenity", BusinessCategoryLabels.searchQueryForLabel("Tüm Hizmet İşletmeleri"))
+        assertEquals("healthcare", BusinessCategoryLabels.searchQueryForLabel("Sağlık İşletmeleri"))
+        assertEquals("leisure", BusinessCategoryLabels.searchQueryForLabel("Eğlence / Aktivite"))
+        assertEquals("industrial", BusinessCategoryLabels.searchQueryForLabel("Sanayi"))
+        assertEquals("warehouse", BusinessCategoryLabels.searchQueryForLabel("Depo / Lojistik"))
+        assertEquals("tourism", BusinessCategoryLabels.searchQueryForLabel("Turizm İşletmeleri"))
+        assertEquals("commercial", BusinessCategoryLabels.searchQueryForLabel("Ticari Bina / Kompleks"))
     }
 
     @Test
