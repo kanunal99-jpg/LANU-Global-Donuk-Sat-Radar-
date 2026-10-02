@@ -32,6 +32,7 @@ data class CrmCustomerEntity(
     val businessType: String? = null,
     val taxOrNationalId: String? = null,
     val phone: String? = null,
+    val website: String? = null,
     val createdAtEpochMs: Long,
     val updatedAtEpochMs: Long,
     val version: Long,
