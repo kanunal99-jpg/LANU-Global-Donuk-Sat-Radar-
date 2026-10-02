@@ -229,21 +229,28 @@ class OfficialRegistryStore(
     fun recordsFor(
         city: String,
         district: String?,
+    ): List<OfficialRegistryRecord> =
+        OfficialRegistrySource.entries.flatMap { source ->
+            recordsFor(source, city, district)
+        }
+
+    fun recordsFor(
+        source: OfficialRegistrySource,
+        city: String,
+        district: String?,
     ): List<OfficialRegistryRecord> {
         val normalizedCity = OfficialRegistryNormalizer.text(city)
         val normalizedDistrict = district
             ?.takeUnless { it.isBlank() || it.equals("Tümü", ignoreCase = true) }
             ?.let(OfficialRegistryNormalizer::text)
 
-        return OfficialRegistrySource.entries.flatMap { source ->
-            readSource(source, city).filter { record ->
-                val cityMatches = record.city.isNullOrBlank() ||
-                    OfficialRegistryNormalizer.text(record.city) == normalizedCity
-                val districtMatches = normalizedDistrict == null ||
-                    record.district.isNullOrBlank() ||
-                    OfficialRegistryNormalizer.text(record.district) == normalizedDistrict
-                cityMatches && districtMatches
-            }
+        return readSource(source, city).filter { record ->
+            val cityMatches = record.city.isNullOrBlank() ||
+                OfficialRegistryNormalizer.text(record.city) == normalizedCity
+            val districtMatches = normalizedDistrict == null ||
+                record.district.isNullOrBlank() ||
+                OfficialRegistryNormalizer.text(record.district) == normalizedDistrict
+            cityMatches && districtMatches
         }
     }
 
