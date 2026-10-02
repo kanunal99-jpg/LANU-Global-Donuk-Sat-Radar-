@@ -70,7 +70,13 @@ class RoutineExcelExporterTest {
         assertTrue(sheet.contains("Test Sokak No:0"))
         assertTrue(sheet.contains("29.02"))
         assertTrue(sheet.contains("40.98"))
+        assertTrue(sheet.contains("Ziyaret Aralığı (Gün)"))
+        assertTrue(sheet.contains("Frekans Kaynağı"))
+        assertTrue(sheet.contains("Önceki Uzaklık"))
         assertTrue(sheet.contains("Kümülatif Uzaklık"))
+        assertTrue(sheet.contains("Önceki Süre (dk)"))
+        assertTrue(sheet.contains("Kümülatif Süre (dk)"))
+        assertTrue(sheet.contains("Otomatik"))
     }
 
     @Test
