@@ -31,15 +31,20 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 @Composable
-fun RoutineExportActions(plan: MonthlyRoutinePlan) {
+fun RoutineExportActions(
+    plan: MonthlyRoutinePlan,
+    planLabel: String = "Otomatik",
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var pendingWorkbook by remember { mutableStateOf<ByteArray?>(null) }
     var status by remember { mutableStateOf<String?>(null) }
     var exporting by remember { mutableStateOf(false) }
 
-    val fileName = remember(plan.totalPointCount) {
-        "LANU-Aylik-Rutin-Plan-" +
+    val fileName = remember(plan.totalPointCount, planLabel) {
+        "LANU-Aylik-Rutin-" +
+            planLabel.filter { it.isLetterOrDigit() || it == '-' }.ifBlank { "Plan" } +
+            "-" +
             LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmm")) +
             ".xlsx"
     }
@@ -79,7 +84,7 @@ fun RoutineExportActions(plan: MonthlyRoutinePlan) {
                 onClick = {
                     scope.launch {
                         exporting = true
-                        status = "4 haftalık rutin Excel hazırlanıyor…"
+                        status = planLabel + " rutin Excel hazırlanıyor…"
                         runCatching {
                             withContext(Dispatchers.Default) {
                                 RoutineExcelExporter.build(plan)
@@ -127,7 +132,7 @@ fun RoutineExportActions(plan: MonthlyRoutinePlan) {
                             }
                         }.onSuccess { intent ->
                             context.startActivity(
-                                Intent.createChooser(intent, "Aylık rutin Excel dosyasını paylaş"),
+                                Intent.createChooser(intent, planLabel + " rutin Excel dosyasını paylaş"),
                             )
                             status = "Aylık rutin Excel paylaşım için hazır."
                         }.onFailure {
