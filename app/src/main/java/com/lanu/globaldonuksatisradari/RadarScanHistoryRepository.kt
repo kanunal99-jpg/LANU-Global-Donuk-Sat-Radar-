@@ -24,11 +24,12 @@ class RadarScanHistoryRepository(context: Context) {
     fun compareAndRecord(
         city: String,
         district: String?,
+        neighborhood: String? = null,
         query: String,
         records: List<VerifiedBusiness>,
         nowEpochMs: Long = System.currentTimeMillis(),
     ): RadarScanDelta {
-        val key = scopeKey(city, district, query)
+        val key = scopeKey(city, district, neighborhood, query)
         val currentKeys = records
             .map(::businessKey)
             .toSet()
@@ -72,14 +73,28 @@ class RadarScanHistoryRepository(context: Context) {
         fun businessKey(business: VerifiedBusiness): String =
             business.source.id + ":" + business.id
 
-        private fun scopeKey(city: String, district: String?, query: String): String {
+        private fun scopeKey(
+            city: String,
+            district: String?,
+            neighborhood: String?,
+            query: String,
+        ): String {
             val normalizedCity = BusinessDeduplication.normalizeForComparison(city)
             val normalizedDistrict = district
                 ?.takeIf { it.isNotBlank() && it != "Tümü" }
                 ?.let(BusinessDeduplication::normalizeForComparison)
                 .orEmpty()
+            val normalizedNeighborhood = neighborhood
+                ?.takeIf { it.isNotBlank() && it != "Tümü" }
+                ?.let(BusinessDeduplication::normalizeForComparison)
+                .orEmpty()
             val normalizedQuery = BusinessDeduplication.normalizeForComparison(query)
-            return "scope:" + listOf(normalizedCity, normalizedDistrict, normalizedQuery)
+            return "scope:" + listOf(
+                normalizedCity,
+                normalizedDistrict,
+                normalizedNeighborhood,
+                normalizedQuery,
+            )
                 .joinToString("|")
                 .lowercase(Locale.ROOT)
         }
