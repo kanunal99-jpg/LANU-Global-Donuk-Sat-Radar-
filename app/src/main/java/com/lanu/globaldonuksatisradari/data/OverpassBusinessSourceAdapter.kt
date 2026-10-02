@@ -114,6 +114,9 @@ object OverpassQueryBuilder {
         """nwr["name"]["leisure"~"adult_gaming_centre|amusement_arcade|bowling_alley|fitness_centre|sports_centre|dance|escape_game|water_park"](area.searchArea);""",
         """nwr["name"]["club"](area.searchArea);""",
         """nwr["name"]["healthcare"](area.searchArea);""",
+        """nwr["name"]["company"](area.searchArea);""",
+        """nwr["name"]["building"~"commercial|retail|industrial|warehouse|office|supermarket|kiosk|hotel"](area.searchArea);""",
+        """nwr["name"]["landuse"~"commercial|retail|industrial"](area.searchArea);""",
     ).joinToString("\n")
 
     private fun buildTermQuery(query: String): String {
@@ -145,15 +148,21 @@ object OverpassQueryBuilder {
                     """nwr["name"]["man_made"="works"](area.searchArea);""",
                     """nwr["name"]["industrial"](area.searchArea);""",
                     """nwr["name"]["craft"](area.searchArea);""",
+                    """nwr["name"]["building"~"industrial|warehouse"](area.searchArea);""",
+                    """nwr["name"]["landuse"="industrial"](area.searchArea);""",
                 )
             normalized in setOf("toptanci", "toptancı", "wholesale", "wholesaler") ->
                 listOf(
                     """nwr["name"]["shop"="wholesale"](area.searchArea);""",
+                    """nwr["name"]["industrial"~"warehouse|logistics"](area.searchArea);""",
+                    """nwr["name"]["building"="warehouse"](area.searchArea);""",
                     """nwr["name"~"$regex",i](area.searchArea);""",
                 )
             normalized in setOf("avm", "mall", "alisveris merkezi", "alışveriş merkezi") ->
                 listOf(
                     """nwr["name"]["shop"~"mall|department_store"](area.searchArea);""",
+                    """nwr["name"]["building"~"retail|commercial"](area.searchArea);""",
+                    """nwr["name"]["landuse"="retail"](area.searchArea);""",
                     """nwr["name"~"$regex",i](area.searchArea);""",
                 )
             normalized in setOf("gece kulubu", "gece kulübü", "nightclub", "disko", "disco") ->
@@ -163,7 +172,11 @@ object OverpassQueryBuilder {
                     """nwr["name"]["club"](area.searchArea);""",
                 )
             normalized in setOf("ofis", "sirket", "şirket", "office", "company") ->
-                listOf("""nwr["name"]["office"](area.searchArea);""")
+                listOf(
+                    """nwr["name"]["office"](area.searchArea);""",
+                    """nwr["name"]["company"](area.searchArea);""",
+                    """nwr["name"]["building"~"office|commercial"](area.searchArea);""",
+                )
             normalized in setOf("magaza", "mağaza", "shop") ->
                 listOf("""nwr["name"]["shop"](area.searchArea);""")
             normalized in setOf("playstation", "playstation cafe", "oyun salonu", "internet cafe") ->
@@ -190,6 +203,9 @@ object OverpassQueryBuilder {
                 """nwr["man_made"~"$regex",i](area.searchArea);""",
                 """nwr["club"~"$regex",i](area.searchArea);""",
                 """nwr["healthcare"~"$regex",i](area.searchArea);""",
+                """nwr["company"~"$regex",i](area.searchArea);""",
+                """nwr["building"~"$regex",i](area.searchArea);""",
+                """nwr["landuse"~"$regex",i](area.searchArea);""",
             )
         }
         return categoryClauses.joinToString("\n")
@@ -333,7 +349,10 @@ class OverpassBusinessSourceAdapter(
         for (index in 0 until elements.length()) {
             val item = elements.optJSONObject(index) ?: continue
             val tags = item.optJSONObject("tags") ?: continue
-            val name = tags.optString("name").trim()
+            if (isInactiveCommercialFeature(tags)) continue
+            val name = firstTag(tags, "name", "official_name", "brand", "operator")
+                ?.trim()
+                .orEmpty()
             if (name.isBlank()) continue
 
             val center = item.optJSONObject("center")
@@ -367,6 +386,9 @@ class OverpassBusinessSourceAdapter(
                 "industrial",
                 "man_made",
                 "club",
+                "company",
+                "building",
+                "landuse",
                 "cuisine",
             )
             val id = item.optString("type") + ":" + item.optLong("id")
@@ -402,6 +424,26 @@ class OverpassBusinessSourceAdapter(
             )
         }
         return BusinessDeduplication.deduplicate(result)
+    }
+
+
+    private fun isInactiveCommercialFeature(tags: JSONObject): Boolean {
+        val lifecycleValues = listOf(
+            tags.optString("shop"),
+            tags.optString("office"),
+            tags.optString("industrial"),
+        ).map { it.trim().lowercase() }
+
+        if (lifecycleValues.any { it in setOf("vacant", "disused", "abandoned", "closed") }) {
+            return true
+        }
+
+        return tags.keys().asSequence().any { key ->
+            key.startsWith("disused:") ||
+                key.startsWith("abandoned:") ||
+                key.startsWith("demolished:")
+        } || tags.optString("disused").equals("yes", ignoreCase = true) ||
+            tags.optString("abandoned").equals("yes", ignoreCase = true)
     }
 
     private fun firstTag(tags: JSONObject, vararg keys: String): String? =
