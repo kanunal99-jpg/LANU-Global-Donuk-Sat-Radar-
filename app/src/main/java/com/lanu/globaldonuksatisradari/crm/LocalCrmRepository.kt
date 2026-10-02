@@ -880,6 +880,7 @@ private object CrmPayloads {
         put("stage", customer.stage.name)
         put("ownerUserId", customer.ownerUserId)
         put("notes", customer.notes)
+        put("phone", customer.phone)
         put("createdAtEpochMs", customer.createdAtEpochMs)
         put("updatedAtEpochMs", customer.updatedAtEpochMs)
         put("version", customer.version)
