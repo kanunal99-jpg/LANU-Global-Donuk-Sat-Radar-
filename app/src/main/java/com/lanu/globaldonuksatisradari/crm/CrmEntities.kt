@@ -40,6 +40,75 @@ data class CrmCustomerEntity(
 )
 
 @Entity(
+    tableName = "crm_contact",
+    indices = [
+        Index(value = ["customerId", "updatedAtEpochMs"]),
+        Index(value = ["syncState"]),
+    ],
+)
+data class CrmContactEntity(
+    @PrimaryKey val id: String,
+    val customerId: String,
+    val fullName: String,
+    val role: String?,
+    val phone: String?,
+    val email: String?,
+    val isPrimary: Boolean,
+    val createdAtEpochMs: Long,
+    val updatedAtEpochMs: Long,
+    val version: Long,
+    val syncState: String,
+)
+
+@Entity(
+    tableName = "crm_quote",
+    indices = [
+        Index(value = ["customerId", "updatedAtEpochMs"]),
+        Index(value = ["status"]),
+        Index(value = ["syncState"]),
+    ],
+)
+data class CrmQuoteEntity(
+    @PrimaryKey val id: String,
+    val customerId: String,
+    val opportunityId: String?,
+    val quoteNumber: String,
+    val status: String,
+    val currency: String,
+    val totalMinor: Long,
+    val validUntilEpochMs: Long?,
+    val notes: String?,
+    val createdAtEpochMs: Long,
+    val updatedAtEpochMs: Long,
+    val version: Long,
+    val syncState: String,
+)
+
+@Entity(
+    tableName = "crm_order",
+    indices = [
+        Index(value = ["customerId", "updatedAtEpochMs"]),
+        Index(value = ["quoteId"]),
+        Index(value = ["status"]),
+        Index(value = ["syncState"]),
+    ],
+)
+data class CrmOrderEntity(
+    @PrimaryKey val id: String,
+    val customerId: String,
+    val quoteId: String?,
+    val orderNumber: String,
+    val status: String,
+    val currency: String,
+    val totalMinor: Long,
+    val notes: String?,
+    val createdAtEpochMs: Long,
+    val updatedAtEpochMs: Long,
+    val version: Long,
+    val syncState: String,
+)
+
+@Entity(
     tableName = "crm_activity",
     indices = [
         Index(value = ["customerId", "occurredAtEpochMs"]),
