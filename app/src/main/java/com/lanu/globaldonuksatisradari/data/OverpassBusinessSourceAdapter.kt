@@ -224,6 +224,7 @@ object OverpassQueryBuilder {
                 """nwr["man_made"~"$regex",i](area.searchArea);""",
                 """nwr["club"~"$regex",i](area.searchArea);""",
                 """nwr["healthcare"~"$regex",i](area.searchArea);""",
+                """nwr["building"~"$regex",i](area.searchArea);""",
             )
         }
         return categoryClauses.joinToString("\n")
