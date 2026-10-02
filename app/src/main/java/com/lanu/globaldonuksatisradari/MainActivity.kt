@@ -431,8 +431,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                             Text("Hızlı filtreler", style = MaterialTheme.typography.titleMedium)
                                             Text(
                                                 "81 il destekli. İl / ilçe / mahalle seçimi doğrudan kaynak taramasına uygulanır. " +
-                                                    "Kategori “Tümü” ise mağaza, ofis/şirket, üretici, toptancı, AVM, gece hayatı, " +
-                                                    "konaklama, hizmet ve diğer ticari OSM etiketleri birlikte taranır. Telefon/web sonuca uygulanır.",
+                                                    "Kategori “Tümü” ise mağaza, ofis/şirket, üretici, toptancı, AVM, bar/kulüp/disko, " +
+                                                    "konaklama, sağlık, eğitim/kurs, otomotiv, güzellik, finans/emlak, inşaat, tarım, lojistik " +
+                                                    "ve diğer ticari OSM etiketleri birlikte taranır. Telefon/web sonuca uygulanır.",
                                                 style = MaterialTheme.typography.bodySmall,
                                             )
                                         }
