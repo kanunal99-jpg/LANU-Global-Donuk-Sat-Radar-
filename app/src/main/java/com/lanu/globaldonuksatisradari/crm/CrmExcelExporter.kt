@@ -11,7 +11,12 @@ object CrmExcelExporter {
     val headers: List<String> = listOf(
         "Ad Soyad",
         "Nokta Adı",
+        "Tabela Adı",
         "İşletme Türü",
+        "Durum",
+        "Sicil Kaynağı",
+        "Sicil No",
+        "Kayıt Kaynağı",
         "TC/Vergi No",
         "Telefon No",
         "Web Sitesi",
@@ -54,7 +59,13 @@ object CrmExcelExporter {
                 val values = listOf(
                     customer.contactName.orEmpty(),
                     customer.businessName,
-                    BusinessCategoryLabels.displayName(customer.businessType).orEmpty(),
+                    customer.signboardName.orEmpty(),
+                    BusinessCategoryLabels.displayName(customer.businessType)
+                        ?: customer.businessType.orEmpty(),
+                    registryStatusLabel(customer.registryStatus),
+                    customer.registrySource.orEmpty(),
+                    customer.registryNumber.orEmpty(),
+                    if (customer.businessSourceId.startsWith("manual:")) "Manuel" else "Radar",
                     customer.taxOrNationalId.orEmpty(),
                     customer.phone.orEmpty(),
                     customer.website.orEmpty(),
@@ -68,7 +79,7 @@ object CrmExcelExporter {
                 )
                 append(rowXml(rowNumber, values.mapIndexed { cellIndex, value ->
                     val ref = columnName(cellIndex + 1) + rowNumber
-                    if (cellIndex == 10 || cellIndex == 11) {
+                    if (cellIndex == 15 || cellIndex == 16) {
                         numericOrTextCell(ref, value)
                     } else {
                         textCell(ref, value, style = 2)
@@ -88,18 +99,25 @@ object CrmExcelExporter {
   <sheetFormatPr defaultRowHeight="18"/>
   <cols>
     <col min="1" max="1" width="22" customWidth="1"/>
-    <col min="2" max="2" width="30" customWidth="1"/>
-    <col min="3" max="3" width="22" customWidth="1"/>
-    <col min="4" max="5" width="18" customWidth="1"/>
-    <col min="6" max="6" width="32" customWidth="1"/>
-    <col min="7" max="9" width="18" customWidth="1"/>
-    <col min="10" max="10" width="42" customWidth="1"/>
-    <col min="11" max="12" width="16" customWidth="1"/>
-    <col min="13" max="13" width="48" customWidth="1"/>
+    <col min="2" max="3" width="30" customWidth="1"/>
+    <col min="4" max="5" width="20" customWidth="1"/>
+    <col min="6" max="6" width="36" customWidth="1"/>
+    <col min="7" max="10" width="18" customWidth="1"/>
+    <col min="11" max="11" width="32" customWidth="1"/>
+    <col min="12" max="14" width="18" customWidth="1"/>
+    <col min="15" max="15" width="42" customWidth="1"/>
+    <col min="16" max="17" width="16" customWidth="1"/>
+    <col min="18" max="18" width="48" customWidth="1"/>
   </cols>
   <sheetData>$rows</sheetData>
-  <autoFilter ref="A1:M$lastRow"/>
+  <autoFilter ref="A1:R$lastRow"/>
 </worksheet>"""
+    }
+
+    private fun registryStatusLabel(status: CrmRegistryStatus): String = when (status) {
+        CrmRegistryStatus.ACTIVE -> "AKTİF"
+        CrmRegistryStatus.INACTIVE -> "PASİF"
+        CrmRegistryStatus.UNVERIFIED -> "DOĞRULANMADI"
     }
 
     private fun rowXml(rowNumber: Int, cells: List<String>): String =
