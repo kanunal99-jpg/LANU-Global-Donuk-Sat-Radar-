@@ -109,6 +109,9 @@ fun CrmCustomerDetailScreen(
                 customer.phone?.takeIf(String::isNotBlank)?.let {
                     Text("Telefon: $it", style = MaterialTheme.typography.bodySmall)
                 }
+                customer.website?.takeIf(String::isNotBlank)?.let {
+                    Text("Web: $it", style = MaterialTheme.typography.bodySmall)
+                }
                 customer.taxOrNationalId?.takeIf(String::isNotBlank)?.let {
                     Text("Vergi / TC No: $it", style = MaterialTheme.typography.bodySmall)
                 }
