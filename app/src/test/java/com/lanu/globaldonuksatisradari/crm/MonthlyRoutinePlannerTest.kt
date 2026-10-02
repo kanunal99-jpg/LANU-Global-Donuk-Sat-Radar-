@@ -9,6 +9,7 @@ class MonthlyRoutinePlannerTest {
         id: String,
         lat: Double,
         lon: Double,
+        stage: CrmStage = CrmStage.PROSPECT,
     ) = CrmCustomer(
         id = id,
         businessSourceId = "test:$id",
@@ -21,6 +22,7 @@ class MonthlyRoutinePlannerTest {
         longitude = lon,
         contactName = "$id kişi",
         phone = "05550000000",
+        stage = stage,
         createdAtEpochMs = 1L,
         updatedAtEpochMs = 1L,
     )
@@ -82,6 +84,57 @@ class MonthlyRoutinePlannerTest {
 
         plan.days.filter { it.stops.isNotEmpty() }.forEach { day ->
             assertEquals(0.0, day.stops.first().cumulativeDistanceKm, 0.000001)
+        }
+    }
+
+    @Test
+    fun automaticFrequencyUsesCrmStageAndExcludesLostCustomers() {
+        val active = customer("active", 40.99, 29.03, CrmStage.ACTIVE_CUSTOMER)
+        val prospect = customer("prospect", 41.00, 29.04, CrmStage.PROSPECT)
+        val lost = customer("lost", 41.01, 29.05, CrmStage.LOST)
+
+        val plan = MonthlyRoutinePlanner.plan(listOf(active, prospect, lost), startCustomerId = active.id)
+
+        assertEquals(4, plan.frequencyFor(active.id)?.plannedVisits)
+        assertEquals(7, plan.frequencyFor(active.id)?.intervalDays)
+        assertEquals(1, plan.frequencyFor(prospect.id)?.plannedVisits)
+        assertEquals(28, plan.frequencyFor(prospect.id)?.intervalDays)
+        assertEquals(null, plan.frequencyFor(lost.id))
+        assertEquals(5, plan.totalPointCount)
+        assertEquals(2, plan.uniquePointCount)
+    }
+
+    @Test
+    fun manualIntervalCreatesSeparateRepeatFrequencyForAllRoutableCustomers() {
+        val first = customer("first", 40.99, 29.03, CrmStage.ACTIVE_CUSTOMER)
+        val second = customer("second", 41.00, 29.04, CrmStage.LOST)
+
+        val plan = MonthlyRoutinePlanner.plan(
+            customers = listOf(first, second),
+            startCustomerId = first.id,
+            manualIntervalDays = 10,
+        )
+
+        assertEquals(3, plan.frequencyFor(first.id)?.plannedVisits)
+        assertEquals(3, plan.frequencyFor(second.id)?.plannedVisits)
+        assertEquals(VisitFrequencySource.MANUAL, plan.frequencyFor(first.id)?.source)
+        assertEquals(6, plan.totalPointCount)
+        assertEquals(2, plan.uniquePointCount)
+    }
+
+    @Test
+    fun cumulativeEstimatedTimeRestartsEveryDay() {
+        val plan = MonthlyRoutinePlanner.plan(
+            List(40) { index ->
+                customer("time$index", 40.90 + index * 0.001, 29.00 + index * 0.001)
+            },
+        )
+
+        plan.days.filter { it.stops.isNotEmpty() }.forEach { day ->
+            assertEquals(0, day.stops.first().cumulativeEstimatedMinutes)
+            if (day.stops.size > 1) {
+                assertTrue(day.stops.last().cumulativeEstimatedMinutes > 0)
+            }
         }
     }
 
