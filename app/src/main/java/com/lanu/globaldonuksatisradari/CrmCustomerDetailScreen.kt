@@ -60,6 +60,7 @@ fun CrmCustomerDetailScreen(
     onCreateOpportunity: (String, String?, Long?, String?) -> Unit,
     onTransitionOpportunity: (String, CrmOpportunityStatus) -> Unit,
     onSaveNotes: (String?) -> Unit,
+    onWorkspaceMessage: (String) -> Unit = {},
     message: String? = null,
 ) {
     var stageMenu by remember(customer.id, customer.stage) { mutableStateOf(false) }
@@ -154,6 +155,11 @@ fun CrmCustomerDetailScreen(
                 }
             }
         }
+
+        CrmCustomerContactsSection(
+            customer = customer,
+            onMessage = onWorkspaceMessage,
+        )
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
