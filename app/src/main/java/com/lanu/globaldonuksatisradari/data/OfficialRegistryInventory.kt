@@ -11,9 +11,17 @@ object OfficialRegistryInventory {
         val verifiedRecords = OfficialRegistryTrust.verified(records)
             .filterNot { it.status?.let(OfficialRegistryStatus::isInactive) == true }
 
+        val enrichmentRecords = verifiedRecords.filter { record ->
+            recordCompatibleWithScope(
+                record = record,
+                city = city,
+                district = district,
+                neighborhood = neighborhood,
+            )
+        }
         val enriched = OfficialRegistryEnricher.enrich(
             businesses = discoveredBusinesses,
-            records = verifiedRecords,
+            records = enrichmentRecords,
         )
         if (verifiedRecords.isEmpty()) return enriched
 
@@ -87,6 +95,36 @@ object OfficialRegistryInventory {
                 fieldsUsed = fieldsUsed,
             ),
         )
+    }
+
+    private fun recordCompatibleWithScope(
+        record: OfficialRegistryRecord,
+        city: String,
+        district: String?,
+        neighborhood: String?,
+    ): Boolean {
+        val selectedCity = OfficialRegistryNormalizer.text(city)
+        val recordCity = OfficialRegistryNormalizer.text(record.city.orEmpty())
+        if (recordCity.isNotEmpty() && recordCity != selectedCity) return false
+
+        val selectedDistrict = district
+            ?.takeUnless { it.isBlank() || it.equals("Tümü", ignoreCase = true) }
+            ?.let(OfficialRegistryNormalizer::text)
+        if (selectedDistrict != null) {
+            val recordDistrict = OfficialRegistryNormalizer.text(record.district.orEmpty())
+            if (recordDistrict.isNotEmpty() && recordDistrict != selectedDistrict) return false
+        }
+
+        val selectedNeighborhood = neighborhood
+            ?.takeUnless { it.isBlank() || it.equals("Tümü", ignoreCase = true) }
+            ?.let(::normalizeNeighborhood)
+        if (selectedNeighborhood != null) {
+            val recordNeighborhood = normalizeNeighborhood(record.neighborhood.orEmpty())
+            if (recordNeighborhood.isNotEmpty() && recordNeighborhood != selectedNeighborhood) {
+                return false
+            }
+        }
+        return true
     }
 
     private fun recordMatchesScope(
