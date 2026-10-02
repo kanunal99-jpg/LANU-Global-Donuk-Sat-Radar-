@@ -142,4 +142,31 @@ class OfficialRegistryInventoryTest {
 
         assertEquals(listOf("Doğru İlçe"), merged.map { it.name })
     }
+    @Test
+    fun explicitOtherNeighborhoodRecordCannotEnrichSelectedNeighborhoodBusiness() {
+        val original = business(
+            name = "Aynı İsim Market",
+            phone = null,
+            neighborhood = "Mimar Sinan",
+        )
+        val merged = OfficialRegistryInventory.mergeIntoInventory(
+            discoveredBusinesses = listOf(original),
+            records = listOf(
+                record(
+                    name = "Aynı İsim Market",
+                    registrationNumber = "88",
+                    neighborhood = "Hasanpaşa Mahallesi",
+                    phone = "0555 999 88 77",
+                ),
+            ),
+            city = "İstanbul",
+            district = "Sultanbeyli",
+            neighborhood = "Mimar Sinan",
+        )
+
+        assertEquals(1, merged.size)
+        assertNull(merged.single().phone)
+        assertNull(merged.single().officialRegistryEvidence)
+    }
+
 }
