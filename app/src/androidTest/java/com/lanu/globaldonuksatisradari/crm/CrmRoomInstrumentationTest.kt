@@ -44,6 +44,7 @@ class CrmRoomInstrumentationTest {
                 longitude = 29.03,
                 category = "cafe",
                 phone = "05550000000",
+                website = "https://smoke.example",
             )
             assertTrue(VerifiedBusinessValidator.validate(business).isSuccess)
 
@@ -95,6 +96,8 @@ class CrmRoomInstrumentationTest {
             assertEquals(customer.id, pending.single().entityId)
             assertEquals(LocalCrmRepository.OP_CREATE, pending.single().operation)
             assertEquals("05550000000", JSONObject(pending.single().payloadJson).getString("phone"))
+            assertEquals("https://smoke.example", JSONObject(pending.single().payloadJson).getString("website"))
+            assertEquals("https://smoke.example", observed.single().website)
             assertEquals(1, transitions.size)
             assertEquals(CrmStage.PROSPECT.name, transitions.single().toStage)
 
