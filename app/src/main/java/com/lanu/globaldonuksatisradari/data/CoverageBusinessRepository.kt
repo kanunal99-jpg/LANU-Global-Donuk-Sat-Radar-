@@ -161,9 +161,12 @@ class CoverageBusinessRepository(
             }
         }
 
-        return OfficialRegistryEnricher.enrich(
-            businesses = discovered,
+        return OfficialRegistryInventory.mergeIntoInventory(
+            discoveredBusinesses = discovered,
             records = officialRegistryStore.recordsFor(city, normalizedDistrict),
+            city = city,
+            district = normalizedDistrict,
+            neighborhood = normalizedNeighborhood,
         )
     }
 

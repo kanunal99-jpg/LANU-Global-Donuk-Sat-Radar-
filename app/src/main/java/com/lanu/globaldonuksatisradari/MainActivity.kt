@@ -219,17 +219,29 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val regionNextActions by remember(regionKey) { localCrmRepository.observeOpenNextActionsForRegion(selectedCity.name, regionDistrict) }.collectAsState(initial = emptyList())
     val regionOpportunities by remember(regionKey) { localCrmRepository.observeOpportunitiesForRegion(selectedCity.name, regionDistrict) }.collectAsState(initial = emptyList())
     val presenceOptions = listOf("Tümü", "Var", "Yok")
-    val categoryOptions = remember {
-        listOf("Tümü") + BusinessCategoryLabels.searchLabels
+    val categoryOptions = remember(results) {
+        listOf("Tümü") +
+            (
+                BusinessCategoryLabels.searchLabels +
+                    results.mapNotNull { BusinessCategoryLabels.displayName(it.category) }
+                )
+                .filter { it.isNotBlank() }
+                .distinctBy { BusinessDeduplication.normalizeForComparison(it) }
+                .sortedWith(String.CASE_INSENSITIVE_ORDER)
     }
     val visibleResults = remember(results, selectedDistrict, selectedNeighborhood, categoryFilter, phoneFilter, websiteFilter) {
         results.filter { business ->
+            val categoryName = BusinessCategoryLabels.displayName(business.category).orEmpty()
+            val categoryMatches = categoryFilter == "Tümü" ||
+                categoryName.equals(categoryFilter, ignoreCase = true) ||
+                business.category.orEmpty().equals(categoryFilter, ignoreCase = true)
             (selectedDistrict == "Tümü" || business.district.equals(selectedDistrict, true)) &&
                 (
                     selectedNeighborhood == "Tümü" ||
                         normalizeNeighborhoodLabel(business.neighborhood) ==
                             normalizeNeighborhoodLabel(selectedNeighborhood)
                 ) &&
+                categoryMatches &&
                 matchesInventoryPresence(business.phone, phoneFilter) &&
                 matchesInventoryPresence(business.website, websiteFilter)
         }
@@ -418,8 +430,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                             Text("Hızlı filtreler", style = MaterialTheme.typography.titleMedium)
                                             Text(
                                                 "81 il destekli. İl / ilçe / mahalle seçimi doğrudan kaynak taramasına uygulanır. " +
-                                                    "Kategori “Tümü” ise mağaza, ofis/şirket, üretici, toptancı, AVM, gece hayatı, " +
-                                                    "konaklama, hizmet ve diğer ticari OSM etiketleri birlikte taranır. Telefon/web sonuca uygulanır.",
+                                                    "Kategori “Tümü” ise ticari OSM kayıtları ile içe aktarılmış doğrulanmış İTO/ODA/TOBB/MERSİS/ESBİS " +
+                                                    "kayıtları tek havuzda birleştirilir. Park, kamu kurumu, ATM gibi ticari olmayan POI'ler geniş taramadan çıkarılır. " +
+                                                    "Sonuçlarda bulunan tüm kategoriler filtre listesine eklenir.",
                                                 style = MaterialTheme.typography.bodySmall,
                                             )
                                         }

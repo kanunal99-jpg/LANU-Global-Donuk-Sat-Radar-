@@ -104,27 +104,49 @@ object OverpassQueryBuilder {
     }
 
     private fun buildBroadQuery(): String = listOf(
-        // Every named retail / wholesale / mall / repair / service shop.
-        """nwr["name"]["shop"](area.searchArea);""",
-        // Corporate offices, agencies and professional services.
-        """nwr["name"]["office"](area.searchArea);""",
-        // Workshops and small-scale producers.
-        """nwr["name"]["craft"](area.searchArea);""",
-        // Industrial businesses and factories.
-        """nwr["name"]["industrial"](area.searchArea);""",
-        """nwr["name"]["man_made"="works"](area.searchArea);""",
-        // All named commercial/service amenities, excluding clearly civic or
-        // infrastructure-only POIs so "all businesses" does not become "all map objects".
-        """nwr["name"]["amenity"]["amenity"!~"^(place_of_worship|school|kindergarten|college|university|library|community_centre|social_centre|townhall|courthouse|police|fire_station|post_box|bench|shelter|toilets|drinking_water|waste_basket|recycling|parking|parking_entrance|bicycle_parking|motorcycle_parking|grave_yard|crematorium|public_bookcase)$"](area.searchArea);""",
-        // Accommodation, attractions and other named tourism operators.
-        """nwr["name"]["tourism"](area.searchArea);""",
-        // Entertainment, sports and activity businesses.
-        """nwr["name"]["leisure"](area.searchArea);""",
-        """nwr["name"]["club"](area.searchArea);""",
-        // Named healthcare operators.
-        """nwr["name"]["healthcare"](area.searchArea);""",
-        // Some commercial sites are mapped only as a building.
-        """nwr["name"]["building"~"retail|commercial|industrial|warehouse|office|supermarket|kiosk|hotel"](area.searchArea);""",
+        // Retail / wholesale / repair / service shops. Brand/operator-only records
+        // are included too because some valid businesses are mapped without a name tag.
+        """nwr["shop"]["name"](area.searchArea);""",
+        """nwr["shop"]["brand"](area.searchArea);""",
+        """nwr["shop"]["operator"](area.searchArea);""",
+
+        // Commercial/professional offices; explicitly remove civic/non-commercial offices.
+        """nwr["office"]["name"]["office"!~"^(government|ngo|association|foundation|diplomatic|political_party|religion)$"](area.searchArea);""",
+        """nwr["office"]["brand"]["office"!~"^(government|ngo|association|foundation|diplomatic|political_party|religion)$"](area.searchArea);""",
+        """nwr["office"]["operator"]["office"!~"^(government|ngo|association|foundation|diplomatic|political_party|religion)$"](area.searchArea);""",
+
+        // Workshops, producers, factories and industrial operators.
+        """nwr["craft"]["name"](area.searchArea);""",
+        """nwr["craft"]["operator"](area.searchArea);""",
+        """nwr["industrial"]["name"](area.searchArea);""",
+        """nwr["industrial"]["operator"](area.searchArea);""",
+        """nwr["man_made"="works"]["name"](area.searchArea);""",
+        """nwr["man_made"="works"]["operator"](area.searchArea);""",
+
+        // Commercial/service amenities. ATM/post office and civic/infrastructure POIs
+        // are excluded because the user asked for trading businesses, not all map objects.
+        """nwr["amenity"]["name"]["amenity"!~"^(place_of_worship|school|kindergarten|college|university|library|community_centre|social_centre|townhall|courthouse|police|fire_station|post_box|post_office|atm|bench|shelter|toilets|drinking_water|waste_basket|recycling|parking|parking_entrance|bicycle_parking|motorcycle_parking|grave_yard|crematorium|public_bookcase)$"](area.searchArea);""",
+        """nwr["amenity"]["brand"]["amenity"!~"^(place_of_worship|school|kindergarten|college|university|library|community_centre|social_centre|townhall|courthouse|police|fire_station|post_box|post_office|atm|bench|shelter|toilets|drinking_water|waste_basket|recycling|parking|parking_entrance|bicycle_parking|motorcycle_parking|grave_yard|crematorium|public_bookcase)$"](area.searchArea);""",
+        """nwr["amenity"]["operator"]["amenity"!~"^(place_of_worship|school|kindergarten|college|university|library|community_centre|social_centre|townhall|courthouse|police|fire_station|post_box|post_office|atm|bench|shelter|toilets|drinking_water|waste_basket|recycling|parking|parking_entrance|bicycle_parking|motorcycle_parking|grave_yard|crematorium|public_bookcase)$"](area.searchArea);""",
+
+        // Commercial accommodation only; generic tourism also contains viewpoints,
+        // museums and attractions that are not necessarily businesses.
+        """nwr["tourism"~"^(hotel|hostel|motel|guest_house|apartment|chalet|resort|camp_site|caravan_site|alpine_hut)$"]["name"](area.searchArea);""",
+        """nwr["tourism"~"^(hotel|hostel|motel|guest_house|apartment|chalet|resort|camp_site|caravan_site|alpine_hut)$"]["operator"](area.searchArea);""",
+
+        // Commercial entertainment/activity operators; park/playground/pitch are
+        // deliberately excluded.
+        """nwr["leisure"~"^(adult_gaming_centre|amusement_arcade|bowling_alley|dance|escape_game|fitness_centre|sauna|sports_centre|water_park|horse_riding|golf_course)$"]["name"](area.searchArea);""",
+        """nwr["leisure"~"^(adult_gaming_centre|amusement_arcade|bowling_alley|dance|escape_game|fitness_centre|sauna|sports_centre|water_park|horse_riding|golf_course)$"]["operator"](area.searchArea);""",
+
+        // Named healthcare operators (public/private cannot always be distinguished
+        // in OSM, so they remain visible instead of silently dropping private clinics).
+        """nwr["healthcare"]["name"](area.searchArea);""",
+        """nwr["healthcare"]["operator"](area.searchArea);""",
+
+        // Some businesses are mapped only as a commercial building/site.
+        """nwr["building"~"retail|commercial|industrial|warehouse|office|supermarket|kiosk|hotel"]["name"](area.searchArea);""",
+        """nwr["building"~"retail|commercial|industrial|warehouse|office|supermarket|kiosk|hotel"]["operator"](area.searchArea);""",
     ).joinToString("\n")
 
     private fun buildTermQuery(query: String): String {
@@ -179,16 +201,23 @@ object OverpassQueryBuilder {
                 listOf("""nwr["name"]["shop"](area.searchArea);""")
             normalized in setOf("hizmet", "service", "amenity") ->
                 listOf(
-                    """nwr["name"]["amenity"]["amenity"!~"^(place_of_worship|school|kindergarten|college|university|library|community_centre|social_centre|townhall|courthouse|police|fire_station|post_box|bench|shelter|toilets|drinking_water|waste_basket|recycling|parking|parking_entrance|bicycle_parking|motorcycle_parking|grave_yard|crematorium|public_bookcase)$"](area.searchArea);""",
+                    """nwr["amenity"]["name"]["amenity"!~"^(place_of_worship|school|kindergarten|college|university|library|community_centre|social_centre|townhall|courthouse|police|fire_station|post_box|post_office|atm|bench|shelter|toilets|drinking_water|waste_basket|recycling|parking|parking_entrance|bicycle_parking|motorcycle_parking|grave_yard|crematorium|public_bookcase)$"](area.searchArea);""",
                 )
             normalized in setOf("turizm", "tourism") ->
-                listOf("""nwr["name"]["tourism"](area.searchArea);""")
+                listOf(
+                    """nwr["tourism"~"^(hotel|hostel|motel|guest_house|apartment|chalet|resort|camp_site|caravan_site|alpine_hut)$"]["name"](area.searchArea);""",
+                )
             normalized in setOf("eglence", "eğlence", "leisure") ->
-                listOf("""nwr["name"]["leisure"](area.searchArea);""")
+                listOf(
+                    """nwr["leisure"~"^(adult_gaming_centre|amusement_arcade|bowling_alley|dance|escape_game|fitness_centre|sauna|sports_centre|water_park|horse_riding|golf_course)$"]["name"](area.searchArea);""",
+                )
             normalized in setOf("saglik", "sağlık", "healthcare") ->
-                listOf("""nwr["name"]["healthcare"](area.searchArea);""")
+                listOf("""nwr["healthcare"]["name"](area.searchArea);""")
             normalized in setOf("kulup", "kulüp", "club") ->
-                listOf("""nwr["name"]["club"](area.searchArea);""")
+                listOf(
+                    """nwr["amenity"="nightclub"]["name"](area.searchArea);""",
+                    """nwr["leisure"="dance"]["name"](area.searchArea);""",
+                )
             normalized in setOf("sanayi", "industrial") ->
                 listOf("""nwr["name"]["industrial"](area.searchArea);""")
             normalized in setOf("depo", "lojistik", "warehouse") ->
@@ -368,7 +397,14 @@ class OverpassBusinessSourceAdapter(
         for (index in 0 until elements.length()) {
             val item = elements.optJSONObject(index) ?: continue
             val tags = item.optJSONObject("tags") ?: continue
-            val name = tags.optString("name").trim()
+            val name = firstTag(
+                tags,
+                "name",
+                "brand",
+                "operator",
+                "official_name",
+                "short_name",
+            )?.trim().orEmpty()
             if (name.isBlank()) continue
 
             val center = item.optJSONObject("center")
