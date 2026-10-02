@@ -721,14 +721,21 @@ private fun BusinessResultCard(
                             style = MaterialTheme.typography.labelLarge,
                         )
                     }
-                    business.officialRegistryEvidence?.let { evidence ->
-                        Text(
-                            if (evidence.explicitlyActive) "RESMÎ • FAAL" else "RESMÎ",
-                            modifier = Modifier.testTag("official_registry_badge"),
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                    }
+                    val registryEvidence = business.officialRegistryEvidence
+                    Text(
+                        when {
+                            registryEvidence?.explicitlyActive == true -> "DURUM • AKTİF"
+                            registryEvidence?.explicitlyInactive == true -> "DURUM • PASİF"
+                            else -> "DURUM • DOĞRULANMADI"
+                        },
+                        modifier = Modifier.testTag("official_registry_badge"),
+                        color = if (registryEvidence?.explicitlyInactive == true) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                    )
                     Text(
                         "${BusinessQualityEvaluator.evaluate(business).score}/100",
                         color = MaterialTheme.colorScheme.primary,
