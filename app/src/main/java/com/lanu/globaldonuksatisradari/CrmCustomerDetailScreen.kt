@@ -99,6 +99,9 @@ fun CrmCustomerDetailScreen(
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(customer.businessName, style = MaterialTheme.typography.headlineSmall)
+                customer.signboardName?.takeIf(String::isNotBlank)?.let {
+                    Text("Tabela adı: $it", style = MaterialTheme.typography.bodySmall)
+                }
                 Text("${customer.city} • ${customer.district}${customer.neighborhood?.let { " • ${it}" } ?: ""}")
                 Text("CRM aşaması: ${stageLabel(customer.stage)}")
                 customer.businessType?.takeIf(String::isNotBlank)?.let {
@@ -115,6 +118,20 @@ fun CrmCustomerDetailScreen(
                 }
                 customer.taxOrNationalId?.takeIf(String::isNotBlank)?.let {
                     Text("Vergi / TC No: $it", style = MaterialTheme.typography.bodySmall)
+                }
+                Text(
+                    "Sicil durumu: " + when (customer.registryStatus) {
+                        com.lanu.globaldonuksatisradari.crm.CrmRegistryStatus.ACTIVE -> "AKTİF"
+                        com.lanu.globaldonuksatisradari.crm.CrmRegistryStatus.INACTIVE -> "PASİF"
+                        com.lanu.globaldonuksatisradari.crm.CrmRegistryStatus.UNVERIFIED -> "DOĞRULANMADI"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                customer.registrySource?.takeIf(String::isNotBlank)?.let {
+                    Text("Sicil kaynağı: $it", style = MaterialTheme.typography.bodySmall)
+                }
+                customer.registryNumber?.takeIf(String::isNotBlank)?.let {
+                    Text("Sicil no: $it", style = MaterialTheme.typography.bodySmall)
                 }
                 customer.address?.takeIf(String::isNotBlank)?.let {
                     Text("Açık adres: $it", style = MaterialTheme.typography.bodySmall)
