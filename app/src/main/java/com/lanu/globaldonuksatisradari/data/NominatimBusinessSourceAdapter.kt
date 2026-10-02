@@ -2,6 +2,9 @@ package com.lanu.globaldonuksatisradari.data
 
 import android.os.SystemClock
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.io.IOException
@@ -83,7 +86,7 @@ class NominatimBusinessSourceAdapter(
             baseUrlProvider(),
         ).joinToString("|")
         SearchCache.get(cacheKey)?.let { return@withContext it }
-        RateLimiter.await()
+        NominatimRateLimiter.await()
         val connection = (
             URL(
                 NominatimQueryBuilder.build(
@@ -231,13 +234,17 @@ private object SearchCache {
     fun put(key: String, records: List<VerifiedBusiness>) { entries[key] = Entry(System.currentTimeMillis(), records) }
 }
 
-private object RateLimiter {
+internal object NominatimRateLimiter {
     private const val MIN_INTERVAL_MS = 1_100L
+    private val mutex = Mutex()
     private var lastRequestAt = 0L
-    @Synchronized fun await() {
-        val now = SystemClock.elapsedRealtime()
-        val wait = MIN_INTERVAL_MS - (now - lastRequestAt)
-        if (wait > 0) Thread.sleep(wait)
-        lastRequestAt = SystemClock.elapsedRealtime()
+
+    suspend fun await() {
+        mutex.withLock {
+            val now = SystemClock.elapsedRealtime()
+            val wait = MIN_INTERVAL_MS - (now - lastRequestAt)
+            if (wait > 0L) delay(wait)
+            lastRequestAt = SystemClock.elapsedRealtime()
+        }
     }
 }
