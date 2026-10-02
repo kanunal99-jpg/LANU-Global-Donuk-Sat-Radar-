@@ -91,6 +91,11 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
 
     fun save() {
         editorError = runCatching {
+            val normalizedSourceUrl = sourceUrl.trim().takeIf { it.isNotEmpty() }
+            val existingProduct = editingId?.let { id -> products.firstOrNull { it.id == id } }
+            val preservedVerification = existingProduct
+                ?.sourceVerifiedAtEpochMs
+                ?.takeIf { existingProduct.sourceUrl == normalizedSourceUrl }
             repository.upsert(
                 id = editingId,
                 name = name,
@@ -102,7 +107,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                 description = description,
                 imageUrl = imageUrl,
                 sourceUrl = sourceUrl,
-                sourceVerifiedAtEpochMs = null,
+                sourceVerifiedAtEpochMs = preservedVerification,
             )
             editorOpen = false
         }.exceptionOrNull()?.message
