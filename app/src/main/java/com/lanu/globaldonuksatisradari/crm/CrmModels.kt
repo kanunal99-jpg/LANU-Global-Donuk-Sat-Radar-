@@ -163,6 +163,8 @@ data class RouteStop(
     val order: Int,
     val distanceFromPreviousKm: Double,
     val cumulativeDistanceKm: Double,
+    val estimatedMinutesFromPrevious: Int = 0,
+    val cumulativeEstimatedMinutes: Int = 0,
 )
 
 object CrmRoutePlanner {
@@ -198,6 +200,7 @@ object CrmRoutePlanner {
         }
 
         var total = 0.0
+        var totalMinutes = 0
         return ordered.mapIndexed { index, customer ->
             val previous = ordered.getOrNull(index - 1)
             val segment = if (previous == null) 0.0 else {
@@ -209,11 +212,15 @@ object CrmRoutePlanner {
                 )
             }
             total += segment
+            val segmentMinutes = RouteTimeEstimator.estimatedTravelMinutes(segment)
+            totalMinutes += segmentMinutes
             RouteStop(
                 customer = customer,
                 order = index + 1,
                 distanceFromPreviousKm = segment,
                 cumulativeDistanceKm = total,
+                estimatedMinutesFromPrevious = segmentMinutes,
+                cumulativeEstimatedMinutes = totalMinutes,
             )
         }
     }
@@ -227,5 +234,23 @@ object CrmRoutePlanner {
             kotlin.math.cos(Math.toRadians(lat2)) *
             kotlin.math.sin(dLon / 2) * kotlin.math.sin(dLon / 2)
         return 2 * earthRadiusKm * kotlin.math.asin(kotlin.math.sqrt(a))
+    }
+}
+
+
+object RouteTimeEstimator {
+    private const val ROAD_DISTANCE_FACTOR = 1.25
+    private const val ASSUMED_AVERAGE_SPEED_KMH = 30.0
+
+    /**
+     * Offline-safe travel-time fallback. It converts straight-line distance to a conservative
+     * urban road-distance estimate and never claims live traffic accuracy.
+     */
+    fun estimatedTravelMinutes(straightLineDistanceKm: Double): Int {
+        if (straightLineDistanceKm <= 0.0) return 0
+        val estimatedRoadKm = straightLineDistanceKm * ROAD_DISTANCE_FACTOR
+        return kotlin.math.ceil(
+            estimatedRoadKm / ASSUMED_AVERAGE_SPEED_KMH * 60.0,
+        ).toInt().coerceAtLeast(1)
     }
 }
