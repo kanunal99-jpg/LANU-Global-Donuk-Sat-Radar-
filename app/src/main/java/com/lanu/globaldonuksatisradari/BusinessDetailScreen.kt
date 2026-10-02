@@ -50,11 +50,21 @@ fun BusinessDetailCard(
             Text("Kaynak: ${business.source.sourceUrl}", style = MaterialTheme.typography.bodySmall)
             Text("Uygulama kaydının doğrulama zamanı: ${business.verifiedAtEpochMs}", style = MaterialTheme.typography.bodySmall)
 
-            business.officialRegistryEvidence?.let { evidence ->
+            val registryEvidence = business.officialRegistryEvidence
+            Text(
+                "İşletme durumu: " + when {
+                    registryEvidence?.explicitlyActive == true -> "AKTİF"
+                    registryEvidence?.explicitlyInactive == true -> "PASİF"
+                    else -> "DOĞRULANMADI"
+                },
+                style = MaterialTheme.typography.titleMedium,
+            )
+
+            registryEvidence?.let { evidence ->
                 Text("Resmî sicil eşleşmesi", style = MaterialTheme.typography.titleMedium)
                 Text("${evidence.source.name} • ${evidence.source.publisher}")
                 evidence.registrationNumber?.let { Text("Sicil / kayıt no: $it") }
-                Text("Sicil durumu: ${evidence.status ?: "Kaynakta belirtilmemiş"}")
+                Text("Kaynak sicil durumu: ${evidence.status ?: "Kaynakta belirtilmemiş"}")
                 if (evidence.fieldsUsed.isNotEmpty()) {
                     Text(
                         "Resmî kayıttan kullanılan alanlar: ${evidence.fieldsUsed.sorted().joinToString(", ")}",
