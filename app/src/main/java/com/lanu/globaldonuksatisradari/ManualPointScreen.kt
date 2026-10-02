@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 fun ManualPointScreen(
     repository: LocalCrmRepository,
     defaultCity: String,
+    ownerUserId: String? = null,
     onSaved: () -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
@@ -127,6 +128,7 @@ fun ManualPointScreen(
                             businessType = businessType,
                             taxOrNationalId = taxOrNationalId,
                             phone = phone,
+                            ownerUserId = ownerUserId,
                         )
                     }.onSuccess {
                         message = "Manuel nokta kaydedildi ve rutin havuzuna eklendi."
