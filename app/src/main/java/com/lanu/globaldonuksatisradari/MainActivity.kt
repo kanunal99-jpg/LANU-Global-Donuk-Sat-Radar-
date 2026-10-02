@@ -200,20 +200,23 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         localCrmRepository.observePendingSyncCount(activeOwnerUserId)
     }
     val pendingSyncCount by pendingSyncFlow.collectAsState(initial = 0)
-    val crmRegistryCities = remember(allCrmCustomers) {
-        allCrmCustomers.map { it.city.trim() }
+    val crmRegistryCities = remember(crmCustomers) {
+        crmCustomers.map { it.city.trim() }
             .filter(String::isNotBlank)
             .distinct()
             .sorted()
     }
-    LaunchedEffect(crmRegistryCities) {
+    LaunchedEffect(crmRegistryCities, activeOwnerUserId) {
         if (crmRegistryCities.isEmpty()) return@LaunchedEffect
         runCatching {
             val records = withContext(Dispatchers.IO) {
                 crmRegistryCities.flatMap { city -> officialRegistryStore.recordsFor(city, null) }
             }
             if (records.isEmpty()) return@runCatching null
-            localCrmRepository.enrichCustomersFromOfficialRegistry(records)
+            localCrmRepository.enrichCustomersFromOfficialRegistryForOwner(
+                records = records,
+                ownerUserId = activeOwnerUserId,
+            )
         }.onSuccess { enriched ->
             if (enriched != null && enriched.updated > 0) {
                 crmMessage = "Mevcut resmî sicil kayıtları CRM'e uygulandı: " +
@@ -235,9 +238,31 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
 
     val regionKey = "${selectedCity.name}|$selectedDistrict"
     val regionDistrict = selectedDistrict.takeUnless { it == "Tümü" }
-    val regionActivities by remember(regionKey) { localCrmRepository.observeActivitiesForRegion(selectedCity.name, regionDistrict) }.collectAsState(initial = emptyList())
-    val regionNextActions by remember(regionKey) { localCrmRepository.observeOpenNextActionsForRegion(selectedCity.name, regionDistrict) }.collectAsState(initial = emptyList())
-    val regionOpportunities by remember(regionKey) { localCrmRepository.observeOpportunitiesForRegion(selectedCity.name, regionDistrict) }.collectAsState(initial = emptyList())
+    val allRegionActivities by remember(regionKey) {
+        localCrmRepository.observeActivitiesForRegion(selectedCity.name, regionDistrict)
+    }.collectAsState(initial = emptyList())
+    val allRegionNextActions by remember(regionKey) {
+        localCrmRepository.observeOpenNextActionsForRegion(selectedCity.name, regionDistrict)
+    }.collectAsState(initial = emptyList())
+    val allRegionOpportunities by remember(regionKey) {
+        localCrmRepository.observeOpportunitiesForRegion(selectedCity.name, regionDistrict)
+    }.collectAsState(initial = emptyList())
+    val regionCustomerIds = remember(crmCustomers, selectedCity.name, regionDistrict) {
+        crmCustomers
+            .filter { customer ->
+                scopeCrmCustomers(listOf(customer), selectedCity.name, selectedDistrict).isNotEmpty()
+            }
+            .mapTo(mutableSetOf()) { it.id }
+    }
+    val regionActivities = remember(allRegionActivities, regionCustomerIds) {
+        allRegionActivities.filter { it.customerId in regionCustomerIds }
+    }
+    val regionNextActions = remember(allRegionNextActions, regionCustomerIds) {
+        allRegionNextActions.filter { it.customerId in regionCustomerIds }
+    }
+    val regionOpportunities = remember(allRegionOpportunities, regionCustomerIds) {
+        allRegionOpportunities.filter { it.customerId in regionCustomerIds }
+    }
     val presenceOptions = listOf("Tümü", "Var", "Yok")
     val categoryOptions = remember {
         listOf("Tümü") + BusinessCategoryLabels.searchLabels
