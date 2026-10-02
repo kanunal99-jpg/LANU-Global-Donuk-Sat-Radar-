@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -323,5 +324,10 @@ class MainActivitySmokeTest {
 
         waitForText("Smoke Donuk Ürün").assertExists()
         waitForText("125,50 TRY").assertExists()
+
+        val saved = ProductCatalogRepository(composeRule.activity)
+            .products.value
+            .first { it.name == "Smoke Donuk Ürün" }
+        assertNull("Manual product save must not claim verified source provenance", saved.sourceVerifiedAtEpochMs)
     }
 }
