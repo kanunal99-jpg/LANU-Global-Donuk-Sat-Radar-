@@ -80,7 +80,14 @@ fun OfficialRegistryImportCard(
                 }
             }.onSuccess { summary ->
                 counts = OfficialRegistrySource.entries.associateWith(store::count)
-                val records = withContext(Dispatchers.IO) { store.records(summary.source) }
+                val records = withContext(Dispatchers.IO) {
+                    if (!defaultCity.isNullOrBlank()) {
+                        store.recordsFor(defaultCity, null)
+                            .filter { it.source == summary.source }
+                    } else {
+                        store.records(summary.source)
+                    }
+                }
                 registryRecords = records
                 showRecords = true
                 recordQuery = ""
@@ -186,7 +193,14 @@ fun OfficialRegistryImportCard(
                     } else {
                         loadingRecords = true
                         scope.launch {
-                            registryRecords = withContext(Dispatchers.IO) { store.records(selectedSource) }
+                            registryRecords = withContext(Dispatchers.IO) {
+                                if (!defaultCity.isNullOrBlank()) {
+                                    store.recordsFor(defaultCity, null)
+                                        .filter { it.source == selectedSource }
+                                } else {
+                                    store.records(selectedSource)
+                                }
+                            }
                             recordQuery = ""
                             phonePresenceFilter = "Tümü"
                             showRecords = true
@@ -270,7 +284,8 @@ fun OfficialRegistryImportCard(
                     }
                 }
                 Text(
-                    "${filteredRecords.size} eşleşme • ilk ${minOf(filteredRecords.size, 30)} kayıt gösteriliyor",
+                    (defaultCity?.takeIf(String::isNotBlank)?.let { "$it • " } ?: "") +
+                        "${filteredRecords.size} eşleşme • ilk ${minOf(filteredRecords.size, 30)} kayıt gösteriliyor",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 OfficialRegistryExportActions(
