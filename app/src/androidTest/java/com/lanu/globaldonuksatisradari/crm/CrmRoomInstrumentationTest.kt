@@ -8,6 +8,7 @@ import com.lanu.globaldonuksatisradari.data.VerifiedBusinessValidator
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.json.JSONObject
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -42,6 +43,7 @@ class CrmRoomInstrumentationTest {
                 latitude = 40.99,
                 longitude = 29.03,
                 category = "cafe",
+                phone = "05550000000",
             )
             assertTrue(VerifiedBusinessValidator.validate(business).isSuccess)
 
@@ -92,6 +94,7 @@ class CrmRoomInstrumentationTest {
             assertEquals(SyncState.PENDING_UPLOAD, observed.single().syncState)
             assertEquals(customer.id, pending.single().entityId)
             assertEquals(LocalCrmRepository.OP_CREATE, pending.single().operation)
+            assertEquals("05550000000", JSONObject(pending.single().payloadJson).getString("phone"))
             assertEquals(1, transitions.size)
             assertEquals(CrmStage.PROSPECT.name, transitions.single().toStage)
 
