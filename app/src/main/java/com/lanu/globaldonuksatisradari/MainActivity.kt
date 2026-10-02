@@ -442,6 +442,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                             if (categoryFilter != it) {
                                                 invalidateSearch()
                                                 categoryFilter = it
+                                                query = ""
                                                 results = emptyList()
                                                 selectedBusiness = null
                                                 scanDelta = null
