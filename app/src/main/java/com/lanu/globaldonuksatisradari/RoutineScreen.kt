@@ -30,7 +30,14 @@ fun RoutineScreen(
         scopeCrmCustomers(customers, selectedCity, selectedDistrict)
     }
     val routable = remember(scopedCustomers) {
-        scopedCustomers.filter { it.latitude != null && it.longitude != null }
+        scopedCustomers.filter { customer ->
+            val latitude = customer.latitude
+            val longitude = customer.longitude
+            latitude != null &&
+                longitude != null &&
+                latitude in -90.0..90.0 &&
+                longitude in -180.0..180.0
+        }
     }
     val route = remember(routable, startId) {
         CrmRoutePlanner.plan(routable, startId)
@@ -55,7 +62,7 @@ fun RoutineScreen(
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("Alan: " + selectedCity + " / " + selectedDistrict)
-                    Text("Rota noktası: " + routable.size + " • Koordinatsız: " + missingCoordinates)
+                    Text("Rota noktası: " + routable.size + " • Eksik/geçersiz koordinat: " + missingCoordinates)
                     Text("Başlangıç: " + startName)
                     if (startId != null) {
                         OutlinedButton(onClick = { startId = null }, modifier = Modifier.fillMaxWidth()) {
