@@ -310,8 +310,11 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                     val id = p.getString("id")
                     val remoteVersion = p.optLong("sync_version", 1L)
                     val local = database.customerDao().findById(id)
-                    val accept = local == null || remoteVersion > local.version ||
-                        local.syncState == SyncState.SYNCED.name
+                    val accept = CrmPullConflictPolicy.acceptRemote(
+                        localVersion = local?.version,
+                        localSyncState = local?.syncState,
+                        remoteVersion = remoteVersion,
+                    )
                     if (accept) {
                         database.customerDao().upsert(
                             CrmCustomerEntity(
