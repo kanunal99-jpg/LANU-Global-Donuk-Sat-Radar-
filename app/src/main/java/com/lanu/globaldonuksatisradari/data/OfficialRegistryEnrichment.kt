@@ -478,12 +478,25 @@ object OfficialRegistryEnricher {
             }
 
             val fieldsUsed = linkedSetOf<String>()
-            val officialAddress = match.address?.trim()?.takeIf(String::isNotEmpty)
-            val officialPhone = match.phone?.trim()?.takeIf(String::isNotEmpty)
-            val officialWebsite = match.website?.trim()?.takeIf(String::isNotEmpty)
-            val officialDistrict = match.district?.trim()?.takeIf(String::isNotEmpty)
-            val officialNeighborhood = match.neighborhood?.trim()?.takeIf(String::isNotEmpty)
+            val inactive = match.status?.let(OfficialRegistryStatus::isInactive) == true
+            val officialAddress = if (inactive) null else {
+                match.address?.trim()?.takeIf(String::isNotEmpty)
+            }
+            val officialPhone = if (inactive) null else {
+                match.phone?.trim()?.takeIf(String::isNotEmpty)
+            }
+            val officialWebsite = if (inactive) null else {
+                match.website?.trim()?.takeIf(String::isNotEmpty)
+            }
+            val officialDistrict = if (inactive) null else {
+                match.district?.trim()?.takeIf(String::isNotEmpty)
+            }
+            val officialNeighborhood = if (inactive) null else {
+                match.neighborhood?.trim()?.takeIf(String::isNotEmpty)
+            }
 
+            if (!match.status.isNullOrBlank()) fieldsUsed += "status"
+            if (!match.registrationNumber.isNullOrBlank()) fieldsUsed += "registration_number"
             if (officialAddress != null) fieldsUsed += "address"
             if (officialPhone != null) fieldsUsed += "phone"
             if (officialWebsite != null) fieldsUsed += "website"
