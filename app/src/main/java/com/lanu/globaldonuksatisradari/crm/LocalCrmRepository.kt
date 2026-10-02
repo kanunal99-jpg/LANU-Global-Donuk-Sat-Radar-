@@ -391,7 +391,7 @@ class LocalCrmRepository(
             stage = to.name,
             updatedAtEpochMs = timestamp,
             version = current.version + 1L,
-            syncState = SyncState.PENDING_UPLOAD.name,
+            syncState = syncStateFor(current.ownerUserId).name,
             notes = note ?: current.notes,
         )
         database.withTransaction {
@@ -407,7 +407,8 @@ class LocalCrmRepository(
                     clientVersion = updated.version,
                 ),
             )
-            database.syncOperationDao().insert(
+            enqueueIfCloudOwned(
+                current.ownerUserId,
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_CUSTOMER,
@@ -431,9 +432,8 @@ class LocalCrmRepository(
         note: String? = null,
         createdByUserId: String? = null,
     ): CrmActivity {
-        require(database.customerDao().findById(customerId) != null) {
-            "Aktivite için CRM müşterisi bulunamadı: $customerId"
-        }
+        val customer = database.customerDao().findById(customerId)
+            ?: error("Aktivite için CRM müşterisi bulunamadı: $customerId")
         val timestamp = now()
         val activity = CrmActivity(
             id = idGenerator(),
@@ -444,12 +444,13 @@ class LocalCrmRepository(
             createdByUserId = createdByUserId,
             createdAtEpochMs = timestamp,
             version = 1L,
-            syncState = SyncState.PENDING_UPLOAD,
+            syncState = syncStateFor(customer.ownerUserId),
         )
 
         database.withTransaction {
             database.activityDao().upsert(CrmMappings.toEntity(activity))
-            database.syncOperationDao().insert(
+            enqueueIfCloudOwned(
+                customer.ownerUserId,
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_ACTIVITY,
