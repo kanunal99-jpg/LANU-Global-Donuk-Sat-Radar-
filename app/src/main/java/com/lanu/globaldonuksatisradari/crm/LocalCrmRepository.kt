@@ -515,9 +515,8 @@ class LocalCrmRepository(
         valueOrigin: CrmValueOrigin = CrmValueOrigin.USER_ENTERED,
         createdByUserId: String? = null,
     ): CrmOpportunity {
-        require(database.customerDao().findById(customerId) != null) {
-            "Fırsat için CRM müşterisi bulunamadı: $customerId"
-        }
+        val customer = database.customerDao().findById(customerId)
+            ?: error("Fırsat için CRM müşterisi bulunamadı: $customerId")
         val normalizedTitle = title.trim()
         require(normalizedTitle.isNotEmpty()) { "Fırsat başlığı boş olamaz." }
         require(estimatedValueMinor == null || estimatedValueMinor >= 0L) {
@@ -539,12 +538,13 @@ class LocalCrmRepository(
             valueOrigin = if (estimatedValueMinor == null) CrmValueOrigin.UNKNOWN else valueOrigin,
             createdAtEpochMs = timestamp,
             updatedAtEpochMs = timestamp,
-            syncState = SyncState.PENDING_UPLOAD,
+            syncState = syncStateFor(customer.ownerUserId),
         )
 
         database.withTransaction {
             database.opportunityDao().upsert(CrmMappings.toEntity(opportunity))
-            database.syncOperationDao().insert(
+            enqueueIfCloudOwned(
+                customer.ownerUserId,
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_OPPORTUNITY,
@@ -567,6 +567,8 @@ class LocalCrmRepository(
     ): CrmOpportunity {
         val current = database.opportunityDao().findById(opportunityId)
             ?: error("Satış fırsatı bulunamadı: $opportunityId")
+        val customer = database.customerDao().findById(current.customerId)
+            ?: error("Satış fırsatının CRM müşterisi bulunamadı: ${current.customerId}")
         val timestamp = now()
         return database.withTransaction {
             check(
@@ -574,13 +576,14 @@ class LocalCrmRepository(
                     id = opportunityId,
                     status = status.name,
                     updatedAtEpochMs = timestamp,
-                    syncState = SyncState.PENDING_UPLOAD.name,
+                    syncState = syncStateFor(customer.ownerUserId).name,
                 ) == 1,
             ) { "Satış fırsatı güncellenemedi: $opportunityId" }
             val latest = database.opportunityDao().findById(opportunityId)
                 ?: error("Güncel satış fırsatı okunamadı: $opportunityId")
             val updated = CrmMappings.toDomain(latest)
-            database.syncOperationDao().insert(
+            enqueueIfCloudOwned(
+                customer.ownerUserId,
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_OPPORTUNITY,
@@ -604,9 +607,8 @@ class LocalCrmRepository(
         note: String? = null,
         createdByUserId: String? = null,
     ): CrmNextAction {
-        require(database.customerDao().findById(customerId) != null) {
-            "Takip aksiyonu için CRM müşterisi bulunamadı: $customerId"
-        }
+        val customer = database.customerDao().findById(customerId)
+            ?: error("Takip aksiyonu için CRM müşterisi bulunamadı: $customerId")
         require(dueAtEpochMs > 0L) { "Takip zamanı geçerli olmalıdır." }
 
         val timestamp = now()
@@ -618,11 +620,12 @@ class LocalCrmRepository(
             note = note,
             createdByUserId = createdByUserId,
             createdAtEpochMs = timestamp,
-            syncState = SyncState.PENDING_UPLOAD,
+            syncState = syncStateFor(customer.ownerUserId),
         )
         database.withTransaction {
             database.nextActionDao().upsert(CrmMappings.toEntity(action))
-            database.syncOperationDao().insert(
+            enqueueIfCloudOwned(
+                customer.ownerUserId,
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_NEXT_ACTION,
