@@ -84,17 +84,33 @@ class OfficialRegistryEnrichmentTest {
     }
 
     @Test
-    fun explicitlyInactiveOfficialRecordIsRetainedWithInactiveEvidence() {
+    fun explicitlyInactiveOfficialRecordIsRetainedWithoutOverwritingOperationalFields() {
         val result = OfficialRegistryEnricher.enrich(
-            businesses = listOf(business(phone = "0216 555 44 33")),
-            records = listOf(record(status = "Terkin")),
+            businesses = listOf(
+                business(
+                    phone = "0555 111 22 33",
+                    address = "Güncel Operasyon Adresi",
+                ),
+            ),
+            records = listOf(
+                record(
+                    status = "Terkin",
+                    phone = "0216 000 00 00",
+                    address = "Eski Sicil Adresi",
+                ),
+            ),
         )
 
         assertEquals(1, result.size)
         val enriched = result.single()
         assertTrue(enriched.officialRegistryEvidence?.explicitlyInactive == true)
         assertEquals("Terkin", enriched.officialRegistryEvidence?.status)
-        assertEquals("0216 555 44 33", enriched.phone)
+        assertEquals("0555 111 22 33", enriched.phone)
+        assertEquals("Güncel Operasyon Adresi", enriched.address)
+        assertEquals(null, enriched.website)
+        assertTrue(enriched.officialRegistryEvidence?.fieldsUsed?.contains("status") == true)
+        assertTrue(enriched.officialRegistryEvidence?.fieldsUsed?.contains("phone") == false)
+        assertTrue(enriched.officialRegistryEvidence?.fieldsUsed?.contains("address") == false)
     }
 
     @Test
