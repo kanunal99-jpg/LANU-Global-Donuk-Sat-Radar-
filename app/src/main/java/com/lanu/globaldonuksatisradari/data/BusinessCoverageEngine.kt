@@ -4,6 +4,7 @@ data class CoverageScope(
     val country: String = "Türkiye",
     val city: String,
     val district: String,
+    val neighborhood: String? = null,
     val category: String,
 )
 

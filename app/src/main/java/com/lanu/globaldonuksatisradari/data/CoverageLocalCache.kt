@@ -47,7 +47,7 @@ class SharedPreferencesCoverageLocalCache(
     }
 
     private fun key(scope: CoverageScope): String =
-        listOf(scope.country, scope.city, scope.district, scope.category)
+        listOf(scope.country, scope.city, scope.district, scope.neighborhood.orEmpty(), scope.category)
             .joinToString("|")
             .lowercase()
             .map { if (it.isLetterOrDigit()) it else '_' }

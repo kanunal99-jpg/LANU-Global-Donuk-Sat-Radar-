@@ -52,8 +52,12 @@ class BusinessRepositoryFactoryTest {
         val invalid = validBusiness().copy(name = "")
         val adapter = object : BusinessSourceAdapter {
             override val contract = this@BusinessRepositoryFactoryTest.contract
-            override suspend fun fetch(query: String, city: String, district: String?) =
-                listOf(validBusiness(), invalid)
+            override suspend fun fetch(
+                query: String,
+                city: String,
+                district: String?,
+                neighborhood: String?,
+            ) = listOf(validBusiness(), invalid)
         }
 
         val repository = BusinessRepositoryFactory.create(contract, adapter)
@@ -70,8 +74,12 @@ class BusinessRepositoryFactoryTest {
         val unsafe = contract.copy(permittedUseVerified = false)
         val adapter = object : BusinessSourceAdapter {
             override val contract = unsafe
-            override suspend fun fetch(query: String, city: String, district: String?) =
-                listOf(validBusiness())
+            override suspend fun fetch(
+                query: String,
+                city: String,
+                district: String?,
+                neighborhood: String?,
+            ) = listOf(validBusiness())
         }
 
         val repository = BusinessRepositoryFactory.create(unsafe, adapter)

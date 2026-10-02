@@ -33,6 +33,22 @@ class CoverageBusinessRepositoryTest {
     }
 
     @Test
+    fun explicitNeighborhoodStaysInsideSelectedDistrictScope() {
+        val scopes = planCoverageScopes(
+            city = "İstanbul",
+            selectedDistrict = "Kadıköy",
+            selectedNeighborhood = "Caferağa",
+            query = "",
+            discoveredDistricts = emptyList(),
+        )
+
+        assertEquals(1, scopes.size)
+        assertEquals("Kadıköy", scopes.single().district)
+        assertEquals("Caferağa", scopes.single().neighborhood)
+        assertEquals("*", scopes.single().category)
+    }
+
+    @Test
     fun explicitDistrictNeverLeaksIntoOtherDistricts() {
         val scopes = planCoverageScopes(
             city = "Ağrı",

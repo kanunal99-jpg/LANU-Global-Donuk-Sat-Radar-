@@ -6,6 +6,7 @@ import com.lanu.globaldonuksatisradari.IstanbulDistricts
 internal fun planCoverageScopes(
     city: String,
     selectedDistrict: String?,
+    selectedNeighborhood: String? = null,
     query: String,
     discoveredDistricts: List<String>,
 ): List<CoverageScope> {
@@ -15,6 +16,7 @@ internal fun planCoverageScopes(
             CoverageScope(
                 city = city,
                 district = selectedDistrict,
+                neighborhood = selectedNeighborhood,
                 category = category,
             ),
         )
@@ -64,6 +66,7 @@ class CoverageBusinessRepository(
                     query = scope.category.takeUnless { it == "*" }.orEmpty(),
                     city = scope.city,
                     district = scope.district.takeUnless { it == "Tümü" },
+                    neighborhood = scope.neighborhood,
                 )
                 Result.success(
                     CoverageSourceResult(
@@ -78,6 +81,7 @@ class CoverageBusinessRepository(
                     query = scope.category.takeUnless { it == "*" }.orEmpty(),
                     city = scope.city,
                     district = scope.district.takeUnless { it == "Tümü" },
+                    neighborhood = scope.neighborhood,
                 )
                 Result.success(
                     CoverageSourceResult(
@@ -95,8 +99,23 @@ class CoverageBusinessRepository(
         query: String,
         city: String,
         district: String?,
+    ): List<VerifiedBusiness> = searchScoped(
+        query = query,
+        city = city,
+        district = district,
+        neighborhood = null,
+    )
+
+    suspend fun searchScoped(
+        query: String,
+        city: String,
+        district: String?,
+        neighborhood: String?,
     ): List<VerifiedBusiness> {
         val normalizedDistrict = district?.takeUnless { it.isBlank() || it.equals("Tümü", true) }
+        val normalizedNeighborhood = neighborhood
+            ?.takeUnless { it.isBlank() || it.equals("Tümü", true) }
+            ?.takeIf { normalizedDistrict != null }
 
         val fallbackDistricts = if (city.equals("İstanbul", true)) {
             IstanbulDistricts.ALL
@@ -111,20 +130,47 @@ class CoverageBusinessRepository(
         val scopes = planCoverageScopes(
             city = city,
             selectedDistrict = normalizedDistrict,
+            selectedNeighborhood = normalizedNeighborhood,
             query = query,
             discoveredDistricts = discoveredDistricts,
         )
 
         val scans = engine.scanAll(scopes)
-        val discovered = CoverageResultMerger.merge(
+        var discovered = CoverageResultMerger.merge(
             scans = scans,
             localCache = localCache,
             nowEpochMs = System.currentTimeMillis(),
         )
+
+        // Some OSM neighborhoods have no Overpass area counterpart. In that case,
+        // make one bounded district fallback request and keep only records whose
+        // explicit OSM neighborhood/quarter/suburb tag matches the selected mahalle.
+        if (normalizedNeighborhood != null && normalizedDistrict != null && discovered.isEmpty()) {
+            val districtFallback = runCatching {
+                overpass.fetchValidated(
+                    query = query,
+                    city = city,
+                    district = normalizedDistrict,
+                    neighborhood = null,
+                )
+            }.getOrDefault(emptyList())
+
+            val wanted = normalizeNeighborhoodForComparison(normalizedNeighborhood)
+            discovered = districtFallback.filter { business ->
+                normalizeNeighborhoodForComparison(business.neighborhood.orEmpty()) == wanted
+            }
+        }
+
         return OfficialRegistryEnricher.enrich(
             businesses = discovered,
             records = officialRegistryStore.recordsFor(city, normalizedDistrict),
         )
     }
+
+    private fun normalizeNeighborhoodForComparison(value: String): String =
+        BusinessDeduplication.normalizeForComparison(value)
+            .removeSuffix(" mahallesi")
+            .removeSuffix(" mah")
+            .trim()
 
 }

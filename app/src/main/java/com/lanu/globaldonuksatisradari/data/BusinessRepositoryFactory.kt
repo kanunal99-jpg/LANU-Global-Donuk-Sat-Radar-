@@ -28,7 +28,12 @@ object BusinessRepositoryFactory {
 
 interface BusinessSourceAdapter {
     val contract: BusinessSourceContract
-    suspend fun fetch(query: String, city: String, district: String? = null): List<VerifiedBusiness>
+    suspend fun fetch(
+        query: String,
+        city: String,
+        district: String? = null,
+        neighborhood: String? = null,
+    ): List<VerifiedBusiness>
 }
 
 /** Defensive ingestion boundary: source contract + per-record validation are mandatory. */
@@ -36,9 +41,10 @@ suspend fun BusinessSourceAdapter.fetchValidated(
     query: String,
     city: String,
     district: String? = null,
+    neighborhood: String? = null,
 ): List<VerifiedBusiness> {
     if (!contract.validate().isSuccess) return emptyList()
-    return fetch(query, city, district).mapNotNull { business ->
+    return fetch(query, city, district, neighborhood).mapNotNull { business ->
         VerifiedBusinessValidator.validate(business).getOrNull()
     }
 }

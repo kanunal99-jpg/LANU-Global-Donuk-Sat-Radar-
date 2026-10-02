@@ -27,7 +27,7 @@ object NominatimBusinessSource {
     val contract = BusinessSourceContract(
         descriptor = descriptor,
         accessMethod = SourceAccessMethod.PUBLIC_SEARCH,
-        scope = "User-triggered place search; non-exhaustive HORECA discovery; OSM/ODbL data",
+        scope = "User-triggered bounded business/place search; non-exhaustive alternative source for commercial discovery; OSM/ODbL data",
         permittedUseVerified = true,
         supportsBulk = false,
         fieldNames = setOf(
@@ -38,12 +38,19 @@ object NominatimBusinessSource {
 }
 
 object NominatimQueryBuilder {
-    fun build(query: String, city: String, district: String?, baseUrl: String = NominatimBusinessSource.BASE_URL): String {
+    fun build(
+        query: String,
+        city: String,
+        district: String?,
+        baseUrl: String = NominatimBusinessSource.BASE_URL,
+        neighborhood: String? = null,
+    ): String {
         require(query.isNotBlank()) { "Arama metni boş olamaz" }
         require(city.isNotBlank()) { "Şehir boş olamaz" }
         require(baseUrl.startsWith("https://")) { "Kaynak endpoint HTTPS olmalı" }
         val location = listOfNotNull(
             query.trim(),
+            neighborhood?.takeUnless { it.isBlank() || it.equals("Tümü", ignoreCase = true) },
             district?.takeUnless { it.isBlank() || it.equals("Tümü", ignoreCase = true) },
             city.trim(),
             "Türkiye",
@@ -58,15 +65,36 @@ class NominatimBusinessSourceAdapter(
 ) : BusinessSourceAdapter {
     override val contract: BusinessSourceContract = NominatimBusinessSource.contract
 
-    override suspend fun fetch(query: String, city: String, district: String?): List<VerifiedBusiness> = withContext(Dispatchers.IO) {
+    override suspend fun fetch(
+        query: String,
+        city: String,
+        district: String?,
+        neighborhood: String?,
+    ): List<VerifiedBusiness> = withContext(Dispatchers.IO) {
         contract.validate().getOrElse { error ->
             throw IllegalStateException("Nominatim kaynak sözleşmesi geçersiz", error)
         }
         require(query.isNotBlank()) { "Nominatim hedefli arama için sorgu boş olamaz" }
-        val cacheKey = listOf(query.trim().lowercase(), city.trim().lowercase(), district?.trim()?.lowercase().orEmpty(), baseUrlProvider()).joinToString("|")
+        val cacheKey = listOf(
+            query.trim().lowercase(),
+            city.trim().lowercase(),
+            district?.trim()?.lowercase().orEmpty(),
+            neighborhood?.trim()?.lowercase().orEmpty(),
+            baseUrlProvider(),
+        ).joinToString("|")
         SearchCache.get(cacheKey)?.let { return@withContext it }
         RateLimiter.await()
-        val connection = (URL(NominatimQueryBuilder.build(query, city, district, baseUrlProvider())).openConnection() as HttpURLConnection).apply {
+        val connection = (
+            URL(
+                NominatimQueryBuilder.build(
+                    query = query,
+                    city = city,
+                    district = district,
+                    baseUrl = baseUrlProvider(),
+                    neighborhood = neighborhood,
+                ),
+            ).openConnection() as HttpURLConnection
+        ).apply {
             requestMethod = "GET"
             connectTimeout = 15_000
             readTimeout = 20_000
@@ -80,13 +108,19 @@ class NominatimBusinessSourceAdapter(
                 throw IOException("Nominatim HTTP $responseCode")
             }
             val payload = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            val parsed = parse(payload, city, district, nowEpochMs())
+            val parsed = parse(payload, city, district, nowEpochMs(), neighborhood)
             SearchCache.put(cacheKey, parsed)
             parsed
         } finally { connection.disconnect() }
     }
 
-    internal fun parse(payload: String, selectedCity: String, selectedDistrict: String?, verifiedAtEpochMs: Long): List<VerifiedBusiness> {
+    internal fun parse(
+        payload: String,
+        selectedCity: String,
+        selectedDistrict: String?,
+        verifiedAtEpochMs: Long,
+        selectedNeighborhood: String? = null,
+    ): List<VerifiedBusiness> {
         val json = JSONArray(payload)
         val result = mutableListOf<VerifiedBusiness>()
         for (index in 0 until json.length()) {
@@ -111,6 +145,31 @@ class NominatimBusinessSourceAdapter(
             ) {
                 continue
             }
+
+            val selectedNeighborhoodNormalized = selectedNeighborhood
+                ?.takeUnless { it.isBlank() || it.equals("Tümü", ignoreCase = true) }
+                ?.let(::normalizePlaceName)
+            val addressNeighborhoodCandidates = address?.let {
+                listOfNotNull(
+                    it.optString("neighbourhood").takeIf(String::isNotBlank),
+                    it.optString("quarter").takeIf(String::isNotBlank),
+                    it.optString("suburb").takeIf(String::isNotBlank),
+                    it.optString("village").takeIf(String::isNotBlank),
+                    it.optString("hamlet").takeIf(String::isNotBlank),
+                )
+            }.orEmpty()
+            if (selectedNeighborhoodNormalized != null &&
+                addressNeighborhoodCandidates.none {
+                    normalizePlaceName(it)
+                        .removeSuffix(" mahallesi")
+                        .removeSuffix(" mah") ==
+                        selectedNeighborhoodNormalized
+                            .removeSuffix(" mahallesi")
+                            .removeSuffix(" mah")
+                }
+            ) {
+                continue
+            }
             val district = selectedDistrict?.takeUnless { it.isBlank() || it.equals("Tümü", ignoreCase = true) }
                 ?: addressDistrictCandidates.firstOrNull()
                 ?: continue
@@ -118,7 +177,9 @@ class NominatimBusinessSourceAdapter(
             if (id.isBlank()) continue
             result += VerifiedBusiness(
                 id = id, name = name, city = selectedCity, district = district,
-                neighborhood = address?.let {
+                neighborhood = selectedNeighborhood?.takeUnless {
+                    it.isBlank() || it.equals("Tümü", ignoreCase = true)
+                } ?: address?.let {
                     listOf(
                         "neighbourhood",
                         "quarter",

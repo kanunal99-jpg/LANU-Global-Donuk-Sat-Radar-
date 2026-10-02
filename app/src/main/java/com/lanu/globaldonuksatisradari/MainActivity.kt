@@ -230,10 +230,6 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         normalizeNeighborhoodLabel(business.neighborhood) ==
                             normalizeNeighborhoodLabel(selectedNeighborhood)
                 ) &&
-                (
-                    categoryFilter == "Tümü" ||
-                        BusinessCategoryLabels.displayName(business.category).equals(categoryFilter, true)
-                ) &&
                 matchesInventoryPresence(business.phone, phoneFilter) &&
                 matchesInventoryPresence(business.website, websiteFilter)
         }
@@ -347,7 +343,13 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             }
                         }
                         item {
-                            OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(), label = { Text("İşletme veya HORECA ara") }, singleLine = true)
+                            OutlinedTextField(
+                                value = query,
+                                onValueChange = { query = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("İşletme adı veya kategori ara") },
+                                singleLine = true,
+                            )
                         }
                         item {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -395,7 +397,12 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         DropdownMenuItem(
                                             text = { Text(neighborhood) },
                                             onClick = {
+                                                invalidateSearch()
                                                 selectedNeighborhood = neighborhood
+                                                results = emptyList()
+                                                selectedBusiness = null
+                                                scanDelta = null
+                                                newBusinessKeys = emptySet()
                                                 neighborhoodMenu = false
                                             },
                                         )
@@ -410,14 +417,39 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         Column(Modifier.weight(1f)) {
                                             Text("Hızlı filtreler", style = MaterialTheme.typography.titleMedium)
                                             Text(
-                                                "81 il destekli. Tarama seçilen il/ilçe kapsamında yapılır; kategori seçimi kaynağa da uygulanır. " +
-                                                    "Telefon ve web filtreleri gelen sonuçları süzer.",
+                                                "81 il destekli. İl / ilçe / mahalle seçimi doğrudan kaynak taramasına uygulanır. " +
+                                                    "Kategori “Tümü” ise mağaza, ofis/şirket, üretici, toptancı, AVM, gece hayatı, " +
+                                                    "konaklama, hizmet ve diğer ticari OSM etiketleri birlikte taranır. Telefon/web sonuca uygulanır.",
                                                 style = MaterialTheme.typography.bodySmall,
                                             )
                                         }
-                                        TextButton(onClick = { resetFilters() }) { Text("Temizle") }
+                                        TextButton(
+                                            onClick = {
+                                                invalidateSearch()
+                                                resetFilters()
+                                                results = emptyList()
+                                                selectedBusiness = null
+                                                scanDelta = null
+                                                newBusinessKeys = emptySet()
+                                            },
+                                        ) { Text("Temizle") }
                                     }
-                                    InventoryFilterMenu("Kategori", categoryFilter, categoryOptions, { categoryFilter = it })
+                                    InventoryFilterMenu(
+                                        "Kategori",
+                                        categoryFilter,
+                                        categoryOptions,
+                                        {
+                                            if (categoryFilter != it) {
+                                                invalidateSearch()
+                                                categoryFilter = it
+                                                query = ""
+                                                results = emptyList()
+                                                selectedBusiness = null
+                                                scanDelta = null
+                                                newBusinessKeys = emptySet()
+                                            }
+                                        },
+                                    )
                                     InventoryFilterMenu("Telefon", phoneFilter, presenceOptions, { phoneFilter = it })
                                     InventoryFilterMenu("Web sitesi", websiteFilter, presenceOptions, { websiteFilter = it })
                                     Text("${visibleResults.size} sonuç", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
@@ -432,6 +464,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     val requestId = ++searchRequestId
                                     val requestCity = selectedCity.name
                                     val requestDistrict = selectedDistrict.takeUnless { it == "Tümü" }
+                                    val requestNeighborhood = selectedNeighborhood.takeUnless {
+                                        it == "Tümü" || requestDistrict == null
+                                    }
                                     val requestQuery = query.trim().ifBlank {
                                         BusinessCategoryLabels.searchQueryForLabel(categoryFilter).orEmpty()
                                     }
@@ -441,12 +476,22 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         } else {
                                             SEARCH_TIMEOUT_MS
                                         }
-                                        runCatching { withTimeout(searchTimeoutMs) { repository.search(requestQuery, requestCity, requestDistrict) } }
+                                        runCatching {
+                                            withTimeout(searchTimeoutMs) {
+                                                repository.searchScoped(
+                                                    query = requestQuery,
+                                                    city = requestCity,
+                                                    district = requestDistrict,
+                                                    neighborhood = requestNeighborhood,
+                                                )
+                                            }
+                                        }
                                             .onSuccess { records ->
                                                 if (requestId == searchRequestId) {
                                                     val delta = scanHistoryRepository.compareAndRecord(
                                                         city = requestCity,
                                                         district = requestDistrict,
+                                                        neighborhood = requestNeighborhood,
                                                         query = requestQuery,
                                                         records = records,
                                                     )
@@ -468,10 +513,14 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                                 }
                                             }
                                             .onFailure { throwable ->
-                                                Log.w("LanuRadar", "İşletme taraması tamamlanamadı: $requestCity/$requestDistrict", throwable)
+                                                Log.w(
+                                                    "LanuRadar",
+                                                    "İşletme taraması tamamlanamadı: $requestCity/$requestDistrict/$requestNeighborhood",
+                                                    throwable,
+                                                )
                                                 if (requestId == searchRequestId) {
                                                     error = if (throwable is TimeoutCancellationException) {
-                                                        "Tarama zaman aşımına uğradı. Daha dar bir ilçe veya arama terimiyle tekrar deneyin."
+                                                        "Tarama zaman aşımına uğradı. İlçe/mahalle seçerek kapsamı daraltıp tekrar deneyin."
                                                     } else if (results.isNotEmpty()) {
                                                         "Yeni tarama başarısız; önceki sonuçlar korunuyor."
                                                     } else {
@@ -486,7 +535,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             ) {
                                 Text(
                                     if (loading) "İşletmeler aranıyor…"
-                                    else if (categoryFilter == "Tümü") "Tüm hedef kategorileri getir"
+                                    else if (categoryFilter == "Tümü") "Tüm işletmeleri getir"
                                     else "$categoryFilter işletmelerini getir",
                                 )
                             }
@@ -633,7 +682,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
 }
 
 private const val SEARCH_TIMEOUT_MS = 120_000L
-private const val CITY_WIDE_SEARCH_TIMEOUT_MS = 240_000L
+private const val CITY_WIDE_SEARCH_TIMEOUT_MS = 600_000L
 
 @Composable
 private fun BusinessResultCard(
