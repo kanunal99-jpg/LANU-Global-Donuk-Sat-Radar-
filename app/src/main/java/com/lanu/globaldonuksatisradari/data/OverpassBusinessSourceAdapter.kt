@@ -201,16 +201,23 @@ object OverpassQueryBuilder {
                 listOf("""nwr["name"]["shop"](area.searchArea);""")
             normalized in setOf("hizmet", "service", "amenity") ->
                 listOf(
-                    """nwr["name"]["amenity"]["amenity"!~"^(place_of_worship|school|kindergarten|college|university|library|community_centre|social_centre|townhall|courthouse|police|fire_station|post_box|bench|shelter|toilets|drinking_water|waste_basket|recycling|parking|parking_entrance|bicycle_parking|motorcycle_parking|grave_yard|crematorium|public_bookcase)$"](area.searchArea);""",
+                    """nwr["amenity"]["name"]["amenity"!~"^(place_of_worship|school|kindergarten|college|university|library|community_centre|social_centre|townhall|courthouse|police|fire_station|post_box|post_office|atm|bench|shelter|toilets|drinking_water|waste_basket|recycling|parking|parking_entrance|bicycle_parking|motorcycle_parking|grave_yard|crematorium|public_bookcase)$"](area.searchArea);""",
                 )
             normalized in setOf("turizm", "tourism") ->
-                listOf("""nwr["name"]["tourism"](area.searchArea);""")
+                listOf(
+                    """nwr["tourism"~"^(hotel|hostel|motel|guest_house|apartment|chalet|resort|camp_site|caravan_site|alpine_hut)$"]["name"](area.searchArea);""",
+                )
             normalized in setOf("eglence", "eğlence", "leisure") ->
-                listOf("""nwr["name"]["leisure"](area.searchArea);""")
+                listOf(
+                    """nwr["leisure"~"^(adult_gaming_centre|amusement_arcade|bowling_alley|dance|escape_game|fitness_centre|sauna|sports_centre|water_park|horse_riding|golf_course)$"]["name"](area.searchArea);""",
+                )
             normalized in setOf("saglik", "sağlık", "healthcare") ->
-                listOf("""nwr["name"]["healthcare"](area.searchArea);""")
+                listOf("""nwr["healthcare"]["name"](area.searchArea);""")
             normalized in setOf("kulup", "kulüp", "club") ->
-                listOf("""nwr["name"]["club"](area.searchArea);""")
+                listOf(
+                    """nwr["amenity"="nightclub"]["name"](area.searchArea);""",
+                    """nwr["leisure"="dance"]["name"](area.searchArea);""",
+                )
             normalized in setOf("sanayi", "industrial") ->
                 listOf("""nwr["name"]["industrial"](area.searchArea);""")
             normalized in setOf("depo", "lojistik", "warehouse") ->
