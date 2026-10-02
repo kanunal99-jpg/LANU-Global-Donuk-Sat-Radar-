@@ -355,10 +355,6 @@ object OfficialRegistryEnricher {
                 return@forEach
             }
 
-            if (match.status?.let(OfficialRegistryStatus::isInactive) == true) {
-                return@forEach
-            }
-
             val fieldsUsed = linkedSetOf<String>()
             val officialAddress = match.address?.trim()?.takeIf(String::isNotEmpty)
             val officialPhone = match.phone?.trim()?.takeIf(String::isNotEmpty)
