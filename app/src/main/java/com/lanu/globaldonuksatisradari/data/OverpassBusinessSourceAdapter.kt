@@ -30,7 +30,7 @@ object OverpassBusinessSource {
     val contract = BusinessSourceContract(
         descriptor = descriptor,
         accessMethod = SourceAccessMethod.PUBLIC_SEARCH,
-        scope = "Bounded user-triggered commercial-business discovery across shop, office, craft, industrial, nightlife, hospitality and service tags; OSM/ODbL data; cached locally",
+        scope = "Bounded user-triggered commercial-business discovery across retail, office, craft, industry, manufacturing, nightlife, hospitality, health, education, automotive, finance, construction, agriculture, logistics and other private/commercial OSM tags; OSM/ODbL data; cached locally",
         permittedUseVerified = true,
         supportsBulk = false,
         fieldNames = setOf(
