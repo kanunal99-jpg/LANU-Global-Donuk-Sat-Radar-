@@ -17,6 +17,19 @@ interface CrmCustomerDao {
     @Query("SELECT * FROM crm_customer WHERE businessSourceId = :businessSourceId LIMIT 1")
     suspend fun findByBusinessSourceId(businessSourceId: String): CrmCustomerEntity?
 
+    @Query(
+        """
+        SELECT * FROM crm_customer
+        WHERE businessSourceId = :businessSourceId
+          AND ((ownerUserId = :ownerUserId) OR (ownerUserId IS NULL AND :ownerUserId IS NULL))
+        LIMIT 1
+        """,
+    )
+    suspend fun findByBusinessSourceIdForOwner(
+        businessSourceId: String,
+        ownerUserId: String?,
+    ): CrmCustomerEntity?
+
     @Query("SELECT * FROM crm_customer WHERE city = :city ORDER BY updatedAtEpochMs DESC")
     fun observeByCity(city: String): Flow<List<CrmCustomerEntity>>
 
@@ -301,6 +314,52 @@ interface SyncOperationDao {
 
     @Query("SELECT COUNT(*) FROM crm_sync_operation WHERE state = 'PENDING'")
     fun observePendingCount(): kotlinx.coroutines.flow.Flow<Int>
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM crm_sync_operation s
+        WHERE s.state = 'PENDING' AND (
+            (s.entityType = 'customer' AND EXISTS (
+                SELECT 1 FROM crm_customer c WHERE c.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'activity' AND EXISTS (
+                SELECT 1 FROM crm_activity a INNER JOIN crm_customer c ON c.id = a.customerId
+                WHERE a.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'next_action' AND EXISTS (
+                SELECT 1 FROM crm_next_action n INNER JOIN crm_customer c ON c.id = n.customerId
+                WHERE n.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'opportunity' AND EXISTS (
+                SELECT 1 FROM crm_opportunity o INNER JOIN crm_customer c ON c.id = o.customerId
+                WHERE o.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'contact' AND EXISTS (
+                SELECT 1 FROM crm_contact ct INNER JOIN crm_customer c ON c.id = ct.customerId
+                WHERE ct.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'quote' AND EXISTS (
+                SELECT 1 FROM crm_quote q INNER JOIN crm_customer c ON c.id = q.customerId
+                WHERE q.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'quote_line' AND EXISTS (
+                SELECT 1 FROM crm_quote_line ql INNER JOIN crm_quote q ON q.id = ql.quoteId
+                INNER JOIN crm_customer c ON c.id = q.customerId
+                WHERE ql.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'order' AND EXISTS (
+                SELECT 1 FROM crm_order o INNER JOIN crm_customer c ON c.id = o.customerId
+                WHERE o.id = s.entityId AND c.ownerUserId = :ownerUserId
+            )) OR
+            (s.entityType = 'order_line' AND EXISTS (
+                SELECT 1 FROM crm_order_line ol INNER JOIN crm_order o ON o.id = ol.orderId
+                INNER JOIN crm_customer c ON c.id = o.customerId
+                WHERE ol.id = s.entityId AND c.ownerUserId = :ownerUserId
+            ))
+        )
+        """,
+    )
+    fun observePendingCountForOwner(ownerUserId: String): Flow<Int>
 
     @Query("SELECT MAX(createdAtEpochMs) FROM crm_sync_operation")
     suspend fun maxCreatedAtEpochMs(): Long?
