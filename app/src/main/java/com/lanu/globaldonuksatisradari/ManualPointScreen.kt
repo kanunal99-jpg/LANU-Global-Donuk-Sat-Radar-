@@ -30,6 +30,7 @@ fun ManualPointScreen(
     onSaved: () -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
+    var signboardName by remember { mutableStateOf("") }
     var contactName by remember { mutableStateOf("") }
     var businessType by remember { mutableStateOf("") }
     var taxOrNationalId by remember { mutableStateOf("") }
@@ -54,6 +55,7 @@ fun ManualPointScreen(
         Text("Manuel Nokta Kaydı", style = MaterialTheme.typography.headlineSmall)
         Text("Adres ve koordinatlarını bildiğiniz müşteri/noktayı doğrudan CRM havuzuna ekleyin.")
         OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("Nokta / işletme adı") }, singleLine = true)
+        OutlinedTextField(signboardName, { signboardName = it }, Modifier.fillMaxWidth(), label = { Text("Tabela adı (opsiyonel)") }, singleLine = true)
         OutlinedTextField(contactName, { contactName = it }, Modifier.fillMaxWidth(), label = { Text("Ad Soyad (opsiyonel)") }, singleLine = true)
         OutlinedTextField(businessType, { businessType = it }, Modifier.fillMaxWidth(), label = { Text("İşletme türü (opsiyonel)") }, singleLine = true)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -125,6 +127,7 @@ fun ManualPointScreen(
                             latitude = lat,
                             longitude = lon,
                             contactName = contactName,
+                            signboardName = signboardName,
                             businessType = businessType,
                             taxOrNationalId = taxOrNationalId,
                             phone = phone,
