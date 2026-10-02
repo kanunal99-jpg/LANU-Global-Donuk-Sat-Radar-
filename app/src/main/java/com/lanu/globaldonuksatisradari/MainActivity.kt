@@ -577,7 +577,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         }
                                     },
                                 ) {
-                                    Text(if (bulkSaving) "CRM'e kaydediliyor…" else "Tüm Sonuçları CRM'e Kaydet (${results.size})")
+                                    Text(if (bulkSaving) "CRM'e kaydediliyor…" else "Görünen Sonuçları CRM'e Kaydet (${visibleResults.size})")
                                 }
                             }
                         }
