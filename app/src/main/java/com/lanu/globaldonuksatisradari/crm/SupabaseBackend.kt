@@ -331,7 +331,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                                 contactName = local?.contactName,
                                 businessType = local?.businessType,
                                 taxOrNationalId = local?.taxOrNationalId,
-                                phone = local?.phone,
+                                phone = p.optString("phone").takeIf(String::isNotBlank) ?: local?.phone,
                                 createdAtEpochMs = parseInstant(p.optString("created_at")),
                                 updatedAtEpochMs = parseInstant(p.optString("updated_at")),
                                 version = remoteVersion,
@@ -468,6 +468,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
         put("longitude", if (p.isNull("longitude")) JSONObject.NULL else p.getDouble("longitude"))
         put("data_quality", p.optString("dataQuality").ifBlank { "UNKNOWN" })
         put("notes", p.optString("notes").takeIf(String::isNotBlank) ?: JSONObject.NULL)
+        put("phone", p.optString("phone").takeIf(String::isNotBlank) ?: JSONObject.NULL)
         put("sync_version", p.optLong("version", 1L))
     }
 
