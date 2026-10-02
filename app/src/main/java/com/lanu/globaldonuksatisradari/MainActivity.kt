@@ -354,7 +354,10 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             OfficialRegistryImportCard(defaultCity = selectedCity.name) { summary, records ->
                                 scope.launch {
                                     runCatching {
-                                        localCrmRepository.enrichCustomersFromOfficialRegistry(records)
+                                        localCrmRepository.enrichCustomersFromOfficialRegistryForOwner(
+                                            records = records,
+                                            ownerUserId = activeOwnerUserId,
+                                        )
                                     }.onSuccess { enriched ->
                                         crmMessage = buildString {
                                             append(summary.source.name)
