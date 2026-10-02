@@ -12,8 +12,8 @@ import androidx.work.WorkerParameters
 import java.util.concurrent.TimeUnit
 
 /**
- * Runs the local CRM queue only when network connectivity is available.
- * The default remote is intentionally unconfigured until an authorized backend exists.
+ * Runs the offline-first CRM queue only when network connectivity is available.
+ * Supabase is the configured remote; without an authenticated session local changes stay queued.
  */
 class CrmSyncWorker(
     appContext: Context,
