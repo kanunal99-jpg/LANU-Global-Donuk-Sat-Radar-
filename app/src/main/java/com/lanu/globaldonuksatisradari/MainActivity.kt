@@ -201,8 +201,20 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         }
     }
 
-    val crmCustomers by localCrmRepository.observeCustomers(null).collectAsState(initial = emptyList())
-    val pendingSyncCount by localCrmRepository.observePendingSyncCount().collectAsState(initial = 0)
+    val cloudSessionState = auth?.session?.collectAsState()
+    val activeOwnerUserId = cloudSessionState?.value?.userId
+    val allCrmCustomers by localCrmRepository.observeCustomers(null).collectAsState(initial = emptyList())
+    val crmCustomers = remember(allCrmCustomers, activeOwnerUserId) {
+        if (activeOwnerUserId == null) {
+            allCrmCustomers.filter { it.ownerUserId == null }
+        } else {
+            allCrmCustomers.filter { it.ownerUserId == activeOwnerUserId }
+        }
+    }
+    val pendingSyncFlow = remember(localCrmRepository, activeOwnerUserId) {
+        localCrmRepository.observePendingSyncCount(activeOwnerUserId)
+    }
+    val pendingSyncCount by pendingSyncFlow.collectAsState(initial = 0)
     val filteredCrmCustomers = remember(crmCustomers, selectedCity.name, selectedDistrict) {
         scopeCrmCustomers(crmCustomers, selectedCity.name, selectedDistrict)
     }
@@ -562,7 +574,12 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     onClick = {
                                         bulkSaving = true
                                         scope.launch {
-                                            runCatching { localCrmRepository.addBusinessesAsCustomers(visibleResults) }
+                                            runCatching {
+                                                localCrmRepository.addBusinessesAsCustomers(
+                                                    visibleResults,
+                                                    ownerUserId = activeOwnerUserId,
+                                                )
+                                            }
                                                 .onSuccess { saved ->
                                                     crmMessage = if (saved.alreadyExisting > 0) {
                                                         "${saved.inserted} yeni nokta CRM'e kaydedildi; ${saved.alreadyExisting} nokta zaten kayıtlıydı."
@@ -640,7 +657,12 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 onClick = { selectedBusiness = business },
                             ) {
                                 scope.launch {
-                                    runCatching { localCrmRepository.addBusinessAsCustomer(business) }
+                                    runCatching {
+                                        localCrmRepository.addBusinessAsCustomer(
+                                            business,
+                                            ownerUserId = activeOwnerUserId,
+                                        )
+                                    }
                                         .onSuccess { crmMessage = "${it.businessName} CRM'e kaydedildi." }
                                         .onFailure {
                                             Log.e("LanuCrm", "CRM kaydı başarısız oldu.", it)
@@ -666,7 +688,11 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         auth?.let { cloudAuth -> item { SupabaseSessionCard(cloudAuth) } }
                     }
                     AppSection.PRODUCT_CATALOG -> ProductCatalogScreen(productCatalogRepository)
-                    AppSection.MANUAL_POINT -> ManualPointScreen(localCrmRepository, selectedCity.name) { navigateTo(AppSection.ROUTINE) }
+                    AppSection.MANUAL_POINT -> ManualPointScreen(
+                        repository = localCrmRepository,
+                        defaultCity = selectedCity.name,
+                        ownerUserId = activeOwnerUserId,
+                    ) { navigateTo(AppSection.ROUTINE) }
                     AppSection.ROUTINE -> RoutineScreen(crmCustomers, selectedCity.name, selectedDistrict)
                     AppSection.AI_ASSISTANT -> SalesAiScreen(salesAiContext)
                     }
@@ -679,11 +705,19 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         transitions = selectedCustomerTransitions,
                         opportunities = selectedCustomerOpportunities,
                         onBack = { selectedCustomerId = null },
-                        onStageChange = { target, note -> scope.launch { runCatching { localCrmRepository.transitionStage(customer.id, target, null, note) }.onSuccess { crmMessage = "Aşama güncellendi." }.onFailure { crmMessage = "Aşama değiştirilemedi: ${it.message.orEmpty()}" } } },
-                        onRecordActivity = { type, note -> scope.launch { runCatching { localCrmRepository.recordActivity(customer.id, type, note) }.onSuccess { crmMessage = "Aktivite kaydedildi." }.onFailure { crmMessage = "Aktivite kaydedilemedi: ${it.message.orEmpty()}" } } },
-                        onCreateNextAction = { type, dueAt, note -> scope.launch { runCatching { localCrmRepository.createNextAction(customer.id, type, dueAt, note) }.onSuccess { crmMessage = "Takip planlandı." }.onFailure { crmMessage = "Takip planlanamadı: ${it.message.orEmpty()}" } } },
-                        onCompleteNextAction = { actionId -> scope.launch { runCatching { localCrmRepository.completeNextAction(actionId) }.onSuccess { crmMessage = "Takip tamamlandı." }.onFailure { crmMessage = "Takip tamamlanamadı: ${it.message.orEmpty()}" } } },
-                        onCreateOpportunity = { title, notes, estimatedValueMinor, currency -> scope.launch { runCatching { localCrmRepository.createOpportunity(customer.id, title, notes, estimatedValueMinor, currency, if (estimatedValueMinor == null) com.lanu.globaldonuksatisradari.crm.CrmValueOrigin.UNKNOWN else com.lanu.globaldonuksatisradari.crm.CrmValueOrigin.USER_ENTERED) }.onSuccess { crmMessage = "Satış fırsatı kaydedildi." }.onFailure { crmMessage = "Fırsat kaydedilemedi: ${it.message.orEmpty()}" } } },
+                        onStageChange = { target, note -> scope.launch { runCatching { localCrmRepository.transitionStage(customer.id, target, activeOwnerUserId, note) }.onSuccess { crmMessage = "Aşama güncellendi." }.onFailure { crmMessage = "Aşama değiştirilemedi: ${it.message.orEmpty()}" } } },
+                        onRecordActivity = { type, note -> scope.launch { runCatching { localCrmRepository.recordActivity(customer.id, type, note = note, createdByUserId = activeOwnerUserId) }.onSuccess { crmMessage = "Aktivite kaydedildi." }.onFailure { crmMessage = "Aktivite kaydedilemedi: ${it.message.orEmpty()}" } } },
+                        onCreateNextAction = { type, dueAt, note -> scope.launch { runCatching { localCrmRepository.createNextAction(customer.id, type, dueAt, note, createdByUserId = activeOwnerUserId) }.onSuccess { crmMessage = "Takip planlandı." }.onFailure { crmMessage = "Takip planlanamadı: ${it.message.orEmpty()}" } } },
+                        onCompleteNextAction = { actionId -> scope.launch { runCatching { localCrmRepository.completeNextAction(actionId, completedByUserId = activeOwnerUserId) }.onSuccess { crmMessage = "Takip tamamlandı." }.onFailure { crmMessage = "Takip tamamlanamadı: ${it.message.orEmpty()}" } } },
+                        onCreateOpportunity = { title, notes, estimatedValueMinor, currency -> scope.launch { runCatching { localCrmRepository.createOpportunity(
+                                        customer.id,
+                                        title,
+                                        notes,
+                                        estimatedValueMinor,
+                                        currency,
+                                        if (estimatedValueMinor == null) com.lanu.globaldonuksatisradari.crm.CrmValueOrigin.UNKNOWN else com.lanu.globaldonuksatisradari.crm.CrmValueOrigin.USER_ENTERED,
+                                        createdByUserId = activeOwnerUserId,
+                                    ) }.onSuccess { crmMessage = "Satış fırsatı kaydedildi." }.onFailure { crmMessage = "Fırsat kaydedilemedi: ${it.message.orEmpty()}" } } },
                         onTransitionOpportunity = { opportunityId, status -> scope.launch { runCatching { localCrmRepository.transitionOpportunity(opportunityId, status) }.onSuccess { crmMessage = "Fırsat durumu güncellendi." }.onFailure { crmMessage = "Fırsat durumu güncellenemedi: ${it.message.orEmpty()}" } } },
                         onSaveNotes = { notes -> scope.launch { runCatching { localCrmRepository.updateCustomerNotes(customer.id, notes) }.onSuccess { crmMessage = "Müşteri notu kaydedildi." }.onFailure { crmMessage = "Müşteri notu kaydedilemedi: ${it.message.orEmpty()}" } } },
                         onWorkspaceMessage = { crmMessage = it },
