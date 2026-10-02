@@ -30,7 +30,7 @@ object OverpassBusinessSource {
     val contract = BusinessSourceContract(
         descriptor = descriptor,
         accessMethod = SourceAccessMethod.PUBLIC_SEARCH,
-        scope = "Bounded user-triggered HORECA and retail sales-target discovery; OSM/ODbL data; cached locally",
+        scope = "Bounded user-triggered commercial-business discovery across shop, office, craft, industrial, nightlife, hospitality and service tags; OSM/ODbL data; cached locally",
         permittedUseVerified = true,
         supportsBulk = false,
         fieldNames = setOf(
@@ -41,9 +41,14 @@ object OverpassBusinessSource {
 }
 
 object OverpassQueryBuilder {
-    fun build(city: String, district: String?, query: String): String {
+    fun build(
+        city: String,
+        district: String?,
+        query: String,
+        neighborhood: String? = null,
+    ): String {
         require(city.isNotBlank()) { "Şehir boş olamaz" }
-        val scope = buildScope(city, district)
+        val scope = buildScope(city, district, neighborhood)
         val body = if (query.isBlank()) buildBroadQuery() else buildTermQuery(query.trim())
 
         return """
@@ -56,31 +61,68 @@ object OverpassQueryBuilder {
         """.trimIndent()
     }
 
-    private fun buildScope(city: String, district: String?): String {
+    private fun buildScope(
+        city: String,
+        district: String?,
+        neighborhood: String?,
+    ): String {
         val escapedCity = escapeQuoted(city)
         val selectedDistrict = district?.takeUnless {
             it.isBlank() || it.equals("Tümü", ignoreCase = true)
         }
+        val selectedNeighborhood = neighborhood?.takeUnless {
+            it.isBlank() || it.equals("Tümü", ignoreCase = true)
+        }
 
-        return if (selectedDistrict == null) {
-            """area["name"="$escapedCity"]["boundary"="administrative"]["admin_level"="4"]->.searchArea;"""
-        } else {
-            val escapedDistrict = escapeQuoted(selectedDistrict)
-            """
-            area["name"="$escapedCity"]["boundary"="administrative"]["admin_level"="4"]->.cityArea;
-            relation(area.cityArea)["boundary"="administrative"]["admin_level"="6"]["name"="$escapedDistrict"]->.districtRelation;
-            .districtRelation map_to_area->.searchArea;
+        if (selectedDistrict == null) {
+            return """area["name"="$escapedCity"]["boundary"="administrative"]["admin_level"="4"]->.searchArea;"""
+        }
+
+        val escapedDistrict = escapeQuoted(selectedDistrict)
+        if (selectedNeighborhood == null) {
+            return """
+                area["name"="$escapedCity"]["boundary"="administrative"]["admin_level"="4"]->.cityArea;
+                relation(area.cityArea)["boundary"="administrative"]["admin_level"="6"]["name"="$escapedDistrict"]->.districtRelation;
+                .districtRelation map_to_area->.searchArea;
             """.trimIndent()
         }
+
+        val neighborhoodBase = selectedNeighborhood
+            .replace(Regex("""\s+Mahallesi$""", RegexOption.IGNORE_CASE), "")
+            .trim()
+        val escapedNeighborhoodRegex = escapeRegex(neighborhoodBase)
+        return """
+            area["name"="$escapedCity"]["boundary"="administrative"]["admin_level"="4"]->.cityArea;
+            relation(area.cityArea)["boundary"="administrative"]["admin_level"="6"]["name"="$escapedDistrict"]->.districtRelation;
+            .districtRelation map_to_area->.districtArea;
+            (
+              relation(area.districtArea)["boundary"="administrative"]["name"~"^$escapedNeighborhoodRegex( Mahallesi)?$",i];
+              way(area.districtArea)["boundary"="administrative"]["name"~"^$escapedNeighborhoodRegex( Mahallesi)?$",i];
+            )->.neighborhoodBoundary;
+            .neighborhoodBoundary map_to_area->.searchArea;
+        """.trimIndent()
     }
 
     private fun buildBroadQuery(): String = listOf(
-        """nwr["name"]["amenity"~"restaurant|cafe|fast_food|food_court|bar|pub|biergarten|ice_cream|marketplace|catering"](area.searchArea);""",
-        """nwr["name"]["shop"~"supermarket|convenience|food|bakery|butcher|deli|greengrocer|seafood|wholesale"](area.searchArea);""",
-        """nwr["name"]["craft"="caterer"](area.searchArea);""",
-        """nwr["name"]["tourism"~"hotel|hostel|motel|guest_house|apartment"](area.searchArea);""",
-        """nwr["name"]["amenity"="internet_cafe"](area.searchArea);""",
-        """nwr["name"]["leisure"="adult_gaming_centre"](area.searchArea);""",
+        // Every named shop type: market, mall, clothing, electronics, automotive, wholesale, etc.
+        """nwr["name"]["shop"](area.searchArea);""",
+        // Named offices/companies and professional services.
+        """nwr["name"]["office"](area.searchArea);""",
+        // Named crafts/workshops and small producers.
+        """nwr["name"]["craft"](area.searchArea);""",
+        // Manufacturing/industrial businesses.
+        """nwr["name"]["industrial"](area.searchArea);""",
+        """nwr["name"]["man_made"="works"](area.searchArea);""",
+        // Hospitality, food, nightlife, finance, fuel, health and other commercial services.
+        """nwr["name"]["amenity"~"restaurant|cafe|fast_food|food_court|bar|pub|biergarten|ice_cream|marketplace|catering|nightclub|bank|atm|pharmacy|clinic|doctors|dentist|veterinary|fuel|car_wash|car_rental|vehicle_inspection|cinema|casino|gambling|internet_cafe|coworking_space|conference_centre|events_venue|charging_station|bureau_de_change"](area.searchArea);""",
+        // Commercial accommodation/tourism.
+        """nwr["name"]["tourism"~"hotel|hostel|motel|guest_house|apartment|chalet|camp_site|caravan_site|resort"](area.searchArea);""",
+        // Entertainment / recreation businesses.
+        """nwr["name"]["leisure"~"adult_gaming_centre|amusement_arcade|bowling_alley|fitness_centre|sports_centre|dance|escape_game|water_park"](area.searchArea);""",
+        // Named clubs (sports/social/nightlife); users can further filter after fetch.
+        """nwr["name"]["club"](area.searchArea);""",
+        // Healthcare-tagged businesses that are not necessarily represented by amenity/shop.
+        """nwr["name"]["healthcare"](area.searchArea);""",
     ).joinToString("\n")
 
     private fun buildTermQuery(query: String): String {
@@ -107,6 +149,32 @@ object OverpassQueryBuilder {
                     """nwr["shop"="supermarket"](area.searchArea);""",
                     """nwr["shop"="convenience"](area.searchArea);""",
                 )
+            normalized in setOf("uretici", "üretici", "manufacturer", "factory", "fabrika") ->
+                listOf(
+                    """nwr["name"]["man_made"="works"](area.searchArea);""",
+                    """nwr["name"]["industrial"](area.searchArea);""",
+                    """nwr["name"]["craft"](area.searchArea);""",
+                )
+            normalized in setOf("toptanci", "toptancı", "wholesale", "wholesaler") ->
+                listOf(
+                    """nwr["name"]["shop"="wholesale"](area.searchArea);""",
+                    """nwr["name"~"$regex",i](area.searchArea);""",
+                )
+            normalized in setOf("avm", "mall", "alisveris merkezi", "alışveriş merkezi") ->
+                listOf(
+                    """nwr["name"]["shop"~"mall|department_store"](area.searchArea);""",
+                    """nwr["name"~"$regex",i](area.searchArea);""",
+                )
+            normalized in setOf("gece kulubu", "gece kulübü", "nightclub", "disko", "disco") ->
+                listOf(
+                    """nwr["name"]["amenity"="nightclub"](area.searchArea);""",
+                    """nwr["name"]["leisure"="dance"](area.searchArea);""",
+                    """nwr["name"]["club"](area.searchArea);""",
+                )
+            normalized in setOf("ofis", "sirket", "şirket", "office", "company") ->
+                listOf("""nwr["name"]["office"](area.searchArea);""")
+            normalized in setOf("magaza", "mağaza", "shop") ->
+                listOf("""nwr["name"]["shop"](area.searchArea);""")
             normalized in setOf("playstation", "playstation cafe", "oyun salonu", "internet cafe") ->
                 listOf(
                     """nwr["amenity"="internet_cafe"](area.searchArea);""",
@@ -126,6 +194,11 @@ object OverpassQueryBuilder {
                 """nwr["tourism"~"$regex",i](area.searchArea);""",
                 """nwr["leisure"~"$regex",i](area.searchArea);""",
                 """nwr["craft"~"$regex",i](area.searchArea);""",
+                """nwr["office"~"$regex",i](area.searchArea);""",
+                """nwr["industrial"~"$regex",i](area.searchArea);""",
+                """nwr["man_made"~"$regex",i](area.searchArea);""",
+                """nwr["club"~"$regex",i](area.searchArea);""",
+                """nwr["healthcare"~"$regex",i](area.searchArea);""",
             )
         }
         return categoryClauses.joinToString("\n")
@@ -159,6 +232,7 @@ class OverpassBusinessSourceAdapter(
         query: String,
         city: String,
         district: String?,
+        neighborhood: String?,
     ): List<VerifiedBusiness> = withContext(Dispatchers.IO) {
         contract.validate().getOrElse { error ->
             throw IllegalStateException("Overpass kaynak sözleşmesi geçersiz", error)
@@ -175,7 +249,7 @@ class OverpassBusinessSourceAdapter(
         var lastFailure: Exception? = null
         for (endpoint in endpoints) {
             try {
-                return@withContext fetchFromEndpoint(endpoint, query, city, district)
+                return@withContext fetchFromEndpoint(endpoint, query, city, district, neighborhood)
             } catch (error: kotlinx.coroutines.CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -191,6 +265,7 @@ class OverpassBusinessSourceAdapter(
         query: String,
         city: String,
         district: String?,
+        neighborhood: String?,
     ): List<VerifiedBusiness> {
         RateLimiter.await()
 
@@ -209,7 +284,7 @@ class OverpassBusinessSourceAdapter(
 
         try {
             val encodedQuery = java.net.URLEncoder.encode(
-                OverpassQueryBuilder.build(city, district, query),
+                OverpassQueryBuilder.build(city, district, query, neighborhood),
                 Charsets.UTF_8.name(),
             )
             connection.outputStream.bufferedWriter(Charsets.UTF_8).use { writer ->
@@ -236,7 +311,7 @@ class OverpassBusinessSourceAdapter(
                     append(String(buffer, 0, read, Charsets.UTF_8))
                 }
             }
-            return parse(text, city, district, nowEpochMs())
+            return parse(text, city, district, nowEpochMs(), neighborhood)
         } finally {
             connection.disconnect()
         }
@@ -247,6 +322,7 @@ class OverpassBusinessSourceAdapter(
         selectedCity: String,
         selectedDistrict: String?,
         verifiedAtEpochMs: Long,
+        selectedNeighborhood: String? = null,
     ): List<VerifiedBusiness> {
         val json = JSONObject(payload)
         val elements = json.optJSONArray("elements") ?: JSONArray()
@@ -286,6 +362,9 @@ class OverpassBusinessSourceAdapter(
                 "office",
                 "healthcare",
                 "sport",
+                "industrial",
+                "man_made",
+                "club",
                 "cuisine",
             )
             val id = item.optString("type") + ":" + item.optLong("id")
@@ -296,7 +375,9 @@ class OverpassBusinessSourceAdapter(
                 name = name,
                 city = selectedCity,
                 district = district,
-                neighborhood = firstTag(
+                neighborhood = selectedNeighborhood?.takeUnless {
+                    it.isBlank() || it.equals("Tümü", ignoreCase = true)
+                } ?: firstTag(
                     tags,
                     "addr:neighbourhood",
                     "addr:quarter",
