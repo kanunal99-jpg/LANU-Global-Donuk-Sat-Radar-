@@ -53,10 +53,17 @@ enum class SyncOperationState {
     FAILED,
 }
 
+enum class CrmRegistryStatus {
+    ACTIVE,
+    INACTIVE,
+    UNVERIFIED,
+}
+
 data class CrmCustomer(
     val id: String,
     val businessSourceId: String,
     val businessName: String,
+    val signboardName: String? = null,
     val city: String,
     val district: String,
     val neighborhood: String?,
@@ -72,6 +79,9 @@ data class CrmCustomer(
     val taxOrNationalId: String? = null,
     val phone: String? = null,
     val website: String? = null,
+    val registryStatus: CrmRegistryStatus = CrmRegistryStatus.UNVERIFIED,
+    val registrySource: String? = null,
+    val registryNumber: String? = null,
     val createdAtEpochMs: Long,
     val updatedAtEpochMs: Long,
     val version: Long = 0L,
