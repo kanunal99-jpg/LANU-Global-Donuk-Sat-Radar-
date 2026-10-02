@@ -84,13 +84,17 @@ class OfficialRegistryEnrichmentTest {
     }
 
     @Test
-    fun explicitlyInactiveOfficialRecordRemovesMatchedBusiness() {
+    fun explicitlyInactiveOfficialRecordIsRetainedWithInactiveEvidence() {
         val result = OfficialRegistryEnricher.enrich(
             businesses = listOf(business(phone = "0216 555 44 33")),
             records = listOf(record(status = "Terkin")),
         )
 
-        assertTrue(result.isEmpty())
+        assertEquals(1, result.size)
+        val enriched = result.single()
+        assertTrue(enriched.officialRegistryEvidence?.explicitlyInactive == true)
+        assertEquals("Terkin", enriched.officialRegistryEvidence?.status)
+        assertEquals("0216 555 44 33", enriched.phone)
     }
 
     @Test
