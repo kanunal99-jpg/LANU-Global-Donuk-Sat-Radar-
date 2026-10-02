@@ -56,7 +56,7 @@ class LocalCrmRepository(
             notes = notes?.trim()?.takeIf { it.isNotEmpty() },
             updatedAtEpochMs = timestamp,
             version = current.version + 1L,
-            syncState = SyncState.PENDING_UPLOAD.name,
+            syncState = syncStateFor(current.ownerUserId).name,
         )
         database.withTransaction {
             check(
@@ -68,7 +68,8 @@ class LocalCrmRepository(
                     state = updated.syncState,
                 ) == 1,
             ) { "CRM notu güncellenemedi: $customerId" }
-            database.syncOperationDao().insert(
+            enqueueIfCloudOwned(
+                current.ownerUserId,
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_CUSTOMER,
@@ -164,10 +165,11 @@ class LocalCrmRepository(
             val enriched = candidate.copy(
                 updatedAtEpochMs = timestamp,
                 version = existing.version + 1L,
-                syncState = SyncState.PENDING_UPLOAD.name,
+                syncState = syncStateFor(existing.ownerUserId).name,
             )
             database.customerDao().upsert(enriched)
-            database.syncOperationDao().insert(
+            enqueueIfCloudOwned(
+                existing.ownerUserId,
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_CUSTOMER,
@@ -220,10 +222,11 @@ class LocalCrmRepository(
         val enriched = enrichedCandidate.copy(
             updatedAtEpochMs = timestamp,
             version = existing.version + 1L,
-            syncState = SyncState.PENDING_UPLOAD.name,
+            syncState = syncStateFor(existing.ownerUserId).name,
         )
         database.customerDao().upsert(enriched)
-        database.syncOperationDao().insert(
+        enqueueIfCloudOwned(
+            existing.ownerUserId,
             SyncOperationEntity(
                 id = idGenerator(),
                 entityType = ENTITY_CUSTOMER,
@@ -263,7 +266,7 @@ class LocalCrmRepository(
             createdAtEpochMs = timestamp,
             updatedAtEpochMs = timestamp,
             version = 1L,
-            syncState = SyncState.PENDING_UPLOAD,
+            syncState = syncStateFor(ownerUserId),
         )
 
         database.customerDao().upsert(CrmMappings.toEntity(customer))
@@ -278,7 +281,8 @@ class LocalCrmRepository(
                 clientVersion = customer.version,
             ),
         )
-        database.syncOperationDao().insert(
+        enqueueIfCloudOwned(
+            ownerUserId,
             SyncOperationEntity(
                 id = idGenerator(),
                 entityType = ENTITY_CUSTOMER,
@@ -338,7 +342,7 @@ class LocalCrmRepository(
             createdAtEpochMs = timestamp,
             updatedAtEpochMs = timestamp,
             version = 1L,
-            syncState = SyncState.PENDING_UPLOAD,
+            syncState = syncStateFor(ownerUserId),
         )
         database.customerDao().upsert(CrmMappings.toEntity(customer))
         database.stageTransitionDao().insert(
@@ -352,7 +356,8 @@ class LocalCrmRepository(
                 clientVersion = customer.version,
             ),
         )
-        database.syncOperationDao().insert(
+        enqueueIfCloudOwned(
+            ownerUserId,
             SyncOperationEntity(
                 id = idGenerator(),
                 entityType = ENTITY_CUSTOMER,
