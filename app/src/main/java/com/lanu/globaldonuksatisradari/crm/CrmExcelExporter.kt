@@ -14,6 +14,7 @@ object CrmExcelExporter {
         "İşletme Türü",
         "TC/Vergi No",
         "Telefon No",
+        "Web Sitesi",
         "İl",
         "İlçe",
         "Mahalle",
@@ -56,6 +57,7 @@ object CrmExcelExporter {
                     BusinessCategoryLabels.displayName(customer.businessType).orEmpty(),
                     customer.taxOrNationalId.orEmpty(),
                     customer.phone.orEmpty(),
+                    customer.website.orEmpty(),
                     customer.city,
                     customer.district,
                     customer.neighborhood.orEmpty(),
@@ -66,7 +68,7 @@ object CrmExcelExporter {
                 )
                 append(rowXml(rowNumber, values.mapIndexed { cellIndex, value ->
                     val ref = columnName(cellIndex + 1) + rowNumber
-                    if (cellIndex == 9 || cellIndex == 10) {
+                    if (cellIndex == 10 || cellIndex == 11) {
                         numericOrTextCell(ref, value)
                     } else {
                         textCell(ref, value, style = 2)
@@ -89,13 +91,14 @@ object CrmExcelExporter {
     <col min="2" max="2" width="30" customWidth="1"/>
     <col min="3" max="3" width="22" customWidth="1"/>
     <col min="4" max="5" width="18" customWidth="1"/>
-    <col min="6" max="8" width="18" customWidth="1"/>
-    <col min="9" max="9" width="42" customWidth="1"/>
-    <col min="10" max="11" width="16" customWidth="1"/>
-    <col min="12" max="12" width="48" customWidth="1"/>
+    <col min="6" max="6" width="32" customWidth="1"/>
+    <col min="7" max="9" width="18" customWidth="1"/>
+    <col min="10" max="10" width="42" customWidth="1"/>
+    <col min="11" max="12" width="16" customWidth="1"/>
+    <col min="13" max="13" width="48" customWidth="1"/>
   </cols>
   <sheetData>$rows</sheetData>
-  <autoFilter ref="A1:L$lastRow"/>
+  <autoFilter ref="A1:M$lastRow"/>
 </worksheet>"""
     }
 
