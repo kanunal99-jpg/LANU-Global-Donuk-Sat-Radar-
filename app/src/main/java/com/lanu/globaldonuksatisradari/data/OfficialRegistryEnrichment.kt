@@ -196,7 +196,6 @@ class OfficialRegistryStore(
             importedAtEpochMs = importedAtEpochMs,
             defaultCity = defaultCity,
         ).distinctBy(::recordIdentityKey)
-            .take(MAX_RECORDS_PER_PARTITION)
 
         require(parsed.isNotEmpty()) {
             "Dosyada işletme adı içeren kullanılabilir resmî kayıt bulunamadı."
@@ -439,7 +438,7 @@ class OfficialRegistryStore(
     private companion object {
         const val DIRECTORY_NAME = "official_registry"
         const val MAX_IMPORT_BYTES = 25 * 1024 * 1024
-        const val MAX_RECORDS_PER_PARTITION = 100_000
+        const val MAX_RECORDS_PER_PARTITION = 250_000
         const val UNKNOWN_PARTITION = "unknown"
         const val PARTITION_SUFFIX = ".jsonl"
     }
