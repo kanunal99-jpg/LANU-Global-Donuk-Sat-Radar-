@@ -163,6 +163,23 @@ class CrmSyncEngineTest {
                 .sortedBy { it.createdAtEpochMs }
                 .take(limit)
 
+        override suspend fun pendingForOwner(
+            ownerUserId: String,
+            limit: Int,
+        ): List<SyncOperationEntity> = pending(limit)
+
+        override suspend fun countForEntity(
+            entityType: String,
+            entityId: String,
+        ): Int = allOperations.count {
+            it.entityType == entityType && it.entityId == entityId
+        }
+
+        override fun observePendingCountForOwner(ownerUserId: String) = observePendingCount()
+
+        override suspend fun maxCreatedAtEpochMs(): Long? =
+            allOperations.maxOfOrNull { it.createdAtEpochMs }
+
         override fun observePendingCount() = flowOf(
             allOperations.count { it.state == SyncOperationState.PENDING.name },
         )
