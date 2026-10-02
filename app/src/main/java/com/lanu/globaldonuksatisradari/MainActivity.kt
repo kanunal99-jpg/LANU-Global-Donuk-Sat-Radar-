@@ -650,7 +650,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         }
                         if (filteredCrmCustomers.isNotEmpty()) {
                             item { Text("CRM müşterileri", style = MaterialTheme.typography.titleMedium) }
-                            items(filteredCrmCustomers.take(25), key = { it.id }) { customer ->
+                            items(filteredCrmCustomers, key = { it.id }) { customer ->
                                 Card(Modifier.fillMaxWidth()) {
                                     Row(Modifier.padding(14.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Column(Modifier.weight(1f)) { Text(customer.businessName, style = MaterialTheme.typography.titleMedium); Text("${customer.city} • ${customer.district} • ${customer.stage.name}", style = MaterialTheme.typography.bodySmall) }
