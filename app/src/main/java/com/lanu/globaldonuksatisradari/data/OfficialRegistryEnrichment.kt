@@ -195,39 +195,19 @@ class OfficialRegistryStore(
             source = source,
             importedAtEpochMs = importedAtEpochMs,
             defaultCity = defaultCity,
-        ).distinctBy { record ->
-            listOf(
-                record.source.name,
-                record.registrationNumber.orEmpty(),
-                OfficialRegistryNormalizer.text(record.businessName),
-                OfficialRegistryNormalizer.text(record.district.orEmpty()),
-                OfficialRegistryNormalizer.phones(record.phone).sorted().joinToString(","),
-            ).joinToString("|")
-        }.take(MAX_RECORDS)
+        ).distinctBy(::recordIdentityKey)
+            .take(MAX_RECORDS_PER_PARTITION)
 
         require(parsed.isNotEmpty()) {
             "Dosyada işletme adı içeren kullanılabilir resmî kayıt bulunamadı."
         }
 
-        val target = sourceFile(source)
-        val temp = File(directory, target.name + ".tmp")
-        temp.bufferedWriter(Charsets.UTF_8).use { writer ->
-            parsed.forEach { record ->
-                writer.appendLine(encode(record).toString())
+        migrateLegacyFile(source)
+
+        parsed.groupBy { partitionToken(it.city ?: defaultCity) }
+            .forEach { (partition, records) ->
+                writeRecordsAtomically(partitionFile(source, partition), records)
             }
-        }
-        val backup = File(directory, target.name + ".bak")
-        if (backup.exists()) backup.delete()
-        if (target.exists() && !target.renameTo(backup)) {
-            temp.delete()
-            throw IOException("Eski resmî sicil önbelleği güvenli yedeğe taşınamadı.")
-        }
-        if (!temp.renameTo(target)) {
-            temp.delete()
-            if (backup.exists()) backup.renameTo(target)
-            throw IOException("Resmî sicil verisi güvenli şekilde kaydedilemedi; önceki kayıt korundu.")
-        }
-        if (backup.exists()) backup.delete()
 
         return OfficialRegistryImportSummary(
             source = source,
@@ -257,7 +237,7 @@ class OfficialRegistryStore(
             ?.let(OfficialRegistryNormalizer::text)
 
         return OfficialRegistrySource.entries.flatMap { source ->
-            readSource(source).filter { record ->
+            readSource(source, city).filter { record ->
                 val cityMatches = record.city.isNullOrBlank() ||
                     OfficialRegistryNormalizer.text(record.city) == normalizedCity
                 val districtMatches = normalizedDistrict == null ||
@@ -275,20 +255,152 @@ class OfficialRegistryStore(
 
     fun count(source: OfficialRegistrySource): Int = readSource(source).size
 
-    private fun readSource(source: OfficialRegistrySource): List<OfficialRegistryRecord> {
-        val file = sourceFile(source)
+    private fun readSource(
+        source: OfficialRegistrySource,
+        city: String? = null,
+    ): List<OfficialRegistryRecord> {
+        val records = sourceFiles(source, city)
+            .flatMap(::readFile)
+        return deduplicateNewest(records)
+    }
+
+    private fun sourceFiles(
+        source: OfficialRegistrySource,
+        city: String?,
+    ): List<File> {
+        val legacy = legacySourceFile(source)
+        if (city != null) {
+            return listOf(
+                partitionFile(source, partitionToken(city)),
+                partitionFile(source, UNKNOWN_PARTITION),
+                legacy,
+            ).filter(File::exists).distinctBy(File::getAbsolutePath)
+        }
+
+        val prefix = partitionPrefix(source)
+        val partitioned = directory.listFiles()
+            ?.filter { file ->
+                file.isFile &&
+                    file.name.startsWith(prefix) &&
+                    file.name.endsWith(PARTITION_SUFFIX)
+            }
+            ?.sortedBy(File::getName)
+            .orEmpty()
+        return (partitioned + listOf(legacy).filter(File::exists))
+            .distinctBy(File::getAbsolutePath)
+    }
+
+    private fun readFile(file: File): List<OfficialRegistryRecord> {
         if (!file.exists()) return emptyList()
+        val source = sourceFromFileName(file.name) ?: return emptyList()
         return file.useLines(Charsets.UTF_8) { lines ->
             lines.mapNotNull { line ->
                 line.takeIf(String::isNotBlank)?.let { raw ->
                     runCatching { decode(JSONObject(raw), source) }.getOrNull()
                 }
-            }.take(MAX_RECORDS).toList()
+            }.take(MAX_RECORDS_PER_PARTITION).toList()
         }
     }
 
-    private fun sourceFile(source: OfficialRegistrySource): File =
+    private fun migrateLegacyFile(source: OfficialRegistrySource) {
+        val legacy = legacySourceFile(source)
+        if (!legacy.exists()) return
+
+        val legacyRecords = readFile(legacy)
+        legacyRecords.groupBy { partitionToken(it.city) }
+            .forEach { (partition, records) ->
+                val target = partitionFile(source, partition)
+                val combined = if (target.exists()) {
+                    deduplicateNewest(readFile(target) + records)
+                } else {
+                    records
+                }
+                writeRecordsAtomically(target, combined.take(MAX_RECORDS_PER_PARTITION))
+            }
+
+        if (!legacy.delete()) {
+            throw IOException("Eski resmî sicil deposu partition yapısına taşındı ancak eski dosya silinemedi.")
+        }
+    }
+
+    private fun writeRecordsAtomically(
+        target: File,
+        records: List<OfficialRegistryRecord>,
+    ) {
+        val temp = File(directory, target.name + ".tmp")
+        temp.bufferedWriter(Charsets.UTF_8).use { writer ->
+            records.forEach { record ->
+                writer.appendLine(encode(record).toString())
+            }
+        }
+        val backup = File(directory, target.name + ".bak")
+        if (backup.exists()) backup.delete()
+        if (target.exists() && !target.renameTo(backup)) {
+            temp.delete()
+            throw IOException("Eski resmî sicil önbelleği güvenli yedeğe taşınamadı.")
+        }
+        if (!temp.renameTo(target)) {
+            temp.delete()
+            if (backup.exists()) backup.renameTo(target)
+            throw IOException("Resmî sicil verisi güvenli şekilde kaydedilemedi; önceki kayıt korundu.")
+        }
+        if (backup.exists()) backup.delete()
+    }
+
+    private fun deduplicateNewest(
+        records: List<OfficialRegistryRecord>,
+    ): List<OfficialRegistryRecord> {
+        val byIdentity = LinkedHashMap<String, OfficialRegistryRecord>()
+        records.forEach { record ->
+            val key = recordIdentityKey(record)
+            val previous = byIdentity[key]
+            if (previous == null || record.importedAtEpochMs >= previous.importedAtEpochMs) {
+                byIdentity[key] = record
+            }
+        }
+        return byIdentity.values.toList()
+    }
+
+    private fun recordIdentityKey(record: OfficialRegistryRecord): String =
+        listOf(
+            record.source.name,
+            record.registrationNumber.orEmpty(),
+            OfficialRegistryNormalizer.text(record.businessName),
+            OfficialRegistryNormalizer.text(record.city.orEmpty()),
+            OfficialRegistryNormalizer.text(record.district.orEmpty()),
+            OfficialRegistryNormalizer.phones(record.phone).sorted().joinToString(","),
+        ).joinToString("|")
+
+    private fun partitionToken(city: String?): String {
+        val normalized = city
+            ?.takeIf(String::isNotBlank)
+            ?.let(OfficialRegistryNormalizer::text)
+            .orEmpty()
+        if (normalized.isBlank()) return UNKNOWN_PARTITION
+        return normalized
+            .map { char -> if (char.isLetterOrDigit()) char else '_' }
+            .joinToString("")
+            .trim('_')
+            .take(80)
+            .ifBlank { UNKNOWN_PARTITION }
+    }
+
+    private fun partitionPrefix(source: OfficialRegistrySource): String =
+        "registry_${source.name.lowercase(Locale.ROOT)}__"
+
+    private fun partitionFile(
+        source: OfficialRegistrySource,
+        partition: String,
+    ): File = File(directory, partitionPrefix(source) + partition + PARTITION_SUFFIX)
+
+    private fun legacySourceFile(source: OfficialRegistrySource): File =
         File(directory, "registry_${source.name.lowercase(Locale.ROOT)}.jsonl")
+
+    private fun sourceFromFileName(fileName: String): OfficialRegistrySource? =
+        OfficialRegistrySource.entries.firstOrNull { source ->
+            fileName == legacySourceFile(source).name ||
+                fileName.startsWith(partitionPrefix(source))
+        }
 
     private fun encode(record: OfficialRegistryRecord): JSONObject =
         JSONObject().apply {
@@ -327,7 +439,9 @@ class OfficialRegistryStore(
     private companion object {
         const val DIRECTORY_NAME = "official_registry"
         const val MAX_IMPORT_BYTES = 25 * 1024 * 1024
-        const val MAX_RECORDS = 100_000
+        const val MAX_RECORDS_PER_PARTITION = 100_000
+        const val UNKNOWN_PARTITION = "unknown"
+        const val PARTITION_SUFFIX = ".jsonl"
     }
 }
 
