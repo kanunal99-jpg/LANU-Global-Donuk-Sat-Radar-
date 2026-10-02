@@ -11,23 +11,33 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @Database(
     entities = [
         CrmCustomerEntity::class,
+        CrmContactEntity::class,
         CrmActivityEntity::class,
         CrmStageTransitionEntity::class,
         SyncOperationEntity::class,
         CrmNextActionEntity::class,
         CrmOpportunityEntity::class,
+        CrmQuoteEntity::class,
+        CrmOrderEntity::class,
+        CrmQuoteLineEntity::class,
+        CrmOrderLineEntity::class,
     ],
-    version = 8,
+    version = 11,
     exportSchema = false,
 )
 @TypeConverters(CrmRoomConverters::class)
 abstract class LanuCrmDatabase : RoomDatabase() {
     abstract fun customerDao(): CrmCustomerDao
+    abstract fun contactDao(): CrmContactDao
     abstract fun activityDao(): CrmActivityDao
     abstract fun stageTransitionDao(): CrmStageTransitionDao
     abstract fun syncOperationDao(): SyncOperationDao
     abstract fun nextActionDao(): CrmNextActionDao
     abstract fun opportunityDao(): CrmOpportunityDao
+    abstract fun quoteDao(): CrmQuoteDao
+    abstract fun orderDao(): CrmOrderDao
+    abstract fun quoteLineDao(): CrmQuoteLineDao
+    abstract fun orderLineDao(): CrmOrderLineDao
 
     companion object {
         private val MIGRATION_2_3 = object : Migration(2, 3) {
@@ -126,6 +136,41 @@ abstract class LanuCrmDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS crm_contact (id TEXT NOT NULL PRIMARY KEY, customerId TEXT NOT NULL, fullName TEXT NOT NULL, role TEXT, phone TEXT, email TEXT, isPrimary INTEGER NOT NULL, createdAtEpochMs INTEGER NOT NULL, updatedAtEpochMs INTEGER NOT NULL, version INTEGER NOT NULL, syncState TEXT NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_contact_customerId_updatedAtEpochMs ON crm_contact(customerId, updatedAtEpochMs)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_contact_syncState ON crm_contact(syncState)")
+            }
+        }
+
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS crm_quote (id TEXT NOT NULL PRIMARY KEY, customerId TEXT NOT NULL, opportunityId TEXT, quoteNumber TEXT NOT NULL, status TEXT NOT NULL, currency TEXT NOT NULL, totalMinor INTEGER NOT NULL, validUntilEpochMs INTEGER, notes TEXT, createdAtEpochMs INTEGER NOT NULL, updatedAtEpochMs INTEGER NOT NULL, version INTEGER NOT NULL, syncState TEXT NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_quote_customerId_updatedAtEpochMs ON crm_quote(customerId, updatedAtEpochMs)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_quote_status ON crm_quote(status)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_quote_syncState ON crm_quote(syncState)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS crm_order (id TEXT NOT NULL PRIMARY KEY, customerId TEXT NOT NULL, quoteId TEXT, orderNumber TEXT NOT NULL, status TEXT NOT NULL, currency TEXT NOT NULL, totalMinor INTEGER NOT NULL, notes TEXT, createdAtEpochMs INTEGER NOT NULL, updatedAtEpochMs INTEGER NOT NULL, version INTEGER NOT NULL, syncState TEXT NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_order_customerId_updatedAtEpochMs ON crm_order(customerId, updatedAtEpochMs)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_order_quoteId ON crm_order(quoteId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_order_status ON crm_order(status)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_order_syncState ON crm_order(syncState)")
+            }
+        }
+
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS crm_quote_line (id TEXT NOT NULL PRIMARY KEY, quoteId TEXT NOT NULL, productId TEXT, productName TEXT NOT NULL, unit TEXT NOT NULL, quantityMilli INTEGER NOT NULL, unitPriceMinor INTEGER NOT NULL, discountBasisPoints INTEGER NOT NULL, lineTotalMinor INTEGER NOT NULL, createdAtEpochMs INTEGER NOT NULL, updatedAtEpochMs INTEGER NOT NULL, version INTEGER NOT NULL, syncState TEXT NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_quote_line_quoteId_updatedAtEpochMs ON crm_quote_line(quoteId, updatedAtEpochMs)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_quote_line_productId ON crm_quote_line(productId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_quote_line_syncState ON crm_quote_line(syncState)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS crm_order_line (id TEXT NOT NULL PRIMARY KEY, orderId TEXT NOT NULL, productId TEXT, productName TEXT NOT NULL, unit TEXT NOT NULL, quantityMilli INTEGER NOT NULL, unitPriceMinor INTEGER NOT NULL, discountBasisPoints INTEGER NOT NULL, lineTotalMinor INTEGER NOT NULL, createdAtEpochMs INTEGER NOT NULL, updatedAtEpochMs INTEGER NOT NULL, version INTEGER NOT NULL, syncState TEXT NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_order_line_orderId_updatedAtEpochMs ON crm_order_line(orderId, updatedAtEpochMs)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_order_line_productId ON crm_order_line(productId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_crm_order_line_syncState ON crm_order_line(syncState)")
+            }
+        }
+
         @Volatile
         private var instance: LanuCrmDatabase? = null
 
@@ -136,7 +181,18 @@ abstract class LanuCrmDatabase : RoomDatabase() {
                     LanuCrmDatabase::class.java,
                     "lanu_global_donuk_crm.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                    .addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_2_3,
+                        MIGRATION_3_4,
+                        MIGRATION_4_5,
+                        MIGRATION_5_6,
+                        MIGRATION_6_7,
+                        MIGRATION_7_8,
+                        MIGRATION_8_9,
+                        MIGRATION_9_10,
+                        MIGRATION_10_11,
+                    )
                     .build()
                     .also { instance = it }
             }
