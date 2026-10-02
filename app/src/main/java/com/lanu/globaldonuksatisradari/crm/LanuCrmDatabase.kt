@@ -22,7 +22,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CrmQuoteLineEntity::class,
         CrmOrderLineEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = false,
 )
 @TypeConverters(CrmRoomConverters::class)
@@ -171,6 +171,15 @@ abstract class LanuCrmDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE crm_customer ADD COLUMN signboardName TEXT")
+                db.execSQL("ALTER TABLE crm_customer ADD COLUMN registryStatus TEXT NOT NULL DEFAULT 'UNVERIFIED'")
+                db.execSQL("ALTER TABLE crm_customer ADD COLUMN registrySource TEXT")
+                db.execSQL("ALTER TABLE crm_customer ADD COLUMN registryNumber TEXT")
+            }
+        }
+
         @Volatile
         private var instance: LanuCrmDatabase? = null
 
@@ -192,6 +201,7 @@ abstract class LanuCrmDatabase : RoomDatabase() {
                         MIGRATION_8_9,
                         MIGRATION_9_10,
                         MIGRATION_10_11,
+                        MIGRATION_11_12,
                     )
                     .build()
                     .also { instance = it }
