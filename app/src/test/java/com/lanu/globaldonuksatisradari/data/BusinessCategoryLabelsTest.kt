@@ -18,6 +18,16 @@ class BusinessCategoryLabelsTest {
     }
 
     @Test
+    fun broadCommercialCategoriesAreExposedForSourceDrivenSearch() {
+        assertEquals("manufacturer", BusinessCategoryLabels.searchQueryForLabel("Üretici / Fabrika"))
+        assertEquals("wholesale", BusinessCategoryLabels.searchQueryForLabel("Toptancı"))
+        assertEquals("mall", BusinessCategoryLabels.searchQueryForLabel("AVM"))
+        assertEquals("nightclub", BusinessCategoryLabels.searchQueryForLabel("Gece Kulübü / Disko"))
+        assertEquals("office", BusinessCategoryLabels.searchQueryForLabel("Şirket / Ofis"))
+        assertEquals("shop", BusinessCategoryLabels.searchQueryForLabel("Mağaza"))
+    }
+
+    @Test
     fun searchCategoryLabelsCanDriveSourceQueriesBeforeResultsExist() {
         assertEquals("restaurant", BusinessCategoryLabels.searchQueryForLabel("Restoran"))
         assertEquals("hotel", BusinessCategoryLabels.searchQueryForLabel("Otel"))
