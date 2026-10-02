@@ -31,6 +31,15 @@ class CrmRoutePlannerTest {
     }
 
     @Test
+    fun estimatedTravelTimeIsMonotonicAndZeroForOrigin() {
+        assertEquals(0, RouteTimeEstimator.estimatedTravelMinutes(0.0))
+        val oneKm = RouteTimeEstimator.estimatedTravelMinutes(1.0)
+        val fiveKm = RouteTimeEstimator.estimatedTravelMinutes(5.0)
+        assertTrue(oneKm >= 1)
+        assertTrue(fiveKm > oneKm)
+    }
+
+    @Test
     fun invalidCoordinatesAreNotRoutable() {
         val a = customer("a", "A", 200.0, 29.0200)
         assertTrue(CrmRoutePlanner.plan(listOf(a)).isEmpty())
