@@ -17,6 +17,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,7 +55,13 @@ fun OfficialRegistryImportCard(
     var registryRecords by remember { mutableStateOf<List<OfficialRegistryRecord>>(emptyList()) }
     var loadingRecords by remember { mutableStateOf(false) }
     var counts by remember {
-        mutableStateOf(OfficialRegistrySource.entries.associateWith(store::count))
+        mutableStateOf<Map<OfficialRegistrySource, Int>>(emptyMap())
+    }
+
+    LaunchedEffect(store) {
+        counts = withContext(Dispatchers.IO) {
+            OfficialRegistrySource.entries.associateWith(store::count)
+        }
     }
 
     val picker = rememberLauncherForActivityResult(
@@ -79,11 +86,12 @@ fun OfficialRegistryImportCard(
                     )
                 }
             }.onSuccess { summary ->
-                counts = OfficialRegistrySource.entries.associateWith(store::count)
+                counts = withContext(Dispatchers.IO) {
+                    OfficialRegistrySource.entries.associateWith(store::count)
+                }
                 val records = withContext(Dispatchers.IO) {
                     if (!defaultCity.isNullOrBlank()) {
-                        store.recordsFor(defaultCity, null)
-                            .filter { it.source == summary.source }
+                        store.recordsFor(summary.source, defaultCity, null)
                     } else {
                         store.records(summary.source)
                     }
@@ -195,8 +203,7 @@ fun OfficialRegistryImportCard(
                         scope.launch {
                             registryRecords = withContext(Dispatchers.IO) {
                                 if (!defaultCity.isNullOrBlank()) {
-                                    store.recordsFor(defaultCity, null)
-                                        .filter { it.source == selectedSource }
+                                    store.recordsFor(selectedSource, defaultCity, null)
                                 } else {
                                     store.records(selectedSource)
                                 }
