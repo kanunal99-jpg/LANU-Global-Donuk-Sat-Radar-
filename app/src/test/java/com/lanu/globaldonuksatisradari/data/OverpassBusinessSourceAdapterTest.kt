@@ -5,24 +5,28 @@ import kotlin.test.assertTrue
 
 class OverpassBusinessSourceAdapterTest {
     @Test
-    fun blankQueryBuildsBroadCommercialInventory() {
+    fun blankQueryBuildsBroadCommercialInventoryWithoutCivicPoiNoise() {
         val query = OverpassQueryBuilder.build("İstanbul", null, "")
         assertTrue(query.contains("""area["name"="İstanbul"]["boundary"="administrative"]["admin_level"="4"]->.searchArea;"""))
-        assertTrue(query.contains("""["shop"]"""))
-        assertTrue(query.contains("""["office"]"""))
-        assertTrue(query.contains("""["craft"]"""))
-        assertTrue(query.contains("""["industrial"]"""))
-        assertTrue(query.contains("""["man_made"="works"]"""))
-        assertTrue(query.contains("""["amenity"]["amenity"!~"""))
-        assertTrue(query.contains("place_of_worship|school"))
-        assertTrue(query.contains("""["tourism"]"""))
-        assertTrue(query.contains("""["leisure"]"""))
-        assertTrue(query.contains("""["club"]"""))
-        assertTrue(query.contains("""["healthcare"]"""))
-        assertTrue(query.contains("""["building"~"retail|commercial|industrial|warehouse|office|supermarket|kiosk|hotel"]"""))
+        assertTrue(query.contains("""["shop"]["name"]"""))
+        assertTrue(query.contains("""["shop"]["brand"]"""))
+        assertTrue(query.contains("""["shop"]["operator"]"""))
+        assertTrue(query.contains("""["office"]["name"]["office"!~""""))
+        assertTrue(query.contains("government|ngo|association|foundation"))
+        assertTrue(query.contains("""["craft"]["name"]"""))
+        assertTrue(query.contains("""["industrial"]["name"]"""))
+        assertTrue(query.contains("""["man_made"="works"]["name"]"""))
+        assertTrue(query.contains("""["amenity"]["name"]["amenity"!~""""))
+        assertTrue(query.contains("post_office|atm"))
+        assertTrue(query.contains("""["tourism"~"^(hotel|hostel|motel|guest_house|apartment"""))
+        assertTrue(query.contains("""["leisure"~"^(adult_gaming_centre|amusement_arcade|bowling_alley"""))
+        assertTrue(query.contains("""["healthcare"]["name"]"""))
+        assertTrue(query.contains("""["building"~"retail|commercial|industrial|warehouse|office|supermarket|kiosk|hotel"]["name"]"""))
+        assertTrue(!query.contains("""nwr["name"]["tourism"]"""))
+        assertTrue(!query.contains("""nwr["name"]["leisure"]"""))
+        assertTrue(!query.contains("""nwr["name"]["club"]"""))
         assertTrue(!query.contains("map_to_area"))
     }
-
     @Test
     fun districtQueryUsesDistrictAdministrativeBoundary() {
         val query = OverpassQueryBuilder.build("İstanbul", "Kadıköy", "")
@@ -147,6 +151,32 @@ class OverpassBusinessSourceAdapterTest {
 
         assertTrue(hotel.contains("""["tourism"~"hotel",i]"""))
         assertTrue(gaming.contains("""["leisure"~"adult_gaming_centre",i]"""))
+    }
+
+    @Test
+    fun parserAcceptsBrandOrOperatorWhenNameTagIsMissing() {
+        val payload = """
+            {"elements":[
+              {
+                "type":"node","id":1,"lat":40.99,"lon":29.26,
+                "tags":{"shop":"convenience","brand":"Marka Market"}
+              },
+              {
+                "type":"node","id":2,"lat":40.98,"lon":29.27,
+                "tags":{"office":"company","operator":"Operatör Şirket"}
+              }
+            ]}
+        """.trimIndent()
+
+        val result = OverpassBusinessSourceAdapter().parse(
+            payload = payload,
+            selectedCity = "İstanbul",
+            selectedDistrict = "Sultanbeyli",
+            verifiedAtEpochMs = 100L,
+        )
+
+        assertTrue(result.any { it.name == "Marka Market" })
+        assertTrue(result.any { it.name == "Operatör Şirket" })
     }
 
 }
