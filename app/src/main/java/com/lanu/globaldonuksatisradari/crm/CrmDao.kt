@@ -43,6 +43,66 @@ interface CrmCustomerDao {
 }
 
 @Dao
+interface CrmContactDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(contact: CrmContactEntity)
+
+    @Query("SELECT * FROM crm_contact WHERE id = :id LIMIT 1")
+    suspend fun findById(id: String): CrmContactEntity?
+
+    @Query("SELECT * FROM crm_contact WHERE customerId = :customerId ORDER BY isPrimary DESC, fullName COLLATE NOCASE ASC")
+    fun observeForCustomer(customerId: String): Flow<List<CrmContactEntity>>
+
+    @Query("SELECT * FROM crm_contact WHERE customerId = :customerId ORDER BY isPrimary DESC, fullName COLLATE NOCASE ASC")
+    suspend fun listForCustomer(customerId: String): List<CrmContactEntity>
+
+    @Query("SELECT COUNT(*) FROM crm_contact WHERE customerId = :customerId")
+    suspend fun countForCustomer(customerId: String): Int
+
+    @Query("UPDATE crm_contact SET isPrimary = 0, updatedAtEpochMs = :updatedAtEpochMs, version = version + 1, syncState = :state WHERE customerId = :customerId AND isPrimary = 1")
+    suspend fun clearPrimary(customerId: String, updatedAtEpochMs: Long, state: String): Int
+
+    @Query("UPDATE crm_contact SET syncState = :state WHERE id = :id")
+    suspend fun updateSyncState(id: String, state: String): Int
+}
+
+@Dao
+interface CrmQuoteDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(quote: CrmQuoteEntity)
+
+    @Query("SELECT * FROM crm_quote WHERE id = :id LIMIT 1")
+    suspend fun findById(id: String): CrmQuoteEntity?
+
+    @Query("SELECT * FROM crm_quote WHERE customerId = :customerId ORDER BY updatedAtEpochMs DESC")
+    fun observeForCustomer(customerId: String): Flow<List<CrmQuoteEntity>>
+
+    @Query("UPDATE crm_quote SET status = :status, updatedAtEpochMs = :updatedAtEpochMs, version = version + 1, syncState = :syncState WHERE id = :id")
+    suspend fun updateStatus(id: String, status: String, updatedAtEpochMs: Long, syncState: String): Int
+
+    @Query("UPDATE crm_quote SET syncState = :state WHERE id = :id")
+    suspend fun updateSyncState(id: String, state: String): Int
+}
+
+@Dao
+interface CrmOrderDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(order: CrmOrderEntity)
+
+    @Query("SELECT * FROM crm_order WHERE id = :id LIMIT 1")
+    suspend fun findById(id: String): CrmOrderEntity?
+
+    @Query("SELECT * FROM crm_order WHERE customerId = :customerId ORDER BY updatedAtEpochMs DESC")
+    fun observeForCustomer(customerId: String): Flow<List<CrmOrderEntity>>
+
+    @Query("UPDATE crm_order SET status = :status, updatedAtEpochMs = :updatedAtEpochMs, version = version + 1, syncState = :syncState WHERE id = :id")
+    suspend fun updateStatus(id: String, status: String, updatedAtEpochMs: Long, syncState: String): Int
+
+    @Query("UPDATE crm_order SET syncState = :state WHERE id = :id")
+    suspend fun updateSyncState(id: String, state: String): Int
+}
+
+@Dao
 interface CrmActivityDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(activity: CrmActivityEntity)
@@ -190,6 +250,9 @@ interface SyncOperationDao {
 
     @Query("SELECT COUNT(*) FROM crm_sync_operation WHERE state = 'PENDING'")
     fun observePendingCount(): kotlinx.coroutines.flow.Flow<Int>
+
+    @Query("SELECT MAX(createdAtEpochMs) FROM crm_sync_operation")
+    suspend fun maxCreatedAtEpochMs(): Long?
 
     @Query(
         "UPDATE crm_sync_operation " +
