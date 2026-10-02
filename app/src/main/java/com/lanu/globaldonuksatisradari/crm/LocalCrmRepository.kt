@@ -9,6 +9,7 @@ import com.lanu.globaldonuksatisradari.data.OfficialRegistryTrust
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOf
 import org.json.JSONObject
 import java.util.UUID
 
@@ -88,7 +89,10 @@ class LocalCrmRepository(
         business: VerifiedBusiness,
         ownerUserId: String? = null,
     ): CrmCustomer = database.withTransaction {
-        val existing = database.customerDao().findByBusinessSourceId(business.id)
+        val existing = database.customerDao().findByBusinessSourceIdForOwner(
+            businessSourceId = business.id,
+            ownerUserId = ownerUserId,
+        )
         if (existing != null) {
             return@withTransaction CrmMappings.toDomain(enrichBusinessMetadata(existing, business))
         }
@@ -102,7 +106,10 @@ class LocalCrmRepository(
         var inserted = 0
         var alreadyExisting = 0
         businesses.distinctBy { it.id }.forEach { business ->
-            val existing = database.customerDao().findByBusinessSourceId(business.id)
+            val existing = database.customerDao().findByBusinessSourceIdForOwner(
+                businessSourceId = business.id,
+                ownerUserId = ownerUserId,
+            )
             if (existing != null) {
                 enrichBusinessMetadata(existing, business)
                 alreadyExisting++
@@ -692,8 +699,26 @@ class LocalCrmRepository(
     fun observePendingSyncCount(): Flow<Int> =
         database.syncOperationDao().observePendingCount()
 
+    fun observePendingSyncCount(ownerUserId: String?): Flow<Int> =
+        if (ownerUserId.isNullOrBlank()) {
+            flowOf(0)
+        } else {
+            database.syncOperationDao().observePendingCountForOwner(ownerUserId)
+        }
+
     suspend fun pendingSync(limit: Int = 100): List<SyncOperation> =
         database.syncOperationDao().pending(limit).map(CrmMappings::toDomain)
+
+    private fun syncStateFor(ownerUserId: String?): SyncState =
+        if (ownerUserId.isNullOrBlank()) SyncState.LOCAL_ONLY else SyncState.PENDING_UPLOAD
+
+    private suspend fun enqueueIfCloudOwned(
+        ownerUserId: String?,
+        operation: SyncOperationEntity,
+    ) {
+        if (ownerUserId.isNullOrBlank()) return
+        database.syncOperationDao().insert(operation)
+    }
 
     companion object {
         const val ENTITY_CUSTOMER = "customer"
