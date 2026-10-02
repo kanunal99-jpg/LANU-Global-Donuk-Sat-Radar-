@@ -34,6 +34,29 @@ object BusinessCategoryLabels {
         "marketplace" to "Pazar / Çarşı",
         "internet_cafe" to "İnternet Kafe",
         "adult_gaming_centre" to "Oyun Salonu",
+        "nightclub" to "Gece Kulübü / Disko",
+        "mall" to "AVM",
+        "department_store" to "Büyük Mağaza",
+        "company" to "Şirket / Ofis",
+        "works" to "Üretici / Fabrika",
+        "factory" to "Üretici / Fabrika",
+        "warehouse" to "Depo / Toptan",
+        "fitness_centre" to "Fitness Merkezi",
+        "amusement_arcade" to "Eğlence Salonu",
+        "bowling_alley" to "Bowling",
+        "dance" to "Dans / Gece Eğlencesi",
+        "bank" to "Banka",
+        "pharmacy" to "Eczane",
+        "clinic" to "Klinik",
+        "doctors" to "Doktor / Muayenehane",
+        "dentist" to "Diş Kliniği",
+        "veterinary" to "Veteriner",
+        "fuel" to "Akaryakıt",
+        "car_wash" to "Oto Yıkama",
+        "car_rental" to "Araç Kiralama",
+        "cinema" to "Sinema",
+        "casino" to "Casino / Oyun",
+        "coworking_space" to "Ortak Çalışma Alanı",
     )
 
     val searchCategories: List<BusinessSearchCategory> = listOf(
@@ -63,6 +86,12 @@ object BusinessCategoryLabels {
         BusinessSearchCategory("Pazar / Çarşı", "marketplace"),
         BusinessSearchCategory("İnternet Kafe", "internet cafe"),
         BusinessSearchCategory("Oyun Salonu", "adult_gaming_centre"),
+        BusinessSearchCategory("Üretici / Fabrika", "manufacturer"),
+        BusinessSearchCategory("Toptancı", "wholesale"),
+        BusinessSearchCategory("AVM", "mall"),
+        BusinessSearchCategory("Gece Kulübü / Disko", "nightclub"),
+        BusinessSearchCategory("Şirket / Ofis", "office"),
+        BusinessSearchCategory("Mağaza", "shop"),
     )
 
     val searchLabels: List<String>
