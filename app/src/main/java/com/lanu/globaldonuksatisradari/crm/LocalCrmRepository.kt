@@ -145,18 +145,33 @@ class LocalCrmRepository(
             ) ?: return@forEach
 
             matched++
-            if (match.status?.let(OfficialRegistryStatus::isInactive) == true) {
-                inactiveMatches++
-                return@forEach
-            }
+            val inactive = match.status?.let(OfficialRegistryStatus::isInactive) == true
+            if (inactive) inactiveMatches++
 
             val candidate = existing.copy(
-                city = match.city?.trim()?.takeIf(String::isNotEmpty) ?: existing.city,
-                district = match.district?.trim()?.takeIf(String::isNotEmpty) ?: existing.district,
-                neighborhood = match.neighborhood?.trim()?.takeIf(String::isNotEmpty) ?: existing.neighborhood,
-                address = match.address?.trim()?.takeIf(String::isNotEmpty) ?: existing.address,
-                phone = match.phone?.trim()?.takeIf(String::isNotEmpty) ?: existing.phone,
+                signboardName = existing.signboardName ?: existing.businessName,
+                city = if (inactive) existing.city else {
+                    match.city?.trim()?.takeIf(String::isNotEmpty) ?: existing.city
+                },
+                district = if (inactive) existing.district else {
+                    match.district?.trim()?.takeIf(String::isNotEmpty) ?: existing.district
+                },
+                neighborhood = if (inactive) existing.neighborhood else {
+                    match.neighborhood?.trim()?.takeIf(String::isNotEmpty) ?: existing.neighborhood
+                },
+                address = if (inactive) existing.address else {
+                    match.address?.trim()?.takeIf(String::isNotEmpty) ?: existing.address
+                },
+                phone = if (inactive) existing.phone else {
+                    match.phone?.trim()?.takeIf(String::isNotEmpty) ?: existing.phone
+                },
+                website = if (inactive) existing.website else {
+                    match.website?.trim()?.takeIf(String::isNotEmpty) ?: existing.website
+                },
                 dataQuality = DataQuality.OBSERVED.name,
+                registryStatus = registryStatusFor(match.status).name,
+                registrySource = match.source.descriptor.name,
+                registryNumber = match.registrationNumber?.trim()?.takeIf(String::isNotEmpty),
             )
 
             if (candidate == existing) return@forEach
@@ -197,8 +212,10 @@ class LocalCrmRepository(
         business: VerifiedBusiness,
     ): CrmCustomerEntity {
         val timestamp = now()
+        val evidence = business.officialRegistryEvidence
         val enrichedCandidate = existing.copy(
             businessName = business.name.trim().takeIf { it.isNotEmpty() } ?: existing.businessName,
+            signboardName = business.name.trim().takeIf { it.isNotEmpty() } ?: existing.signboardName,
             city = business.city.trim().takeIf { it.isNotEmpty() } ?: existing.city,
             district = business.district.trim()
                 .takeIf { it.isNotEmpty() && !it.equals("Bilinmiyor", ignoreCase = true) }
@@ -215,6 +232,12 @@ class LocalCrmRepository(
                 ?: existing.phone,
             website = business.website?.trim()?.takeIf { it.isNotEmpty() }
                 ?: existing.website,
+            registryStatus = evidence?.let {
+                registryStatusFor(it.status).name
+            } ?: existing.registryStatus,
+            registrySource = evidence?.source?.name ?: existing.registrySource,
+            registryNumber = evidence?.registrationNumber?.trim()?.takeIf { it.isNotEmpty() }
+                ?: existing.registryNumber,
         )
 
         if (enrichedCandidate == existing) return existing
@@ -247,10 +270,12 @@ class LocalCrmRepository(
         ownerUserId: String?,
     ): CrmCustomer {
         val timestamp = now()
+        val evidence = business.officialRegistryEvidence
         val customer = CrmCustomer(
             id = idGenerator(),
             businessSourceId = business.id,
             businessName = business.name,
+            signboardName = business.name.trim().takeIf { it.isNotEmpty() },
             city = business.city,
             district = business.district,
             neighborhood = business.neighborhood,
@@ -263,6 +288,10 @@ class LocalCrmRepository(
             businessType = BusinessCategoryLabels.displayName(business.category),
             phone = business.phone?.trim()?.takeIf { it.isNotEmpty() },
             website = business.website?.trim()?.takeIf { it.isNotEmpty() },
+            registryStatus = evidence?.let { registryStatusFor(it.status) }
+                ?: CrmRegistryStatus.UNVERIFIED,
+            registrySource = evidence?.source?.name,
+            registryNumber = evidence?.registrationNumber?.trim()?.takeIf { it.isNotEmpty() },
             createdAtEpochMs = timestamp,
             updatedAtEpochMs = timestamp,
             version = 1L,
@@ -307,6 +336,7 @@ class LocalCrmRepository(
         latitude: Double,
         longitude: Double,
         contactName: String? = null,
+        signboardName: String? = null,
         businessType: String? = null,
         taxOrNationalId: String? = null,
         phone: String? = null,
@@ -326,6 +356,7 @@ class LocalCrmRepository(
             id = id,
             businessSourceId = sourceId,
             businessName = businessName.trim(),
+            signboardName = signboardName?.trim()?.takeIf { it.isNotEmpty() },
             city = city.trim(),
             district = district.trim(),
             neighborhood = neighborhood?.trim()?.takeIf { it.isNotEmpty() },
@@ -722,6 +753,12 @@ class LocalCrmRepository(
     suspend fun pendingSync(limit: Int = 100): List<SyncOperation> =
         database.syncOperationDao().pending(limit).map(CrmMappings::toDomain)
 
+    private fun registryStatusFor(rawStatus: String?): CrmRegistryStatus = when {
+        rawStatus?.let(OfficialRegistryStatus::isActive) == true -> CrmRegistryStatus.ACTIVE
+        rawStatus?.let(OfficialRegistryStatus::isInactive) == true -> CrmRegistryStatus.INACTIVE
+        else -> CrmRegistryStatus.UNVERIFIED
+    }
+
     private fun syncStateFor(ownerUserId: String?): SyncState =
         if (ownerUserId.isNullOrBlank()) SyncState.LOCAL_ONLY else SyncState.PENDING_UPLOAD
 
@@ -748,6 +785,7 @@ private object CrmMappings {
         id = model.id,
         businessSourceId = model.businessSourceId,
         businessName = model.businessName,
+        signboardName = model.signboardName,
         city = model.city,
         district = model.district,
         neighborhood = model.neighborhood,
@@ -763,6 +801,9 @@ private object CrmMappings {
         taxOrNationalId = model.taxOrNationalId,
         phone = model.phone,
         website = model.website,
+        registryStatus = model.registryStatus.name,
+        registrySource = model.registrySource,
+        registryNumber = model.registryNumber,
         createdAtEpochMs = model.createdAtEpochMs,
         updatedAtEpochMs = model.updatedAtEpochMs,
         version = model.version,
@@ -773,6 +814,7 @@ private object CrmMappings {
         id = entity.id,
         businessSourceId = entity.businessSourceId,
         businessName = entity.businessName,
+        signboardName = entity.signboardName,
         city = entity.city,
         district = entity.district,
         neighborhood = entity.neighborhood,
@@ -788,6 +830,11 @@ private object CrmMappings {
         taxOrNationalId = entity.taxOrNationalId,
         phone = entity.phone,
         website = entity.website,
+        registryStatus = runCatching {
+            CrmRegistryStatus.valueOf(entity.registryStatus)
+        }.getOrDefault(CrmRegistryStatus.UNVERIFIED),
+        registrySource = entity.registrySource,
+        registryNumber = entity.registryNumber,
         createdAtEpochMs = entity.createdAtEpochMs,
         updatedAtEpochMs = entity.updatedAtEpochMs,
         version = entity.version,
@@ -913,6 +960,7 @@ private object CrmPayloads {
         put("id", customer.id)
         put("businessSourceId", customer.businessSourceId)
         put("businessName", customer.businessName)
+        put("signboardName", customer.signboardName)
         put("city", customer.city)
         put("district", customer.district)
         put("neighborhood", customer.neighborhood)
@@ -923,8 +971,13 @@ private object CrmPayloads {
         put("stage", customer.stage.name)
         put("ownerUserId", customer.ownerUserId)
         put("notes", customer.notes)
+        put("contactName", customer.contactName)
+        put("businessType", customer.businessType)
         put("phone", customer.phone)
         put("website", customer.website)
+        put("registryStatus", customer.registryStatus.name)
+        put("registrySource", customer.registrySource)
+        put("registryNumber", customer.registryNumber)
         put("createdAtEpochMs", customer.createdAtEpochMs)
         put("updatedAtEpochMs", customer.updatedAtEpochMs)
         put("version", customer.version)
