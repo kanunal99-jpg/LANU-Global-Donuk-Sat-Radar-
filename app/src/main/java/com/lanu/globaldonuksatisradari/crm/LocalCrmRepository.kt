@@ -124,6 +124,27 @@ class LocalCrmRepository(
 
     suspend fun enrichCustomersFromOfficialRegistry(
         records: List<OfficialRegistryRecord>,
+    ): OfficialRegistryCrmEnrichmentResult =
+        enrichCustomersFromOfficialRegistryInternal(
+            records = records,
+            ownerUserId = null,
+            ownerScoped = false,
+        )
+
+    suspend fun enrichCustomersFromOfficialRegistryForOwner(
+        records: List<OfficialRegistryRecord>,
+        ownerUserId: String?,
+    ): OfficialRegistryCrmEnrichmentResult =
+        enrichCustomersFromOfficialRegistryInternal(
+            records = records,
+            ownerUserId = ownerUserId,
+            ownerScoped = true,
+        )
+
+    private suspend fun enrichCustomersFromOfficialRegistryInternal(
+        records: List<OfficialRegistryRecord>,
+        ownerUserId: String?,
+        ownerScoped: Boolean,
     ): OfficialRegistryCrmEnrichmentResult = database.withTransaction {
         if (records.isEmpty()) return@withTransaction OfficialRegistryCrmEnrichmentResult()
         val verifiedRecords = OfficialRegistryTrust.verified(records)
@@ -133,6 +154,7 @@ class LocalCrmRepository(
         var updated = 0
         var inactiveMatches = 0
         val customers = database.customerDao().all()
+            .filter { !ownerScoped || it.ownerUserId == ownerUserId }
 
         customers.forEach { existing ->
             val match = OfficialRegistryMatcher.bestMatch(
