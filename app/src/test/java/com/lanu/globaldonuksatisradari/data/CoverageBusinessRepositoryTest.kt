@@ -67,4 +67,17 @@ class CoverageBusinessRepositoryTest {
         assertEquals(39, IstanbulDistricts.ALL.size)
         assertEquals(39, IstanbulDistricts.ALL.toSet().size)
     }
+    @Test
+    fun newBusinessFamiliesUseUsefulNominatimFallbackTerms() {
+        assertEquals("school", nominatimFallbackQuery("education"))
+        assertEquals("car repair", nominatimFallbackQuery("automotive"))
+        assertEquals("beauty salon", nominatimFallbackQuery("beauty"))
+        assertEquals("bank", nominatimFallbackQuery("finance"))
+        assertEquals("construction company", nominatimFallbackQuery("construction"))
+        assertEquals("farm", nominatimFallbackQuery("agriculture"))
+        assertEquals("logistics", nominatimFallbackQuery("logistics"))
+        assertEquals("factory", nominatimFallbackQuery("manufacturer"))
+        assertEquals("wholesale", nominatimFallbackQuery("wholesale"))
+    }
+
 }
