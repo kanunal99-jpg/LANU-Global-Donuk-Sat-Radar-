@@ -57,6 +57,10 @@ object BusinessCategoryLabels {
         "cinema" to "Sinema",
         "casino" to "Casino / Oyun",
         "coworking_space" to "Ortak Çalışma Alanı",
+        "commercial" to "Ticari İşletme / Bina",
+        "retail" to "Perakende / Ticari",
+        "industrial" to "Sanayi / Üretim",
+        "office" to "Ofis / Ticari",
     )
 
     val searchCategories: List<BusinessSearchCategory> = listOf(
@@ -92,6 +96,14 @@ object BusinessCategoryLabels {
         BusinessSearchCategory("Gece Kulübü / Disko", "nightclub"),
         BusinessSearchCategory("Şirket / Ofis", "office"),
         BusinessSearchCategory("Mağaza", "shop"),
+        BusinessSearchCategory("Tüm Hizmet İşletmeleri", "amenity"),
+        BusinessSearchCategory("Sağlık İşletmeleri", "healthcare"),
+        BusinessSearchCategory("Eğlence / Aktivite", "leisure"),
+        BusinessSearchCategory("Kulüp", "club"),
+        BusinessSearchCategory("Sanayi", "industrial"),
+        BusinessSearchCategory("Depo / Lojistik", "warehouse"),
+        BusinessSearchCategory("Turizm İşletmeleri", "tourism"),
+        BusinessSearchCategory("Ticari Bina / Kompleks", "commercial"),
     )
 
     val searchLabels: List<String>
