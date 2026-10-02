@@ -160,7 +160,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                     Text(
                         if (products.isEmpty()) {
                             "Yetkili SKU/fiyat kaynağı olmadan ürün veya fiyat uydurulmaz. " +
-                                "Doğrulanmış bir ürünü “Yeni ürün ekle” ile kaydedebilirsiniz."
+                                "Ürünü manuel kaydedebilirsiniz; kaynak doğrulaması ayrıca yapılmalıdır."
                         } else {
                             "Arama metnini değiştirerek tekrar deneyin."
                         },
