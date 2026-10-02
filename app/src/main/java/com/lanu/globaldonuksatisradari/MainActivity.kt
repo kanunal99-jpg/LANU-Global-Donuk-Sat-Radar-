@@ -186,21 +186,6 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val productCatalogRepository = remember(context) { ProductCatalogRepository(context) }
     val officialRegistryStore = remember(context) { OfficialRegistryStore(context) }
 
-    LaunchedEffect(Unit) {
-        runCatching {
-            val records = withContext(Dispatchers.IO) { officialRegistryStore.allRecords() }
-            if (records.isEmpty()) return@runCatching null
-            localCrmRepository.enrichCustomersFromOfficialRegistry(records)
-        }.onSuccess { enriched ->
-            if (enriched != null && enriched.updated > 0) {
-                crmMessage = "Mevcut resmî sicil kayıtları CRM'e uygulandı: " +
-                    "${enriched.updated} müşteri adres/telefon kaydı güncellendi."
-            }
-        }.onFailure { error ->
-            Log.w("LanuRegistry", "Başlangıç resmî sicil zenginleştirmesi tamamlanamadı.", error)
-        }
-    }
-
     val cloudSessionState = auth?.session?.collectAsState()
     val activeOwnerUserId = cloudSessionState?.value?.userId
     val allCrmCustomers by localCrmRepository.observeCustomers(null).collectAsState(initial = emptyList())
@@ -215,6 +200,29 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         localCrmRepository.observePendingSyncCount(activeOwnerUserId)
     }
     val pendingSyncCount by pendingSyncFlow.collectAsState(initial = 0)
+    val crmRegistryCities = remember(allCrmCustomers) {
+        allCrmCustomers.map { it.city.trim() }
+            .filter(String::isNotBlank)
+            .distinct()
+            .sorted()
+    }
+    LaunchedEffect(crmRegistryCities) {
+        if (crmRegistryCities.isEmpty()) return@LaunchedEffect
+        runCatching {
+            val records = withContext(Dispatchers.IO) {
+                crmRegistryCities.flatMap { city -> officialRegistryStore.recordsFor(city, null) }
+            }
+            if (records.isEmpty()) return@runCatching null
+            localCrmRepository.enrichCustomersFromOfficialRegistry(records)
+        }.onSuccess { enriched ->
+            if (enriched != null && enriched.updated > 0) {
+                crmMessage = "Mevcut resmî sicil kayıtları CRM'e uygulandı: " +
+                    "${enriched.updated} müşteri adres/telefon kaydı güncellendi."
+            }
+        }.onFailure { error ->
+            Log.w("LanuRegistry", "Başlangıç resmî sicil zenginleştirmesi tamamlanamadı.", error)
+        }
+    }
     val filteredCrmCustomers = remember(crmCustomers, selectedCity.name, selectedDistrict) {
         scopeCrmCustomers(crmCustomers, selectedCity.name, selectedDistrict)
     }
