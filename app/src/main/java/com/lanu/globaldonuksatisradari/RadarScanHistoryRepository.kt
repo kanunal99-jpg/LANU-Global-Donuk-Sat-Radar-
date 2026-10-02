@@ -24,10 +24,10 @@ class RadarScanHistoryRepository(context: Context) {
     fun compareAndRecord(
         city: String,
         district: String?,
-        neighborhood: String? = null,
         query: String,
         records: List<VerifiedBusiness>,
         nowEpochMs: Long = System.currentTimeMillis(),
+        neighborhood: String? = null,
     ): RadarScanDelta {
         val key = scopeKey(city, district, neighborhood, query)
         val currentKeys = records
