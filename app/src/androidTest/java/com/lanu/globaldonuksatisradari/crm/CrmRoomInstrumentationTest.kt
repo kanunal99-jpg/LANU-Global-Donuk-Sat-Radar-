@@ -153,9 +153,10 @@ class CrmRoomInstrumentationTest {
             assertEquals(40.991, observed.latitude ?: Double.NaN, 0.000001)
             assertEquals(29.031, observed.longitude ?: Double.NaN, 0.000001)
             assertEquals(DataQuality.USER_ENTERED, observed.dataQuality)
+            assertEquals(SyncState.LOCAL_ONLY, observed.syncState)
             assertEquals(customer.id, observed.id)
             assertEquals(listOf(customer.id), CrmRoutePlanner.plan(listOf(observed)).map { it.customer.id })
-            assertTrue(repository.pendingSync().any { it.entityId == customer.id })
+            assertTrue(repository.pendingSync().none { it.entityId == customer.id })
         } finally {
             database.close()
         }
