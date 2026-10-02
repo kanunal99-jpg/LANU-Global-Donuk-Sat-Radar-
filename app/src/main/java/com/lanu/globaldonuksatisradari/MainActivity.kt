@@ -247,11 +247,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val allRegionOpportunities by remember(regionKey) {
         localCrmRepository.observeOpportunitiesForRegion(selectedCity.name, regionDistrict)
     }.collectAsState(initial = emptyList())
-    val regionCustomerIds = remember(crmCustomers, selectedCity.name, regionDistrict) {
-        crmCustomers
-            .filter { customer ->
-                scopeCrmCustomers(listOf(customer), selectedCity.name, selectedDistrict).isNotEmpty()
-            }
+    val regionCustomerIds = remember(crmCustomers, selectedCity.name, selectedDistrict) {
+        scopeCrmCustomers(crmCustomers, selectedCity.name, selectedDistrict)
             .mapTo(mutableSetOf()) { it.id }
     }
     val regionActivities = remember(allRegionActivities, regionCustomerIds) {
