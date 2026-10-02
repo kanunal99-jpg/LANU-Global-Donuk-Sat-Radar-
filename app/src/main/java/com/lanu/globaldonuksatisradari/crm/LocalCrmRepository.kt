@@ -204,6 +204,8 @@ class LocalCrmRepository(
                 ?: BusinessCategoryLabels.displayName(existing.businessType),
             phone = business.phone?.trim()?.takeIf { it.isNotEmpty() }
                 ?: existing.phone,
+            website = business.website?.trim()?.takeIf { it.isNotEmpty() }
+                ?: existing.website,
         )
 
         if (enrichedCandidate == existing) return existing
@@ -250,6 +252,7 @@ class LocalCrmRepository(
             ownerUserId = ownerUserId,
             businessType = BusinessCategoryLabels.displayName(business.category),
             phone = business.phone?.trim()?.takeIf { it.isNotEmpty() },
+            website = business.website?.trim()?.takeIf { it.isNotEmpty() },
             createdAtEpochMs = timestamp,
             updatedAtEpochMs = timestamp,
             version = 1L,
@@ -721,6 +724,7 @@ private object CrmMappings {
         businessType = model.businessType,
         taxOrNationalId = model.taxOrNationalId,
         phone = model.phone,
+        website = model.website,
         createdAtEpochMs = model.createdAtEpochMs,
         updatedAtEpochMs = model.updatedAtEpochMs,
         version = model.version,
@@ -745,6 +749,7 @@ private object CrmMappings {
         businessType = entity.businessType,
         taxOrNationalId = entity.taxOrNationalId,
         phone = entity.phone,
+        website = entity.website,
         createdAtEpochMs = entity.createdAtEpochMs,
         updatedAtEpochMs = entity.updatedAtEpochMs,
         version = entity.version,
@@ -881,6 +886,7 @@ private object CrmPayloads {
         put("ownerUserId", customer.ownerUserId)
         put("notes", customer.notes)
         put("phone", customer.phone)
+        put("website", customer.website)
         put("createdAtEpochMs", customer.createdAtEpochMs)
         put("updatedAtEpochMs", customer.updatedAtEpochMs)
         put("version", customer.version)
