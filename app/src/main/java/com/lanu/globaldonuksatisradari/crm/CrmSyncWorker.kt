@@ -41,11 +41,6 @@ class CrmSyncWorker(
     }
 }
 
-/** Safe default provider; backend integration replaces this without changing worker scheduling. */
-object CrmSyncRemoteProvider {
-    @Volatile
-    var dataSource: RemoteCrmDataSource = UnconfiguredRemoteCrmDataSource
-}
 
 object CrmSyncScheduler {
     private const val WORK_NAME = "lanu_global_donuk_crm_sync"
