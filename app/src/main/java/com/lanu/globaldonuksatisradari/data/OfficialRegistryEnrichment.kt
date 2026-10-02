@@ -252,7 +252,16 @@ class OfficialRegistryStore(
     fun allRecords(): List<OfficialRegistryRecord> =
         OfficialRegistrySource.entries.flatMap(::readSource)
 
-    fun count(source: OfficialRegistrySource): Int = readSource(source).size
+    fun count(source: OfficialRegistrySource): Int =
+        sourceFiles(source, null).sumOf { file ->
+            if (!file.exists()) {
+                0
+            } else {
+                file.useLines(Charsets.UTF_8) { lines ->
+                    lines.count(String::isNotBlank)
+                }
+            }
+        }
 
     private fun readSource(
         source: OfficialRegistrySource,
