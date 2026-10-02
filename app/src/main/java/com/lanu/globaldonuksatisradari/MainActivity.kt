@@ -345,9 +345,22 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         item {
                             OutlinedTextField(
                                 value = query,
-                                onValueChange = { query = it },
+                                onValueChange = { value ->
+                                    query = value
+                                    if (value.isNotBlank() && categoryFilter != "Tümü") {
+                                        invalidateSearch()
+                                        categoryFilter = "Tümü"
+                                        results = emptyList()
+                                        selectedBusiness = null
+                                    }
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                                 label = { Text("İşletme adı veya kategori ara") },
+                                supportingText = {
+                                    if (query.isNotBlank()) {
+                                        Text("Serbest arama kullanılırken kategori filtresi Tümü olarak uygulanır.")
+                                    }
+                                },
                                 singleLine = true,
                             )
                         }
@@ -548,7 +561,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     onClick = {
                                         bulkSaving = true
                                         scope.launch {
-                                            runCatching { localCrmRepository.addBusinessesAsCustomers(results) }
+                                            runCatching { localCrmRepository.addBusinessesAsCustomers(visibleResults) }
                                                 .onSuccess { saved ->
                                                     crmMessage = if (saved.alreadyExisting > 0) {
                                                         "${saved.inserted} yeni nokta CRM'e kaydedildi; ${saved.alreadyExisting} nokta zaten kayıtlıydı."
