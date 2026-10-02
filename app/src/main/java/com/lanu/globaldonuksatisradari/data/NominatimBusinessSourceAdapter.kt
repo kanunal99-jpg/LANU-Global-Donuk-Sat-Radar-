@@ -100,7 +100,7 @@ class NominatimBusinessSourceAdapter(
             readTimeout = 20_000
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Accept-Language", "tr")
-            setRequestProperty("User-Agent", "LANU-Global-Donuk-Satis-Radari/0.2 (+https://github.com/kanunal99-jpg/LANU-Global-Donuk-Sat-Radar-)")
+            setRequestProperty("User-Agent", "LANU-Global-Donuk-Satis-Radari/0.3 (+https://github.com/kanunal99-jpg/LANU-Global-Donuk-Sat-Radar-)")
         }
         try {
             val responseCode = connection.responseCode
