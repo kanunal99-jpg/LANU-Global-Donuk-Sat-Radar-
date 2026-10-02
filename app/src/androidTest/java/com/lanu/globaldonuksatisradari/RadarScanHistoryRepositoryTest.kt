@@ -55,6 +55,29 @@ class RadarScanHistoryRepositoryTest {
     }
 
     @Test
+    fun differentNeighborhoodUsesIndependentBaseline() {
+        repository.compareAndRecord(
+            city = "İstanbul",
+            district = "Kadıköy",
+            neighborhood = "Caferağa",
+            query = "",
+            records = listOf(business("1")),
+            nowEpochMs = 1L,
+        )
+        val other = repository.compareAndRecord(
+            city = "İstanbul",
+            district = "Kadıköy",
+            neighborhood = "Fenerbahçe",
+            query = "",
+            records = listOf(business("2")),
+            nowEpochMs = 2L,
+        )
+
+        assertTrue(other.isFirstScan)
+        assertEquals(0, other.newCount)
+    }
+
+    @Test
     fun differentDistrictUsesIndependentBaseline() {
         repository.compareAndRecord("İstanbul", "Kadıköy", "", listOf(business("1")), 1L)
         val other = repository.compareAndRecord("İstanbul", "Beşiktaş", "", listOf(business("2")), 2L)
