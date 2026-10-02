@@ -145,6 +145,31 @@ class NominatimBusinessSourceAdapter(
             ) {
                 continue
             }
+
+            val selectedNeighborhoodNormalized = selectedNeighborhood
+                ?.takeUnless { it.isBlank() || it.equals("Tümü", ignoreCase = true) }
+                ?.let(::normalizePlaceName)
+            val addressNeighborhoodCandidates = address?.let {
+                listOfNotNull(
+                    it.optString("neighbourhood").takeIf(String::isNotBlank),
+                    it.optString("quarter").takeIf(String::isNotBlank),
+                    it.optString("suburb").takeIf(String::isNotBlank),
+                    it.optString("village").takeIf(String::isNotBlank),
+                    it.optString("hamlet").takeIf(String::isNotBlank),
+                )
+            }.orEmpty()
+            if (selectedNeighborhoodNormalized != null &&
+                addressNeighborhoodCandidates.none {
+                    normalizePlaceName(it)
+                        .removeSuffix(" mahallesi")
+                        .removeSuffix(" mah") ==
+                        selectedNeighborhoodNormalized
+                            .removeSuffix(" mahallesi")
+                            .removeSuffix(" mah")
+                }
+            ) {
+                continue
+            }
             val district = selectedDistrict?.takeUnless { it.isBlank() || it.equals("Tümü", ignoreCase = true) }
                 ?: addressDistrictCandidates.firstOrNull()
                 ?: continue
