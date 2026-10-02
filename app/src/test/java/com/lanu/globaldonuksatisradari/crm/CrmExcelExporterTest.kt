@@ -22,6 +22,7 @@ class CrmExcelExporterTest {
             businessType = "Restoran",
             taxOrNationalId = "1234567890",
             phone = "05550000000",
+            website = "https://example.com",
             createdAtEpochMs = 1L,
             updatedAtEpochMs = 1L,
         )
@@ -48,6 +49,7 @@ class CrmExcelExporterTest {
         assertTrue(sheetXml.contains("Restoran"))
         assertTrue(sheetXml.contains("1234567890"))
         assertTrue(sheetXml.contains("05550000000"))
+        assertTrue(sheetXml.contains("https://example.com"))
         assertTrue(sheetXml.contains("29.123456"))
         assertTrue(sheetXml.contains("40.987654"))
         assertTrue(sheetXml.contains("maps.google.com/?q=40.987654,29.123456"))
