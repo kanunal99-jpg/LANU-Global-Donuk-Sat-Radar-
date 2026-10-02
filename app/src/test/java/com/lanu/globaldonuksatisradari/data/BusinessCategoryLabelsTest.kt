@@ -41,4 +41,26 @@ class BusinessCategoryLabelsTest {
         assertEquals("internet cafe", BusinessCategoryLabels.searchQueryForLabel("İnternet Kafe"))
         assertEquals("adult_gaming_centre", BusinessCategoryLabels.searchQueryForLabel("Oyun Salonu"))
     }
+    @Test
+    fun majorBusinessFamilyFiltersAreSourceDriven() {
+        assertEquals("education", BusinessCategoryLabels.searchQueryForLabel("Eğitim / Kurs"))
+        assertEquals("automotive", BusinessCategoryLabels.searchQueryForLabel("Otomotiv"))
+        assertEquals("beauty", BusinessCategoryLabels.searchQueryForLabel("Güzellik / Bakım"))
+        assertEquals("finance", BusinessCategoryLabels.searchQueryForLabel("Finans / Sigorta / Emlak"))
+        assertEquals("construction", BusinessCategoryLabels.searchQueryForLabel("Yapı / İnşaat / Teknik"))
+        assertEquals("agriculture", BusinessCategoryLabels.searchQueryForLabel("Tarım / Çiftlik"))
+        assertEquals("logistics", BusinessCategoryLabels.searchQueryForLabel("Lojistik / Nakliye"))
+    }
+
+    @Test
+    fun addedOsmCategoriesHaveReadableLabels() {
+        assertEquals("Okul / Eğitim", BusinessCategoryLabels.displayName("school"))
+        assertEquals("Oto Servis", BusinessCategoryLabels.displayName("car_repair"))
+        assertEquals("Güzellik / Bakım", BusinessCategoryLabels.displayName("beauty"))
+        assertEquals("Emlak", BusinessCategoryLabels.displayName("estate_agent"))
+        assertEquals("İnşaat", BusinessCategoryLabels.displayName("construction"))
+        assertEquals("Çiftlik / Tarım", BusinessCategoryLabels.displayName("farm"))
+        assertEquals("Lojistik", BusinessCategoryLabels.displayName("logistics"))
+    }
+
 }

@@ -45,6 +45,21 @@ internal fun planCoverageScopes(
     }
 }
 
+internal fun nominatimFallbackQuery(category: String): String = when (
+    category.trim().lowercase()
+) {
+    "education" -> "school"
+    "automotive" -> "car repair"
+    "beauty" -> "beauty salon"
+    "finance" -> "bank"
+    "construction" -> "construction company"
+    "agriculture" -> "farm"
+    "logistics" -> "logistics"
+    "manufacturer" -> "factory"
+    "commercial" -> "business"
+    else -> category
+}
+
 /**
  * Production wiring: Coverage Engine -> real OSM adapters -> local cache -> safe empty.
  * Successful empty responses remain authoritative; local cache is used only after source failures.
@@ -78,7 +93,9 @@ class CoverageBusinessRepository(
             },
             CoverageSource { scope ->
                 val businesses = nominatim.fetchValidated(
-                    query = scope.category.takeUnless { it == "*" }.orEmpty(),
+                    query = scope.category.takeUnless { it == "*" }
+                        ?.let(::nominatimFallbackQuery)
+                        .orEmpty(),
                     city = scope.city,
                     district = scope.district.takeUnless { it == "Tümü" },
                     neighborhood = scope.neighborhood,

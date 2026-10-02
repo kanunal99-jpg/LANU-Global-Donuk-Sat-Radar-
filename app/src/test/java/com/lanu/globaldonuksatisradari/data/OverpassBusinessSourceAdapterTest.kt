@@ -20,6 +20,10 @@ class OverpassBusinessSourceAdapterTest {
         assertTrue(query.contains("""["club"]"""))
         assertTrue(query.contains("""["healthcare"]"""))
         assertTrue(query.contains("""["building"~"retail|commercial|industrial|warehouse|office|supermarket|kiosk|hotel"]"""))
+        assertTrue(query.contains("""["landuse"~"retail|commercial|industrial|farmyard"]"""))
+        assertTrue(query.contains("""["place"="farm"]"""))
+        assertTrue(query.contains("""["product"]"""))
+        assertTrue(query.contains("""["operator:type"="private"]"""))
         assertTrue(!query.contains("map_to_area"))
     }
 
@@ -147,6 +151,45 @@ class OverpassBusinessSourceAdapterTest {
 
         assertTrue(hotel.contains("""["tourism"~"hotel",i]"""))
         assertTrue(gaming.contains("""["leisure"~"adult_gaming_centre",i]"""))
+    }
+
+    @Test
+    fun addedBusinessFamiliesBuildExplicitSourceQueries() {
+        val education = OverpassQueryBuilder.build("İstanbul", "Pendik", "education")
+        val automotive = OverpassQueryBuilder.build("İstanbul", "Pendik", "automotive")
+        val beauty = OverpassQueryBuilder.build("İstanbul", "Pendik", "beauty")
+        val finance = OverpassQueryBuilder.build("İstanbul", "Pendik", "finance")
+        val construction = OverpassQueryBuilder.build("İstanbul", "Pendik", "construction")
+        val agriculture = OverpassQueryBuilder.build("İstanbul", "Pendik", "agriculture")
+        val logistics = OverpassQueryBuilder.build("İstanbul", "Pendik", "logistics")
+
+        assertTrue(education.contains("""["amenity"~"school|kindergarten|college|university|language_school|music_school|driving_school|training|childcare",i]"""))
+        assertTrue(automotive.contains("""["shop"~"car|car_repair|car_parts|tyres|motorcycle|bicycle",i]"""))
+        assertTrue(beauty.contains("""["shop"~"hairdresser|beauty|cosmetics|massage|tattoo",i]"""))
+        assertTrue(finance.contains("""["office"~"financial|insurance|estate_agent|accountant",i]"""))
+        assertTrue(construction.contains("""["office"~"construction|architect|engineer",i]"""))
+        assertTrue(agriculture.contains("""["place"="farm"]"""))
+        assertTrue(logistics.contains("""["office"~"logistics|transport|moving_company",i]"""))
+    }
+
+    @Test
+    fun parserKeepsCommercialLanduseAndFarmCategories() {
+        val payload = """
+            {"elements":[
+              {"type":"way","id":501,"center":{"lat":40.9,"lon":29.1},"tags":{"name":"Örnek Sanayi","landuse":"industrial"}},
+              {"type":"node","id":502,"lat":40.91,"lon":29.11,"tags":{"name":"Örnek Çiftlik","place":"farm"}}
+            ]}
+        """.trimIndent()
+
+        val result = OverpassBusinessSourceAdapter().parse(
+            payload = payload,
+            selectedCity = "İstanbul",
+            selectedDistrict = "Pendik",
+            verifiedAtEpochMs = 100L,
+        )
+
+        assertTrue(result.any { it.name == "Örnek Sanayi" && it.category == "industrial" })
+        assertTrue(result.any { it.name == "Örnek Çiftlik" && it.category == "farm" })
     }
 
 }
