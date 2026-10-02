@@ -22,7 +22,9 @@ class CrmSyncWorker(
 
     override suspend fun doWork(): Result {
         val database = LanuCrmDatabase.getInstance(applicationContext)
-        val remote = SupabaseCrmRemoteDataSource(SupabaseAuthClient(applicationContext))
+        val auth = SupabaseAuthClient(applicationContext)
+        val session = auth.ensureSession() ?: return Result.success()
+        val remote = SupabaseFullCrmRemoteDataSource(auth)
         val pullResult = remote.pullInto(database)
         if (pullResult is RemotePullResult.RetryableFailure) return Result.retry()
 
@@ -30,6 +32,8 @@ class CrmSyncWorker(
             syncDao = database.syncOperationDao(),
             remote = remote,
             stateStore = RoomCrmSyncStateStore(database),
+            ownerUserId = session.userId,
+            ownershipResolver = RoomCrmSyncOwnershipResolver(database),
         )
         val results = engine.processBatch()
 
