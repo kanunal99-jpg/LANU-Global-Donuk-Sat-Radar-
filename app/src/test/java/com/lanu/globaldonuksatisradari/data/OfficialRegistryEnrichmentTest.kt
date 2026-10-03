@@ -408,4 +408,65 @@ class OfficialRegistryEnrichmentTest {
         assertTrue(OfficialRegistrySource.entries.all { it.contract.supportsBulk })
         assertFalse(OfficialRegistrySource.entries.any { it.contract.accessMethod == SourceAccessMethod.PUBLIC_SEARCH })
     }
+
+    @Test
+    fun identityVerifiedRegistryRowCanBecomeStandaloneBroadInventoryBusiness() {
+        val standalone = OfficialRegistryDiscovery.toVerifiedBusiness(
+            record = record(
+                name = "Bağımsız Sanayi AŞ",
+                registrationNumber = "998877",
+                status = "Faal",
+                address = "Organize Sanayi Bölgesi No:5",
+                phone = "0216 777 66 55",
+            ).copy(naceCode = "10.89.09"),
+            selectedCity = "İstanbul",
+            selectedDistrict = "Kadıköy",
+        )
+
+        requireNotNull(standalone)
+        assertEquals("Bağımsız Sanayi AŞ", standalone.name)
+        assertEquals("official-ito", standalone.source.id)
+        assertEquals("NACE 10.89.09", standalone.category)
+        assertEquals("998877", standalone.officialRegistryEvidence?.registrationNumber)
+        assertTrue(standalone.officialRegistryEvidence?.explicitlyActive == true)
+    }
+
+    @Test
+    fun broadInventoryAddsOfficialBusinessMissingFromOsmWithoutDuplicatingMatchedOne() {
+        val matched = record(
+            name = "Örnek Gıda",
+            registrationNumber = "123456",
+            status = "Faal",
+        )
+        val registryOnly = record(
+            name = "Haritada Olmayan Toptancı",
+            registrationNumber = "654321",
+            status = "Faal",
+            phone = "0216 999 88 77",
+            address = "Sanayi Cad. No:22",
+        )
+
+        val merged = OfficialRegistryDiscovery.mergeIntoBroadInventory(
+            discovered = listOf(business()),
+            records = listOf(matched, registryOnly),
+            selectedCity = "İstanbul",
+            selectedDistrict = "Kadıköy",
+        )
+
+        assertEquals(2, merged.size)
+        assertTrue(merged.any { it.name == "Örnek Gıda" && it.officialRegistryEvidence?.registrationNumber == "123456" })
+        assertTrue(merged.any { it.name == "Haritada Olmayan Toptancı" && it.source.id == "official-ito" })
+    }
+
+    @Test
+    fun registryRowWithoutIdentityNumberDoesNotPretendToBeStandaloneVerifiedBusiness() {
+        val standalone = OfficialRegistryDiscovery.toVerifiedBusiness(
+            record = record(registrationNumber = null),
+            selectedCity = "İstanbul",
+            selectedDistrict = "Kadıköy",
+        )
+
+        assertNull(standalone)
+    }
+
 }

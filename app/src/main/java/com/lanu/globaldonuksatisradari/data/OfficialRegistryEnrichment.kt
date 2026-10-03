@@ -530,6 +530,104 @@ object OfficialRegistryEnricher {
 
 }
  
+object OfficialRegistryDiscovery {
+    /**
+     * Broad inventory must not depend on OSM already knowing a business.
+     * Identity-verified official registry rows can therefore become standalone
+     * radar records. Records without a registry id are still allowed to enrich
+     * an OSM point, but they are not promoted to standalone verified inventory.
+     */
+    fun mergeIntoBroadInventory(
+        discovered: List<VerifiedBusiness>,
+        records: List<OfficialRegistryRecord>,
+        selectedCity: String,
+        selectedDistrict: String?,
+    ): List<VerifiedBusiness> {
+        val enriched = OfficialRegistryEnricher.enrich(discovered, records)
+        if (records.isEmpty()) return enriched
+
+        val matchedOfficialKeys = enriched.mapNotNull { business ->
+            val evidence = business.officialRegistryEvidence ?: return@mapNotNull null
+            val registrationNumber = evidence.registrationNumber
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
+                ?: return@mapNotNull null
+            evidence.source.id + "|" + registrationNumber
+        }.toSet()
+
+        val officialOnly = OfficialRegistryTrust.verified(records)
+            .asSequence()
+            .filterNot { record -> officialIdentityKey(record) in matchedOfficialKeys }
+            .mapNotNull { record ->
+                toVerifiedBusiness(
+                    record = record,
+                    selectedCity = selectedCity,
+                    selectedDistrict = selectedDistrict,
+                )
+            }
+            .toList()
+
+        return BusinessDeduplication.deduplicateCrossSource(enriched + officialOnly)
+    }
+
+    internal fun toVerifiedBusiness(
+        record: OfficialRegistryRecord,
+        selectedCity: String,
+        selectedDistrict: String?,
+    ): VerifiedBusiness? {
+        if (!OfficialRegistryTrust.isIdentityVerified(record)) return null
+        val registrationNumber = record.registrationNumber
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: return null
+        val name = record.businessName.trim().takeIf(String::isNotEmpty) ?: return null
+        val city = record.city?.trim()?.takeIf(String::isNotEmpty) ?: selectedCity.trim()
+        if (city.isEmpty()) return null
+        val district = record.district?.trim()?.takeIf(String::isNotEmpty)
+            ?: selectedDistrict?.trim()?.takeIf(String::isNotEmpty)
+            ?: "Bilinmiyor"
+
+        val fieldsUsed = linkedSetOf("registration_number")
+        if (!record.status.isNullOrBlank()) fieldsUsed += "status"
+        if (!record.address.isNullOrBlank()) fieldsUsed += "address"
+        if (!record.phone.isNullOrBlank()) fieldsUsed += "phone"
+        if (!record.website.isNullOrBlank()) fieldsUsed += "website"
+        if (!record.district.isNullOrBlank()) fieldsUsed += "district"
+        if (!record.neighborhood.isNullOrBlank()) fieldsUsed += "neighborhood"
+        if (!record.naceCode.isNullOrBlank()) fieldsUsed += "nace_code"
+
+        return VerifiedBusiness(
+            id = record.source.name.lowercase(Locale.ROOT) + ":" + registrationNumber,
+            name = name,
+            city = city,
+            district = district,
+            neighborhood = record.neighborhood?.trim()?.takeIf(String::isNotEmpty),
+            source = record.source.descriptor,
+            verifiedAtEpochMs = record.importedAtEpochMs,
+            category = record.naceCode
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
+                ?.let { "NACE " + it }
+                ?: "Resmî Sicil Kaydı",
+            address = record.address?.trim()?.takeIf(String::isNotEmpty),
+            phone = record.phone?.trim()?.takeIf(String::isNotEmpty),
+            website = record.website?.trim()?.takeIf(String::isNotEmpty),
+            officialRegistryEvidence = OfficialRegistryEvidence(
+                source = record.source.descriptor,
+                registrationNumber = registrationNumber,
+                status = record.status,
+                importedAtEpochMs = record.importedAtEpochMs,
+                fieldsUsed = fieldsUsed,
+            ),
+        )
+    }
+
+    private fun officialIdentityKey(record: OfficialRegistryRecord): String {
+        val registrationNumber = record.registrationNumber?.trim().orEmpty()
+        return record.source.descriptor.id + "|" + registrationNumber
+    }
+}
+
 object OfficialRegistryMatcher {
     fun bestMatch(
         name: String,

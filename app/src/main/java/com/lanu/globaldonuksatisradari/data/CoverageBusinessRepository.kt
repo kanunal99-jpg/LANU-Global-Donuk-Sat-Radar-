@@ -178,10 +178,20 @@ class CoverageBusinessRepository(
             }
         }
 
-        return OfficialRegistryEnricher.enrich(
-            businesses = discovered,
-            records = officialRegistryStore.recordsFor(city, normalizedDistrict),
-        )
+        val registryRecords = officialRegistryStore.recordsFor(city, normalizedDistrict)
+        return if (query.isBlank()) {
+            OfficialRegistryDiscovery.mergeIntoBroadInventory(
+                discovered = discovered,
+                records = registryRecords,
+                selectedCity = city,
+                selectedDistrict = normalizedDistrict,
+            )
+        } else {
+            OfficialRegistryEnricher.enrich(
+                businesses = discovered,
+                records = registryRecords,
+            )
+        }
     }
 
     private fun normalizeNeighborhoodForComparison(value: String): String =
