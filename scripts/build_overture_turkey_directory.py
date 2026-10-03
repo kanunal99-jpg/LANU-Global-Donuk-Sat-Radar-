@@ -25,6 +25,10 @@ import unicodedata
 import urllib.request
 
 import duckdb
+from shapely import from_wkb
+from shapely.geometry import Point
+from shapely.ops import unary_union
+from shapely.strtree import STRtree
 
 STAC_URL = "https://stac.overturemaps.org/catalog.json"
 S3_ROOT = "s3://overturemaps-us-west-2/release"
@@ -107,6 +111,8 @@ def safe_region_asset(region_code: str) -> str:
 
 
 def open_overture_connection() -> duckdb.DuckDBPyConnection:
+    spill_dir = pathlib.Path("/tmp/lanu-overture-duckdb")
+    spill_dir.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect()
     con.execute("INSTALL spatial")
     con.execute("LOAD spatial")
@@ -115,7 +121,9 @@ def open_overture_connection() -> duckdb.DuckDBPyConnection:
     con.execute("SET s3_region='us-west-2'")
     con.execute("SET threads=2")
     con.execute("SET preserve_insertion_order=false")
-    con.execute("SET memory_limit='6GB'")
+    # Keep RAM headroom for Python, gzip and runner services.
+    con.execute("SET memory_limit='4GB'")
+    con.execute("SET temp_directory='/tmp/lanu-overture-duckdb'")
     return con
 
 
@@ -203,7 +211,7 @@ def build_snapshot(
             d.id AS division_id,
             CAST(d.names.primary AS VARCHAR) AS city,
             CAST(d.region AS VARCHAR) AS region_code,
-            a.geometry AS geometry,
+            ST_AsWKB(a.geometry) AS geometry_wkb,
             CAST(a.bbox.xmin AS DOUBLE) AS xmin,
             CAST(a.bbox.ymin AS DOUBLE) AS ymin,
             CAST(a.bbox.xmax AS DOUBLE) AS xmax,
@@ -226,7 +234,7 @@ def build_snapshot(
             d.id AS division_id,
             CAST(d.names.primary AS VARCHAR) AS district,
             CAST(d.region AS VARCHAR) AS region_code,
-            a.geometry AS geometry
+            ST_AsWKB(a.geometry) AS geometry_wkb
         FROM read_parquet('{division_path}', hive_partitioning=1) AS d
         INNER JOIN read_parquet('{division_area_path}', hive_partitioning=1) AS a
             ON a.division_id = d.id
@@ -240,22 +248,34 @@ def build_snapshot(
 
     region_rows = con.execute(
         """
-        SELECT region_code, city, xmin, ymin, xmax, ymax
+        SELECT region_code, city, geometry_wkb
         FROM tr_regions
         ORDER BY region_code
         """
     ).fetchall()
-    dedup_regions: dict[str, tuple[str, float, float, float, float]] = {}
-    for code, city, xmin, ymin, xmax, ymax in region_rows:
+    region_parts: dict[str, dict[str, object]] = {}
+    for code, city, geometry_wkb in region_rows:
         region_code = str(code)
-        if region_code not in dedup_regions:
-            dedup_regions[region_code] = (
-                str(city),
-                float(xmin),
-                float(ymin),
-                float(xmax),
-                float(ymax),
-            )
+        bucket = region_parts.setdefault(
+            region_code,
+            {"city": str(city), "geometries": []},
+        )
+        bucket["geometries"].append(from_wkb(bytes(geometry_wkb)))
+
+    dedup_regions: dict[str, tuple[str, float, float, float, float, object]] = {}
+    for region_code, bucket in region_parts.items():
+        geometry = unary_union(bucket["geometries"])
+        if geometry.is_empty:
+            continue
+        xmin, ymin, xmax, ymax = geometry.bounds
+        dedup_regions[region_code] = (
+            str(bucket["city"]),
+            float(xmin),
+            float(ymin),
+            float(xmax),
+            float(ymax),
+            geometry,
+        )
 
     if len(dedup_regions) < 81:
         raise RuntimeError(
@@ -284,7 +304,30 @@ def build_snapshot(
         # GeoParquet prune remote row groups before spatial joins, while each query
         # keeps only one province and its districts in memory.
         for region_code, region_info in sorted(dedup_regions.items()):
-            city, xmin, ymin, xmax, ymax = region_info
+            city, xmin, ymin, xmax, ymax, region_geometry = region_info
+
+            county_rows = con.execute(
+                """
+                SELECT district, geometry_wkb
+                FROM tr_counties
+                WHERE region_code = ?
+                ORDER BY district
+                """,
+                [region_code],
+            ).fetchall()
+            county_parts: dict[str, list[object]] = {}
+            for district_name, county_wkb in county_rows:
+                if district_name is None or county_wkb is None:
+                    continue
+                county_parts.setdefault(str(district_name), []).append(
+                    from_wkb(bytes(county_wkb))
+                )
+            county_names = sorted(county_parts)
+            county_geometries = [
+                unary_union(county_parts[name]) for name in county_names
+            ]
+            county_tree = STRtree(county_geometries) if county_geometries else None
+
             asset = output_dir / safe_region_asset(region_code)
             raw_file = asset.open("wb")
             binary = gzip.GzipFile(
@@ -301,63 +344,34 @@ def build_snapshot(
             )
 
             try:
+                # Keep the remote DuckDB query filter-only and streaming. Exact
+                # province/county containment is done below in Python with a small
+                # Shapely polygon index, avoiding the SQL spatial join/window that
+                # exhausted runner RAM for İstanbul.
                 cursor = con.execute(
                     f"""
-                    WITH candidates AS (
-                        SELECT
-                            CAST(p.id AS VARCHAR) AS id,
-                            CAST(p.names.primary AS VARCHAR) AS name,
-                            CAST(p.basic_category AS VARCHAR) AS basic_category,
-                            CAST(p.taxonomy.primary AS VARCHAR) AS category,
-                            CAST(p.taxonomy.hierarchy[1] AS VARCHAR) AS top_level_category,
-                            CAST(p.operating_status AS VARCHAR) AS operating_status,
-                            CAST(p.confidence AS DOUBLE) AS confidence,
-                            CAST(p.phones[1] AS VARCHAR) AS phone,
-                            CAST(p.websites[1] AS VARCHAR) AS website,
-                            CAST(p.addresses[1].freeform AS VARCHAR) AS address_freeform,
-                            CAST(p.addresses[1].locality AS VARCHAR) AS address_locality,
-                            CAST(p.addresses[1].postcode AS VARCHAR) AS postcode,
-                            p.geometry AS geometry
-                        FROM read_parquet('{places_path}', hive_partitioning=1) AS p
-                        WHERE p.names.primary IS NOT NULL
-                          AND p.bbox.xmin BETWEEN {xmin} AND {xmax}
-                          AND p.bbox.ymin BETWEEN {ymin} AND {ymax}
-                          AND CAST(p.taxonomy.hierarchy[1] AS VARCHAR) IN ({top_levels_sql})
-                          AND (p.confidence IS NULL OR p.confidence >= {confidence_sql})
-                    )
                     SELECT
-                        p.id,
-                        p.name,
-                        c.district,
-                        p.address_locality,
-                        p.address_freeform,
-                        p.postcode,
+                        CAST(p.id AS VARCHAR) AS id,
+                        CAST(p.names.primary AS VARCHAR) AS name,
+                        CAST(p.addresses[1].locality AS VARCHAR) AS address_locality,
+                        CAST(p.addresses[1].freeform AS VARCHAR) AS address_freeform,
+                        CAST(p.addresses[1].postcode AS VARCHAR) AS postcode,
                         ST_Y(p.geometry) AS latitude,
                         ST_X(p.geometry) AS longitude,
-                        p.basic_category,
-                        p.category,
-                        p.top_level_category,
-                        p.phone,
-                        p.website,
-                        p.operating_status,
-                        p.confidence
-                    FROM candidates AS p
-                    LEFT JOIN tr_counties AS c
-                        ON c.region_code = ?
-                       AND ST_WITHIN(p.geometry, c.geometry)
-                    WHERE ST_WITHIN(
-                        p.geometry,
-                        (SELECT geometry
-                         FROM tr_regions
-                         WHERE region_code = ?
-                         LIMIT 1)
-                    )
-                    QUALIFY ROW_NUMBER() OVER (
-                        PARTITION BY p.id
-                        ORDER BY CASE WHEN c.district IS NULL THEN 1 ELSE 0 END, c.district
-                    ) = 1
-                    """,
-                    [region_code, region_code],
+                        CAST(p.basic_category AS VARCHAR) AS basic_category,
+                        CAST(p.taxonomy.primary AS VARCHAR) AS category,
+                        CAST(p.taxonomy.hierarchy[1] AS VARCHAR) AS top_level_category,
+                        CAST(p.phones[1] AS VARCHAR) AS phone,
+                        CAST(p.websites[1] AS VARCHAR) AS website,
+                        CAST(p.operating_status AS VARCHAR) AS operating_status,
+                        CAST(p.confidence AS DOUBLE) AS confidence
+                    FROM read_parquet('{places_path}', hive_partitioning=1) AS p
+                    WHERE p.names.primary IS NOT NULL
+                      AND p.bbox.xmin BETWEEN {xmin} AND {xmax}
+                      AND p.bbox.ymin BETWEEN {ymin} AND {ymax}
+                      AND CAST(p.taxonomy.hierarchy[1] AS VARCHAR) IN ({top_levels_sql})
+                      AND (p.confidence IS NULL OR p.confidence >= {confidence_sql})
+                    """
                 )
 
                 columns = [item[0] for item in cursor.description]
@@ -367,7 +381,23 @@ def build_snapshot(
                         break
                     for row in batch:
                         item = dict(zip(columns, row))
-                        district = first_nonempty(item.get("district"))
+                        latitude = item.get("latitude")
+                        longitude = item.get("longitude")
+                        if latitude is None or longitude is None:
+                            continue
+
+                        point = Point(float(longitude), float(latitude))
+                        if not region_geometry.covers(point):
+                            continue
+
+                        district = None
+                        if county_tree is not None:
+                            matches = county_tree.query(point, predicate="intersects")
+                            if len(matches):
+                                district = sorted(
+                                    county_names[int(index)] for index in matches
+                                )[0]
+
                         locality = first_nonempty(item.get("address_locality"))
                         neighborhood = locality
                         if neighborhood and normalize_text(neighborhood) in {
@@ -394,8 +424,8 @@ def build_snapshot(
                             "district": district,
                             "neighborhood": neighborhood,
                             "address": address,
-                            "latitude": item.get("latitude"),
-                            "longitude": item.get("longitude"),
+                            "latitude": float(latitude),
+                            "longitude": float(longitude),
                             "basicCategory": first_nonempty(item.get("basic_category")),
                             "category": first_nonempty(item.get("category")),
                             "topLevelCategory": first_nonempty(item.get("top_level_category")),
