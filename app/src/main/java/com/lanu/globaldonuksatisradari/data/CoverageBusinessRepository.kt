@@ -1,6 +1,7 @@
 package com.lanu.globaldonuksatisradari.data
 
 import android.content.Context
+import android.util.Log
 import com.lanu.globaldonuksatisradari.IstanbulDistricts
 
 internal fun planCoverageScopes(
@@ -79,21 +80,6 @@ class CoverageBusinessRepository(
     private val engine = BusinessCoverageEngine(
         sources = listOf(
             CoverageSource { scope ->
-                val businesses = overture.fetchValidated(
-                    query = scope.category.takeUnless { it == "*" }.orEmpty(),
-                    city = scope.city,
-                    district = scope.district.takeUnless { it == "Tümü" },
-                    neighborhood = scope.neighborhood,
-                )
-                Result.success(
-                    CoverageSourceResult(
-                        source = overture.contract.descriptor,
-                        businesses = businesses,
-                        completedAtEpochMs = System.currentTimeMillis(),
-                    ),
-                )
-            },
-            CoverageSource { scope ->
                 val businesses = overpass.fetchValidated(
                     query = scope.category.takeUnless { it == "*" }.orEmpty(),
                     city = scope.city,
@@ -169,11 +155,32 @@ class CoverageBusinessRepository(
             discoveredDistricts = discoveredDistricts,
         )
 
+        // Overture is a province snapshot. Read it once per user search instead of
+        // once for every district scope; a city-wide İstanbul scan would otherwise
+        // decompress the same file 39 times.
+        val overtureRecords = runCatching {
+            overture.fetchValidated(
+                query = query,
+                city = city,
+                district = normalizedDistrict,
+                neighborhood = normalizedNeighborhood,
+            )
+        }.onFailure { error ->
+            Log.w(
+                "LanuRadar",
+                "Overture snapshot kullanılamadı; OSM kaynaklarına geçiliyor: " +
+                    city + "/" + normalizedDistrict,
+                error,
+            )
+        }.getOrDefault(emptyList())
+
         val scans = engine.scanAll(scopes)
-        var discovered = CoverageResultMerger.merge(
-            scans = scans,
-            localCache = localCache,
-            nowEpochMs = System.currentTimeMillis(),
+        var discovered = BusinessDeduplication.deduplicateCrossSource(
+            overtureRecords + CoverageResultMerger.merge(
+                scans = scans,
+                localCache = localCache,
+                nowEpochMs = System.currentTimeMillis(),
+            ),
         )
 
         // Some OSM neighborhoods have no Overpass area counterpart. In that case,
