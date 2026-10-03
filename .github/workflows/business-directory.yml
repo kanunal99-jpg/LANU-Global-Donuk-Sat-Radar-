@@ -87,9 +87,12 @@ jobs:
           ogrinfo --version
           ogrinfo --formats | grep -i PMTiles
       - name: Probe public Foursquare OS Places PMTiles around Sultanbeyli
+        env:
+          AWS_NO_SIGN_REQUEST: "YES"
+          AWS_REGION: "us-east-1"
         run: |
           set -euo pipefail
-          src="/vsicurl/https://fsq-os-places-us-east-1.s3.us-east-1.amazonaws.com/release/vector-tiles/latest/fsq-os-places.pmtiles"
+          src="/vsis3/fsq-os-places-us-east-1/release/vector-tiles/latest/fsq-os-places.pmtiles"
           ogrinfo -ro -so "$src" > /tmp/fsq-info.txt
           cat /tmp/fsq-info.txt
 
