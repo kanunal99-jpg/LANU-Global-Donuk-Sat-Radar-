@@ -193,4 +193,11 @@ class OverpassBusinessSourceAdapterTest {
         assertTrue(result.any { it.name == "Örnek Çiftlik" && it.category == "farm" })
     }
 
+
+    @Test
+    fun humanNameQueryAllowsInterveningWords() {
+        val query = OverpassQueryBuilder.build("İstanbul", "Sultanbeyli", "sandora cafe")
+        assertTrue(query.contains("""["name"~"sandora.*cafe",i]"""))
+    }
+
 }

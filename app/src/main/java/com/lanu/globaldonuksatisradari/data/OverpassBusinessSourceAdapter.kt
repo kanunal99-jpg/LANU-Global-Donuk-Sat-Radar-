@@ -137,7 +137,7 @@ object OverpassQueryBuilder {
 
     private fun buildTermQuery(query: String): String {
         val normalized = normalize(query)
-        val regex = escapeRegex(query)
+        val regex = BusinessTextSearch.flexibleRegex(query)
         val categoryClauses = when {
             normalized in setOf("cafe", "kafe", "coffee", "kahve") ->
                 listOf("""nwr["amenity"="cafe"](area.searchArea);""")
