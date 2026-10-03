@@ -476,9 +476,10 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                             Text("Hızlı filtreler", style = MaterialTheme.typography.titleMedium)
                                             Text(
                                                 "81 il destekli. İl / ilçe / mahalle seçimi doğrudan kaynak taramasına uygulanır. " +
-                                                    "Kategori “Tümü” ise mağaza, ofis/şirket, üretici, toptancı, AVM, bar/kulüp/disko, " +
-                                                    "konaklama, sağlık, eğitim/kurs, otomotiv, güzellik, finans/emlak, inşaat, tarım, lojistik " +
-                                                    "ve diğer ticari OSM etiketleri birlikte taranır. Telefon/web sonuca uygulanır.",
+                                                    "Kategori “Tümü” ise sektör sınırlaması olmadan Overture Türkiye işletme dizini, " +
+                                                    "OpenStreetMap ve içe aktarılan resmî sicil kayıtları birlikte kullanılır; mağaza, ofis/şirket, " +
+                                                    "üretici, toptancı, sanayi, konaklama, sağlık, eğitim, otomotiv, finans, inşaat, tarım, " +
+                                                    "lojistik ve diğer işletme aileleri kapsama girer. Telefon/web yalnız kaynakta varsa gösterilir.",
                                                 style = MaterialTheme.typography.bodySmall,
                                             )
                                         }
