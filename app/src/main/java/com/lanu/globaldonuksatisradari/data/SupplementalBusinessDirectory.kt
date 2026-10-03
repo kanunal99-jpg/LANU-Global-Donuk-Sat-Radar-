@@ -106,15 +106,14 @@ internal object SupplementalBusinessParser {
             return false
         }
 
-        val wantedQuery = normalize(query)
-        if (wantedQuery.isBlank()) return true
-        val haystack = listOfNotNull(
+        return BusinessTextSearch.matches(
+            query,
             business.name,
             business.category,
             business.address,
             business.phone,
-        ).joinToString(" ")
-        return normalize(haystack).contains(wantedQuery)
+            business.website,
+        )
     }
 
     private fun optionalString(item: JSONObject, key: String): String? =
