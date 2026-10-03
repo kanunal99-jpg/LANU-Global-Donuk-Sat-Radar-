@@ -140,7 +140,7 @@ def build_snapshot(output_dir: pathlib.Path, release: str, min_confidence: float
           AND d.country = '{COUNTRY_CODE}'
           AND CAST(d.region AS VARCHAR) LIKE 'TR-%'
           AND d.names.primary IS NOT NULL
-          AND a.is_land = TRUE
+          AND (a.is_land = TRUE OR a.is_territorial = TRUE)
         """
     )
 
@@ -155,7 +155,7 @@ def build_snapshot(output_dir: pathlib.Path, release: str, min_confidence: float
         FROM read_parquet('{division_path}', hive_partitioning=1) AS d
         INNER JOIN read_parquet('{division_area_path}', hive_partitioning=1) AS a
             ON a.division_id = d.id
-        WHERE d.subtype = 'county'
+        WHERE d.subtype IN ('county', 'localadmin')
           AND d.country = '{COUNTRY_CODE}'
           AND CAST(d.region AS VARCHAR) LIKE 'TR-%'
           AND d.names.primary IS NOT NULL
