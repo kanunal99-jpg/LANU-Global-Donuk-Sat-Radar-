@@ -1,0 +1,140 @@
+name: Turkey Business Directory
+
+on:
+  workflow_dispatch:
+    inputs:
+      overture_release:
+        description: "Optional Overture release (for example 2026-09-23.1); blank = latest STAC release"
+        required: false
+        default: ""
+      min_confidence:
+        description: "Minimum Overture existence confidence, 0.0 keeps maximum coverage"
+        required: false
+        default: "0.0"
+  schedule:
+    - cron: "30 3 25 * *"
+
+concurrency:
+  group: turkey-business-directory
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-directory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      DIRECTORY_TAG: business-directory-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install directory builder dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "duckdb>=1.4,<2"
+
+      - name: Validate builder syntax
+        run: python -m py_compile scripts/build_overture_turkey_directory.py
+
+      - name: Build Turkey-wide business directory
+        env:
+          INPUT_RELEASE: ${{ github.event.inputs.overture_release || '' }}
+          INPUT_MIN_CONFIDENCE: ${{ github.event.inputs.min_confidence || '0.0' }}
+        run: |
+          set -euo pipefail
+          args=(--output-dir build/business-directory --min-confidence "$INPUT_MIN_CONFIDENCE")
+          if [[ -n "$INPUT_RELEASE" ]]; then
+            args+=(--release "$INPUT_RELEASE")
+          fi
+          python scripts/build_overture_turkey_directory.py "${args[@]}"
+
+      - name: Validate generated directory
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import gzip
+          import hashlib
+          import json
+          from pathlib import Path
+
+          root = Path("build/business-directory")
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          cities = manifest["cities"]
+          assert manifest["schemaVersion"] == 1
+          assert len(cities) >= 81, len(cities)
+          assert manifest["totalRecordCount"] > 0
+
+          seen = set()
+          total_lines = 0
+          for city in cities:
+              assert city["regionCode"].startswith("TR-")
+              assert city["regionCode"] not in seen
+              seen.add(city["regionCode"])
+              asset = root / city["asset"]
+              assert asset.exists(), asset
+              digest = hashlib.sha256(asset.read_bytes()).hexdigest()
+              assert digest == city["sha256"], city["asset"]
+              with gzip.open(asset, "rt", encoding="utf-8") as stream:
+                  count = sum(1 for line in stream if line.strip())
+              assert count == city["recordCount"], (city["asset"], count, city["recordCount"])
+              total_lines += count
+
+          assert total_lines == manifest["totalRecordCount"]
+          print(json.dumps({
+              "overtureRelease": manifest["overtureRelease"],
+              "cities": len(cities),
+              "records": total_lines,
+          }, ensure_ascii=False))
+          PY
+
+      - name: Upload directory build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: turkey-business-directory-${{ github.sha }}
+          path: build/business-directory/
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Create or update directory release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release="$(python -c 'import json; print(json.load(open("build/business-directory/manifest.json"))["overtureRelease"])')"
+          records="$(python -c 'import json; print(json.load(open("build/business-directory/manifest.json"))["totalRecordCount"])')"
+
+          if gh release view "$DIRECTORY_TAG" >/dev/null 2>&1; then
+            gh release edit "$DIRECTORY_TAG"               --title "LANU Türkiye İşletme Dizini"               --notes "Overture Maps Places release: $release · Türkiye işletme/POI snapshot: $records kayıt. APK release'inden ayrı veri paketi."               --prerelease
+          else
+            gh release create "$DIRECTORY_TAG"               --target "${GITHUB_SHA}"               --title "LANU Türkiye İşletme Dizini"               --notes "Overture Maps Places release: $release · Türkiye işletme/POI snapshot: $records kayıt. APK release'inden ayrı veri paketi."               --prerelease
+          fi
+
+          gh release upload "$DIRECTORY_TAG" build/business-directory/* --clobber
+
+      - name: Verify published manifest and province asset
+        run: |
+          set -euo pipefail
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${DIRECTORY_TAG}"
+          curl --fail --location --retry 4 --retry-delay 3 "$base/manifest.json" -o /tmp/manifest.json
+
+          python - <<'PY' > /tmp/asset.env
+          import json
+          m = json.load(open("/tmp/manifest.json", encoding="utf-8"))
+          assert m["schemaVersion"] == 1
+          assert len(m["cities"]) >= 81
+          assert m["totalRecordCount"] > 0
+          city = next((c for c in m["cities"] if c["regionCode"] == "TR-34"), m["cities"][0])
+          print("ASSET=" + city["asset"])
+          print("SHA=" + city["sha256"])
+          PY
+
+          source /tmp/asset.env
+          curl --fail --location --retry 4 --retry-delay 3 "$base/$ASSET" -o "/tmp/$ASSET"
+          echo "$SHA  /tmp/$ASSET" | sha256sum --check -
