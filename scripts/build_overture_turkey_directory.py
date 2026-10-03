@@ -121,9 +121,9 @@ def build_snapshot(output_dir: pathlib.Path, release: str, min_confidence: float
     con.execute("LOAD httpfs")
     con.execute("SET s3_region='us-west-2'")
 
-    division_path = f"{S3_ROOT}/{release}/theme=divisions/type=division/*.parquet"
-    division_area_path = f"{S3_ROOT}/{release}/theme=divisions/type=division_area/*.parquet"
-    places_path = f"{S3_ROOT}/{release}/theme=places/type=place/*.parquet"
+    division_path = f"{S3_ROOT}/{release}/theme=divisions/type=division/*"
+    division_area_path = f"{S3_ROOT}/{release}/theme=divisions/type=division_area/*"
+    places_path = f"{S3_ROOT}/{release}/theme=places/type=place/*"
 
     con.execute(
         f"""
