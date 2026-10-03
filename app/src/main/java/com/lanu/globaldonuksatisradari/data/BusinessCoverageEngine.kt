@@ -62,6 +62,9 @@ class BusinessCoverageEngine(
 
     suspend fun scan(scope: CoverageScope): CoverageScanResult {
         val attempts = mutableListOf<CoverageAttempt>()
+        val broadBusinesses = mutableListOf<VerifiedBusiness>()
+        val broadSuccessfulSources = mutableListOf<String>()
+        var broadCompletedAtEpochMs = 0L
 
         for (source in sources) {
             val result = try {
@@ -86,7 +89,19 @@ class BusinessCoverageEngine(
                     resultCount = value.businesses.size,
                 )
 
-                if (value.businesses.isNotEmpty() || scope.category == "*") {
+                if (scope.category == "*") {
+                    broadSuccessfulSources += value.source.id
+                    broadBusinesses += value.businesses
+                    broadCompletedAtEpochMs = maxOf(
+                        broadCompletedAtEpochMs,
+                        value.completedAtEpochMs,
+                    )
+                    // A broad inventory must not stop at the first provider:
+                    // Overture, OSM and future bulk sources are complementary.
+                    continue
+                }
+
+                if (value.businesses.isNotEmpty()) {
                     return CoverageScanResult(
                         scope = scope,
                         businesses = value.businesses,
@@ -106,6 +121,16 @@ class BusinessCoverageEngine(
                 success = false,
                 resultCount = 0,
                 errorCode = result.exceptionOrNull()?.javaClass?.simpleName ?: "SOURCE_ERROR",
+            )
+        }
+
+        if (scope.category == "*" && broadSuccessfulSources.isNotEmpty()) {
+            return CoverageScanResult(
+                scope = scope,
+                businesses = BusinessDeduplication.deduplicateCrossSource(broadBusinesses),
+                attempts = attempts,
+                selectedSourceId = broadSuccessfulSources.singleOrNull() ?: "multi-source",
+                completedAtEpochMs = broadCompletedAtEpochMs.takeIf { it > 0L } ?: nowEpochMs(),
             )
         }
 
