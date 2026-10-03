@@ -28,6 +28,7 @@ import com.lanu.globaldonuksatisradari.crm.SupabaseAuthClient
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.data.BusinessCategoryLabels
+import com.lanu.globaldonuksatisradari.data.BusinessEntityEligibility
 import com.lanu.globaldonuksatisradari.data.BusinessDeduplication
 import com.lanu.globaldonuksatisradari.data.BusinessQualityEvaluator
 import com.lanu.globaldonuksatisradari.data.DistrictCatalogRepository
@@ -190,10 +191,14 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val activeOwnerUserId = cloudSessionState?.value?.userId
     val allCrmCustomers by localCrmRepository.observeCustomers(null).collectAsState(initial = emptyList())
     val crmCustomers = remember(allCrmCustomers, activeOwnerUserId) {
-        if (activeOwnerUserId == null) {
+        val ownerScoped = if (activeOwnerUserId == null) {
             allCrmCustomers.filter { it.ownerUserId == null }
         } else {
             allCrmCustomers.filter { it.ownerUserId == activeOwnerUserId }
+        }
+        ownerScoped.filter { customer ->
+            customer.dataQuality != DataQuality.OBSERVED ||
+                BusinessEntityEligibility.keepCategory(customer.businessType)
         }
     }
     val pendingSyncFlow = remember(localCrmRepository, activeOwnerUserId) {
