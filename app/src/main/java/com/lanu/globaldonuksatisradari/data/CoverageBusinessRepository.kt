@@ -61,14 +61,16 @@ internal fun nominatimFallbackQuery(category: String): String = when (
 }
 
 /**
- * Production wiring: Coverage Engine -> real OSM adapters -> local cache -> safe empty.
- * Successful empty responses remain authoritative; local cache is used only after source failures.
+ * Production wiring: Overture monthly Turkey snapshot -> OSM Overpass -> Nominatim ->
+ * local cache -> safe empty. Broad scans merge successful bulk sources; targeted scans
+ * stop at the first source that returns data.
  */
 class CoverageBusinessRepository(
     context: Context,
     private val localCache: CoverageLocalCache = SharedPreferencesCoverageLocalCache(context),
 ) : BusinessRepository {
 
+    private val overture = OvertureBusinessSourceAdapter(context)
     private val overpass = OverpassBusinessSourceAdapter()
     private val nominatim = NominatimBusinessSourceAdapter()
     private val districtCatalog = DistrictCatalogRepository(context)
@@ -76,6 +78,21 @@ class CoverageBusinessRepository(
 
     private val engine = BusinessCoverageEngine(
         sources = listOf(
+            CoverageSource { scope ->
+                val businesses = overture.fetchValidated(
+                    query = scope.category.takeUnless { it == "*" }.orEmpty(),
+                    city = scope.city,
+                    district = scope.district.takeUnless { it == "Tümü" },
+                    neighborhood = scope.neighborhood,
+                )
+                Result.success(
+                    CoverageSourceResult(
+                        source = overture.contract.descriptor,
+                        businesses = businesses,
+                        completedAtEpochMs = System.currentTimeMillis(),
+                    ),
+                )
+            },
             CoverageSource { scope ->
                 val businesses = overpass.fetchValidated(
                     query = scope.category.takeUnless { it == "*" }.orEmpty(),
