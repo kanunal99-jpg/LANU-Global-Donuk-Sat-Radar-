@@ -72,10 +72,13 @@ object BusinessEntityEligibility {
         "marketplace",
     )
 
-    fun keepForBusinessInventory(business: VerifiedBusiness): Boolean {
+    fun keepForBusinessInventory(business: VerifiedBusiness): Boolean =
+        keepCategory(business.category)
+
+    fun keepCategory(category: String?): Boolean {
         val normalized = BusinessDeduplication.normalizeForComparison(
-            business.category.orEmpty().replace(' ', '_'),
+            category.orEmpty().replace(' ', '_'),
         )
-        return normalized !in clearlyNonBusinessCategories
+        return normalized.isBlank() || normalized !in clearlyNonBusinessCategories
     }
 }
