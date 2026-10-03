@@ -106,6 +106,74 @@ def safe_region_asset(region_code: str) -> str:
     return f"{region_code}.jsonl.gz"
 
 
+def open_overture_connection() -> duckdb.DuckDBPyConnection:
+    con = duckdb.connect()
+    con.execute("INSTALL spatial")
+    con.execute("LOAD spatial")
+    con.execute("INSTALL httpfs")
+    con.execute("LOAD httpfs")
+    con.execute("SET s3_region='us-west-2'")
+    return con
+
+
+def smoke_validate_sources(release: str) -> dict:
+    """Touch the live release with the exact nested fields the full builder uses."""
+    division_path = f"{S3_ROOT}/{release}/theme=divisions/type=division/*"
+    places_path = f"{S3_ROOT}/{release}/theme=places/type=place/*"
+    xmin, ymin, xmax, ymax = TURKEY_SCAN_BBOX
+    con = open_overture_connection()
+    try:
+        region_count = con.execute(
+            f"""
+            SELECT count(DISTINCT CAST(region AS VARCHAR))
+            FROM read_parquet('{division_path}', hive_partitioning=1)
+            WHERE subtype = 'region'
+              AND country = '{COUNTRY_CODE}'
+              AND CAST(region AS VARCHAR) LIKE 'TR-%'
+            """
+        ).fetchone()[0]
+        if int(region_count or 0) < 81:
+            raise RuntimeError(
+                f"Overture Turkey region smoke check returned only {region_count} regions"
+            )
+
+        sample = con.execute(
+            f"""
+            SELECT
+                CAST(id AS VARCHAR),
+                CAST(names.primary AS VARCHAR),
+                CAST(basic_category AS VARCHAR),
+                CAST(taxonomy.primary AS VARCHAR),
+                CAST(taxonomy.hierarchy[1] AS VARCHAR),
+                CAST(phones[1] AS VARCHAR),
+                CAST(websites[1] AS VARCHAR),
+                CAST(addresses[1].freeform AS VARCHAR),
+                CAST(addresses[1].locality AS VARCHAR),
+                CAST(addresses[1].postcode AS VARCHAR),
+                CAST(operating_status AS VARCHAR),
+                CAST(confidence AS DOUBLE),
+                ST_Y(geometry),
+                ST_X(geometry)
+            FROM read_parquet('{places_path}', hive_partitioning=1)
+            WHERE names.primary IS NOT NULL
+              AND bbox.xmin BETWEEN {xmin} AND {xmax}
+              AND bbox.ymin BETWEEN {ymin} AND {ymax}
+            LIMIT 1
+            """
+        ).fetchone()
+        if sample is None or not str(sample[0] or "").strip() or not str(sample[1] or "").strip():
+            raise RuntimeError("Overture Places smoke query returned no usable Turkey-bbox row")
+
+        return {
+            "release": release,
+            "turkeyRegions": int(region_count),
+            "sampleId": str(sample[0]),
+            "sampleName": str(sample[1]),
+        }
+    finally:
+        con.close()
+
+
 def build_snapshot(output_dir: pathlib.Path, release: str, min_confidence: float) -> dict:
     if not 0.0 <= min_confidence <= 1.0:
         raise ValueError("--min-confidence must be between 0 and 1")
@@ -114,12 +182,7 @@ def build_snapshot(output_dir: pathlib.Path, release: str, min_confidence: float
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    con = duckdb.connect()
-    con.execute("INSTALL spatial")
-    con.execute("LOAD spatial")
-    con.execute("INSTALL httpfs")
-    con.execute("LOAD httpfs")
-    con.execute("SET s3_region='us-west-2'")
+    con = open_overture_connection()
 
     division_path = f"{S3_ROOT}/{release}/theme=divisions/type=division/*"
     division_area_path = f"{S3_ROOT}/{release}/theme=divisions/type=division_area/*"
@@ -360,11 +423,20 @@ def main() -> int:
     parser.add_argument("--output-dir", default="build/business-directory")
     parser.add_argument("--release", default="")
     parser.add_argument("--min-confidence", type=float, default=0.0)
+    parser.add_argument(
+        "--smoke-only",
+        action="store_true",
+        help="Validate current Overture S3 paths and nested fields without building the snapshot.",
+    )
     args = parser.parse_args()
 
     release = args.release.strip() or latest_release()
     if not re.fullmatch(r"20\d{2}-\d{2}-\d{2}\.\d+", release):
         raise RuntimeError(f"Invalid Overture release: {release!r}")
+
+    if args.smoke_only:
+        print(json.dumps(smoke_validate_sources(release), ensure_ascii=False))
+        return 0
 
     output_dir = pathlib.Path(args.output_dir).resolve()
     manifest = build_snapshot(output_dir, release, args.min_confidence)
