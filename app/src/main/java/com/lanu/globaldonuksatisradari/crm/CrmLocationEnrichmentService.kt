@@ -1,15 +1,12 @@
 package com.lanu.globaldonuksatisradari.crm
 
 import android.content.Context
-import android.os.SystemClock
 import android.util.Log
 import com.lanu.globaldonuksatisradari.data.BusinessDeduplication
+import com.lanu.globaldonuksatisradari.data.NominatimRateLimiter
 import com.lanu.globaldonuksatisradari.data.DistrictCatalogRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -304,7 +301,7 @@ internal class CrmLocationEnrichmentService(
         }
 
         missing.chunked(MAX_LOOKUP_BATCH).forEach { batch ->
-            LookupRateLimiter.await()
+            NominatimRateLimiter.await()
             val fetched = try {
                 fetchBatch(batch)
             } catch (error: CancellationException) {
@@ -525,17 +522,3 @@ internal class CrmLocationEnrichmentService(
     }
 }
 
-private object LookupRateLimiter {
-    private const val MIN_INTERVAL_MS = 1_100L
-    private val mutex = Mutex()
-    private var lastRequestAt = 0L
-
-    suspend fun await() {
-        mutex.withLock {
-            val now = SystemClock.elapsedRealtime()
-            val wait = MIN_INTERVAL_MS - (now - lastRequestAt)
-            if (wait > 0L) delay(wait)
-            lastRequestAt = SystemClock.elapsedRealtime()
-        }
-    }
-}

@@ -310,14 +310,19 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                     val id = p.getString("id")
                     val remoteVersion = p.optLong("sync_version", 1L)
                     val local = database.customerDao().findById(id)
-                    val accept = local == null || remoteVersion > local.version ||
-                        local.syncState == SyncState.SYNCED.name
+                    val accept = CrmPullConflictPolicy.acceptRemote(
+                        localVersion = local?.version,
+                        localSyncState = local?.syncState,
+                        remoteVersion = remoteVersion,
+                    )
                     if (accept) {
                         database.customerDao().upsert(
                             CrmCustomerEntity(
                                 id = id,
                                 businessSourceId = p.optString("source_id"),
                                 businessName = p.optString("name"),
+                                signboardName = p.optString("signboard_name").takeIf(String::isNotBlank)
+                                    ?: local?.signboardName,
                                 city = p.optString("city"),
                                 district = p.optString("district"),
                                 neighborhood = p.optString("neighborhood").takeIf(String::isNotBlank),
@@ -328,10 +333,21 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                                 stage = p.optString("stage", CrmStage.PROSPECT.name),
                                 ownerUserId = session.userId,
                                 notes = p.optString("notes").takeIf(String::isNotBlank),
-                                contactName = local?.contactName,
-                                businessType = local?.businessType,
+                                contactName = p.optString("contact_name").takeIf(String::isNotBlank)
+                                    ?: local?.contactName,
+                                businessType = p.optString("business_type").takeIf(String::isNotBlank)
+                                    ?: local?.businessType,
                                 taxOrNationalId = local?.taxOrNationalId,
-                                phone = local?.phone,
+                                phone = p.optString("phone").takeIf(String::isNotBlank) ?: local?.phone,
+                                website = p.optString("website").takeIf(String::isNotBlank) ?: local?.website,
+                                registryStatus = p.optString(
+                                    "registry_status",
+                                    CrmRegistryStatus.UNVERIFIED.name,
+                                ),
+                                registrySource = p.optString("registry_source").takeIf(String::isNotBlank)
+                                    ?: local?.registrySource,
+                                registryNumber = p.optString("registry_number").takeIf(String::isNotBlank)
+                                    ?: local?.registryNumber,
                                 createdAtEpochMs = parseInstant(p.optString("created_at")),
                                 updatedAtEpochMs = parseInstant(p.optString("updated_at")),
                                 version = remoteVersion,
@@ -365,7 +381,13 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                     val id = p.getString("id")
                     val remoteVersion = p.optLong("version", 1L)
                     val local = database.nextActionDao().findById(id)
-                    if (local == null || remoteVersion > local.version || local.syncState == SyncState.SYNCED.name) {
+                    if (
+                        CrmPullConflictPolicy.acceptRemote(
+                            localVersion = local?.version,
+                            localSyncState = local?.syncState,
+                            remoteVersion = remoteVersion,
+                        )
+                    ) {
                         database.nextActionDao().upsert(
                             CrmNextActionEntity(
                                 id = id,
@@ -388,7 +410,13 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                     val id = p.getString("id")
                     val local = database.opportunityDao().findById(id)
                     val remoteVersion = p.optLong("version", 1L)
-                    if (local == null || remoteVersion > local.version || local.syncState == SyncState.SYNCED.name) {
+                    if (
+                        CrmPullConflictPolicy.acceptRemote(
+                            localVersion = local?.version,
+                            localSyncState = local?.syncState,
+                            remoteVersion = remoteVersion,
+                        )
+                    ) {
                         val amountMinor = p.optString("amount").takeIf(String::isNotBlank)?.let {
                             runCatching { BigDecimal(it).movePointRight(2).longValueExact() }.getOrNull()
                         }
@@ -460,6 +488,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
         put("source", if (p.optString("businessSourceId").startsWith("manual:")) "manual" else "osm")
         put("source_id", p.getString("businessSourceId"))
         put("name", p.getString("businessName"))
+        put("signboard_name", p.optString("signboardName").takeIf(String::isNotBlank) ?: JSONObject.NULL)
         put("city", p.getString("city"))
         put("district", p.getString("district"))
         put("neighborhood", p.optString("neighborhood").takeIf(String::isNotBlank) ?: JSONObject.NULL)
@@ -468,6 +497,13 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
         put("longitude", if (p.isNull("longitude")) JSONObject.NULL else p.getDouble("longitude"))
         put("data_quality", p.optString("dataQuality").ifBlank { "UNKNOWN" })
         put("notes", p.optString("notes").takeIf(String::isNotBlank) ?: JSONObject.NULL)
+        put("contact_name", p.optString("contactName").takeIf(String::isNotBlank) ?: JSONObject.NULL)
+        put("business_type", p.optString("businessType").takeIf(String::isNotBlank) ?: JSONObject.NULL)
+        put("phone", p.optString("phone").takeIf(String::isNotBlank) ?: JSONObject.NULL)
+        put("website", p.optString("website").takeIf(String::isNotBlank) ?: JSONObject.NULL)
+        put("registry_status", p.optString("registryStatus").ifBlank { CrmRegistryStatus.UNVERIFIED.name })
+        put("registry_source", p.optString("registrySource").takeIf(String::isNotBlank) ?: JSONObject.NULL)
+        put("registry_number", p.optString("registryNumber").takeIf(String::isNotBlank) ?: JSONObject.NULL)
         put("sync_version", p.optLong("version", 1L))
     }
 

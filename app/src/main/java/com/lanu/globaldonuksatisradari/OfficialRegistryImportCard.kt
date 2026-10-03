@@ -17,6 +17,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,7 +55,13 @@ fun OfficialRegistryImportCard(
     var registryRecords by remember { mutableStateOf<List<OfficialRegistryRecord>>(emptyList()) }
     var loadingRecords by remember { mutableStateOf(false) }
     var counts by remember {
-        mutableStateOf(OfficialRegistrySource.entries.associateWith(store::count))
+        mutableStateOf<Map<OfficialRegistrySource, Int>>(emptyMap())
+    }
+
+    LaunchedEffect(store) {
+        counts = withContext(Dispatchers.IO) {
+            OfficialRegistrySource.entries.associateWith(store::count)
+        }
     }
 
     val picker = rememberLauncherForActivityResult(
@@ -79,8 +86,16 @@ fun OfficialRegistryImportCard(
                     )
                 }
             }.onSuccess { summary ->
-                counts = OfficialRegistrySource.entries.associateWith(store::count)
-                val records = withContext(Dispatchers.IO) { store.records(summary.source) }
+                counts = withContext(Dispatchers.IO) {
+                    OfficialRegistrySource.entries.associateWith(store::count)
+                }
+                val records = withContext(Dispatchers.IO) {
+                    if (!defaultCity.isNullOrBlank()) {
+                        store.recordsFor(summary.source, defaultCity, null)
+                    } else {
+                        store.records(summary.source)
+                    }
+                }
                 registryRecords = records
                 showRecords = true
                 recordQuery = ""
@@ -186,7 +201,13 @@ fun OfficialRegistryImportCard(
                     } else {
                         loadingRecords = true
                         scope.launch {
-                            registryRecords = withContext(Dispatchers.IO) { store.records(selectedSource) }
+                            registryRecords = withContext(Dispatchers.IO) {
+                                if (!defaultCity.isNullOrBlank()) {
+                                    store.recordsFor(selectedSource, defaultCity, null)
+                                } else {
+                                    store.records(selectedSource)
+                                }
+                            }
                             recordQuery = ""
                             phonePresenceFilter = "Tümü"
                             showRecords = true
@@ -270,7 +291,8 @@ fun OfficialRegistryImportCard(
                     }
                 }
                 Text(
-                    "${filteredRecords.size} eşleşme • ilk ${minOf(filteredRecords.size, 30)} kayıt gösteriliyor",
+                    (defaultCity?.takeIf(String::isNotBlank)?.let { "$it • " } ?: "") +
+                        "${filteredRecords.size} eşleşme • ilk ${minOf(filteredRecords.size, 30)} kayıt gösteriliyor",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 OfficialRegistryExportActions(

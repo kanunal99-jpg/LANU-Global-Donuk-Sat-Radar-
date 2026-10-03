@@ -16,7 +16,12 @@ object RoutineExcelExporter {
         "Açık Adres",
         "X",
         "Y",
+        "Ziyaret Aralığı (Gün)",
+        "Frekans Kaynağı",
+        "Önceki Uzaklık",
         "Kümülatif Uzaklık",
+        "Önceki Süre (dk)",
+        "Kümülatif Süre (dk)",
     )
 
     fun build(plan: MonthlyRoutinePlan): ByteArray {
@@ -32,7 +37,7 @@ object RoutineExcelExporter {
                 val weekDays = plan.days.filter { it.weekNumber == week }
                 zip.putXml(
                     "xl/worksheets/sheet$week.xml",
-                    worksheet(week, weekDays),
+                    worksheet(week, weekDays, plan),
                 )
             }
         }
@@ -42,6 +47,7 @@ object RoutineExcelExporter {
     private fun worksheet(
         weekNumber: Int,
         days: List<RoutineDayPlan>,
+        plan: MonthlyRoutinePlan,
     ): String {
         val mergeRefs = mutableListOf<String>()
         var rowNumber = 1
@@ -55,7 +61,9 @@ object RoutineExcelExporter {
                     append(" nokta")
                     append(" • ")
                     append("%.2f".format(java.util.Locale.US, day.totalDistanceKm))
-                    append(" km")
+                    append(" km • ")
+                    append(day.totalEstimatedMinutes)
+                    append(" dk")
                 }
                 append(
                     rowXml(
@@ -64,7 +72,7 @@ object RoutineExcelExporter {
                         height = 24,
                     ),
                 )
-                mergeRefs += "A$dayStart:I$dayStart"
+                mergeRefs += "A$dayStart:N$dayStart"
                 rowNumber++
 
                 append(
@@ -91,7 +99,7 @@ object RoutineExcelExporter {
                             ),
                         ),
                     )
-                    mergeRefs += "A$rowNumber:I$rowNumber"
+                    mergeRefs += "A$rowNumber:N$rowNumber"
                     rowNumber++
                 } else {
                     day.stops.forEach { stop ->
@@ -122,10 +130,40 @@ object RoutineExcelExporter {
                             customer.latitude?.toString().orEmpty(),
                             style = 3,
                         )
-                        cells += numericCell(
+                        val frequency = plan.frequencyFor(customer.id)
+                        cells += numericOrTextCell(
                             "I$rowNumber",
+                            frequency?.intervalDays?.toString().orEmpty(),
+                            style = 2,
+                        )
+                        cells += textCell(
+                            "J$rowNumber",
+                            when (frequency?.source) {
+                                VisitFrequencySource.AUTO -> "Otomatik"
+                                VisitFrequencySource.MANUAL -> "Manuel"
+                                null -> ""
+                            },
+                            style = 2,
+                        )
+                        cells += numericCell(
+                            "K$rowNumber",
+                            stop.distanceFromPreviousKm,
+                            style = 5,
+                        )
+                        cells += numericCell(
+                            "L$rowNumber",
                             stop.cumulativeDistanceKm,
                             style = 5,
+                        )
+                        cells += numericCell(
+                            "M$rowNumber",
+                            stop.estimatedMinutesFromPrevious.toDouble(),
+                            style = 6,
+                        )
+                        cells += numericCell(
+                            "N$rowNumber",
+                            stop.cumulativeEstimatedMinutes.toDouble(),
+                            style = 6,
                         )
                         append(rowXml(rowNumber, cells))
                         rowNumber++
@@ -155,7 +193,9 @@ object RoutineExcelExporter {
     <col min="4" max="5" width="18" customWidth="1"/>
     <col min="6" max="6" width="46" customWidth="1"/>
     <col min="7" max="8" width="16" customWidth="1"/>
-    <col min="9" max="9" width="20" customWidth="1"/>
+    <col min="9" max="10" width="20" customWidth="1"/>
+    <col min="11" max="12" width="20" customWidth="1"/>
+    <col min="13" max="14" width="18" customWidth="1"/>
   </cols>
   <sheetData>$rows</sheetData>
   $merges
@@ -256,9 +296,10 @@ object RoutineExcelExporter {
 
     private fun styles() = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <numFmts count="2">
+  <numFmts count="3">
     <numFmt numFmtId="164" formatCode="0.000000"/>
     <numFmt numFmtId="165" formatCode="0.00 &quot;km&quot;"/>
+    <numFmt numFmtId="166" formatCode="0 &quot;dk&quot;"/>
   </numFmts>
   <fonts count="3">
     <font><sz val="11"/><name val="Calibri"/></font>
@@ -282,13 +323,14 @@ object RoutineExcelExporter {
     </border>
   </borders>
   <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-  <cellXfs count="6">
+  <cellXfs count="7">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
     <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
     <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
     <xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1"/>
     <xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>
     <xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1"/>
+    <xf numFmtId="166" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1"/>
   </cellXfs>
   <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>"""

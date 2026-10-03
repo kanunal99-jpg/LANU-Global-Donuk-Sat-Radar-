@@ -115,24 +115,23 @@ object OverpassQueryBuilder {
         """nwr["name"]["man_made"="works"](area.searchArea);""",
         // All named commercial/service amenities, excluding clearly civic or
         // infrastructure-only POIs so "all businesses" does not become "all map objects".
-        """nwr["name"]["amenity"]["amenity"!~"^(place_of_worship|school|kindergarten|college|university|library|community_centre|social_centre|townhall|courthouse|police|fire_station|post_box|bench|shelter|toilets|drinking_water|waste_basket|recycling|parking|parking_entrance|bicycle_parking|motorcycle_parking|grave_yard|crematorium|public_bookcase)$"](area.searchArea);""",
-        // Accommodation, attractions and other named tourism operators.
-        """nwr["name"]["tourism"](area.searchArea);""",
-        // Entertainment, sports and activity businesses.
-        """nwr["name"]["leisure"](area.searchArea);""",
+        """nwr["name"]["amenity"]["amenity"!~"^(place_of_worship|library|community_centre|social_centre|townhall|courthouse|police|fire_station|post_box|bench|shelter|toilets|drinking_water|waste_basket|recycling|parking|parking_entrance|bicycle_parking|motorcycle_parking|grave_yard|crematorium|public_bookcase|clock|fountain)$"](area.searchArea);""",
+        // Accommodation and clearly commercial tourism operators. Generic attractions,
+        // viewpoints and artwork are intentionally excluded from "all businesses".
+        """nwr["name"]["tourism"~"hotel|hostel|motel|guest_house|apartment|chalet|camp_site|caravan_site|resort|theme_park|zoo|aquarium",i](area.searchArea);""",
+        // Commercial entertainment / sports operators. Public parks, pitches, gardens
+        // and nature reserves are intentionally excluded from "all businesses".
+        """nwr["name"]["leisure"~"fitness_centre|sports_centre|bowling_alley|dance|adult_gaming_centre|amusement_arcade|water_park|sauna|spa|escape_game|trampoline_park|horse_riding",i](area.searchArea);""",
         """nwr["name"]["club"](area.searchArea);""",
         // Named healthcare operators.
         """nwr["name"]["healthcare"](area.searchArea);""",
-        // Some commercial sites are mapped only as a building.
+        // Named commercial buildings and warehouses are valid business inventory candidates
+        // even when a mapper did not add shop/office/craft tags to the same object.
         """nwr["name"]["building"~"retail|commercial|industrial|warehouse|office|supermarket|kiosk|hotel"](area.searchArea);""",
-        // Commercial / industrial complexes and agricultural businesses sometimes
-        // exist only as a named landuse/place/product feature.
-        """nwr["name"]["landuse"~"retail|commercial|industrial|farmyard"](area.searchArea);""",
+        // Agriculture is a first-class business family in broad inventory.
         """nwr["name"]["place"="farm"](area.searchArea);""",
-        """nwr["name"]["product"](area.searchArea);""",
-        // Private operators may be mapped as schools, clinics or other POIs without
-        // one of the usual business keys. This keeps private operators discoverable
-        // without turning the query into every named map feature.
+        """nwr["name"]["landuse"="farmyard"](area.searchArea);""",
+        // Private operators may be mapped with only operator metadata.
         """nwr["name"]["operator:type"="private"](area.searchArea);""",
     ).joinToString("\n")
 
@@ -188,7 +187,7 @@ object OverpassQueryBuilder {
                 listOf("""nwr["name"]["shop"](area.searchArea);""")
             normalized in setOf("hizmet", "service", "amenity") ->
                 listOf(
-                    """nwr["name"]["amenity"]["amenity"!~"^(place_of_worship|school|kindergarten|college|university|library|community_centre|social_centre|townhall|courthouse|police|fire_station|post_box|bench|shelter|toilets|drinking_water|waste_basket|recycling|parking|parking_entrance|bicycle_parking|motorcycle_parking|grave_yard|crematorium|public_bookcase)$"](area.searchArea);""",
+                    """nwr["name"]["amenity"]["amenity"!~"^(place_of_worship|library|community_centre|social_centre|townhall|courthouse|police|fire_station|post_box|bench|shelter|toilets|drinking_water|waste_basket|recycling|parking|parking_entrance|bicycle_parking|motorcycle_parking|grave_yard|crematorium|public_bookcase|clock|fountain)$"](area.searchArea);""",
                 )
             normalized in setOf("turizm", "tourism") ->
                 listOf("""nwr["name"]["tourism"](area.searchArea);""")

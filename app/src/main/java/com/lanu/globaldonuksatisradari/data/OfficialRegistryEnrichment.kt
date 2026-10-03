@@ -195,39 +195,18 @@ class OfficialRegistryStore(
             source = source,
             importedAtEpochMs = importedAtEpochMs,
             defaultCity = defaultCity,
-        ).distinctBy { record ->
-            listOf(
-                record.source.name,
-                record.registrationNumber.orEmpty(),
-                OfficialRegistryNormalizer.text(record.businessName),
-                OfficialRegistryNormalizer.text(record.district.orEmpty()),
-                OfficialRegistryNormalizer.phones(record.phone).sorted().joinToString(","),
-            ).joinToString("|")
-        }.take(MAX_RECORDS)
+        ).distinctBy(::recordIdentityKey)
 
         require(parsed.isNotEmpty()) {
             "Dosyada işletme adı içeren kullanılabilir resmî kayıt bulunamadı."
         }
 
-        val target = sourceFile(source)
-        val temp = File(directory, target.name + ".tmp")
-        temp.bufferedWriter(Charsets.UTF_8).use { writer ->
-            parsed.forEach { record ->
-                writer.appendLine(encode(record).toString())
+        migrateLegacyFile(source)
+
+        parsed.groupBy { partitionToken(it.city ?: defaultCity) }
+            .forEach { (partition, records) ->
+                writeRecordsAtomically(partitionFile(source, partition), records)
             }
-        }
-        val backup = File(directory, target.name + ".bak")
-        if (backup.exists()) backup.delete()
-        if (target.exists() && !target.renameTo(backup)) {
-            temp.delete()
-            throw IOException("Eski resmî sicil önbelleği güvenli yedeğe taşınamadı.")
-        }
-        if (!temp.renameTo(target)) {
-            temp.delete()
-            if (backup.exists()) backup.renameTo(target)
-            throw IOException("Resmî sicil verisi güvenli şekilde kaydedilemedi; önceki kayıt korundu.")
-        }
-        if (backup.exists()) backup.delete()
 
         return OfficialRegistryImportSummary(
             source = source,
@@ -250,21 +229,28 @@ class OfficialRegistryStore(
     fun recordsFor(
         city: String,
         district: String?,
+    ): List<OfficialRegistryRecord> =
+        OfficialRegistrySource.entries.flatMap { source ->
+            recordsFor(source, city, district)
+        }
+
+    fun recordsFor(
+        source: OfficialRegistrySource,
+        city: String,
+        district: String?,
     ): List<OfficialRegistryRecord> {
         val normalizedCity = OfficialRegistryNormalizer.text(city)
         val normalizedDistrict = district
             ?.takeUnless { it.isBlank() || it.equals("Tümü", ignoreCase = true) }
             ?.let(OfficialRegistryNormalizer::text)
 
-        return OfficialRegistrySource.entries.flatMap { source ->
-            readSource(source).filter { record ->
-                val cityMatches = record.city.isNullOrBlank() ||
-                    OfficialRegistryNormalizer.text(record.city) == normalizedCity
-                val districtMatches = normalizedDistrict == null ||
-                    record.district.isNullOrBlank() ||
-                    OfficialRegistryNormalizer.text(record.district) == normalizedDistrict
-                cityMatches && districtMatches
-            }
+        return readSource(source, city).filter { record ->
+            val cityMatches = record.city.isNullOrBlank() ||
+                OfficialRegistryNormalizer.text(record.city) == normalizedCity
+            val districtMatches = normalizedDistrict == null ||
+                record.district.isNullOrBlank() ||
+                OfficialRegistryNormalizer.text(record.district) == normalizedDistrict
+            cityMatches && districtMatches
         }
     }
 
@@ -273,22 +259,163 @@ class OfficialRegistryStore(
     fun allRecords(): List<OfficialRegistryRecord> =
         OfficialRegistrySource.entries.flatMap(::readSource)
 
-    fun count(source: OfficialRegistrySource): Int = readSource(source).size
+    fun count(source: OfficialRegistrySource): Int =
+        sourceFiles(source, null).sumOf { file ->
+            if (!file.exists()) {
+                0
+            } else {
+                file.useLines(Charsets.UTF_8) { lines ->
+                    lines.count(String::isNotBlank)
+                }
+            }
+        }
 
-    private fun readSource(source: OfficialRegistrySource): List<OfficialRegistryRecord> {
-        val file = sourceFile(source)
+    private fun readSource(
+        source: OfficialRegistrySource,
+        city: String? = null,
+    ): List<OfficialRegistryRecord> {
+        val records = sourceFiles(source, city)
+            .flatMap(::readFile)
+        return deduplicateNewest(records)
+    }
+
+    private fun sourceFiles(
+        source: OfficialRegistrySource,
+        city: String?,
+    ): List<File> {
+        val legacy = legacySourceFile(source)
+        if (city != null) {
+            return listOf(
+                partitionFile(source, partitionToken(city)),
+                partitionFile(source, UNKNOWN_PARTITION),
+                legacy,
+            ).filter(File::exists).distinctBy(File::getAbsolutePath)
+        }
+
+        val prefix = partitionPrefix(source)
+        val partitioned = directory.listFiles()
+            ?.filter { file ->
+                file.isFile &&
+                    file.name.startsWith(prefix) &&
+                    file.name.endsWith(PARTITION_SUFFIX)
+            }
+            ?.sortedBy(File::getName)
+            .orEmpty()
+        return (partitioned + listOf(legacy).filter(File::exists))
+            .distinctBy(File::getAbsolutePath)
+    }
+
+    private fun readFile(file: File): List<OfficialRegistryRecord> {
         if (!file.exists()) return emptyList()
+        val source = sourceFromFileName(file.name) ?: return emptyList()
         return file.useLines(Charsets.UTF_8) { lines ->
             lines.mapNotNull { line ->
                 line.takeIf(String::isNotBlank)?.let { raw ->
                     runCatching { decode(JSONObject(raw), source) }.getOrNull()
                 }
-            }.take(MAX_RECORDS).toList()
+            }.take(MAX_RECORDS_PER_PARTITION).toList()
         }
     }
 
-    private fun sourceFile(source: OfficialRegistrySource): File =
+    private fun migrateLegacyFile(source: OfficialRegistrySource) {
+        val legacy = legacySourceFile(source)
+        if (!legacy.exists()) return
+
+        val legacyRecords = readFile(legacy)
+        legacyRecords.groupBy { partitionToken(it.city) }
+            .forEach { (partition, records) ->
+                val target = partitionFile(source, partition)
+                val combined = if (target.exists()) {
+                    deduplicateNewest(readFile(target) + records)
+                } else {
+                    records
+                }
+                writeRecordsAtomically(target, combined.take(MAX_RECORDS_PER_PARTITION))
+            }
+
+        if (!legacy.delete()) {
+            throw IOException("Eski resmî sicil deposu partition yapısına taşındı ancak eski dosya silinemedi.")
+        }
+    }
+
+    private fun writeRecordsAtomically(
+        target: File,
+        records: List<OfficialRegistryRecord>,
+    ) {
+        val temp = File(directory, target.name + ".tmp")
+        temp.bufferedWriter(Charsets.UTF_8).use { writer ->
+            records.forEach { record ->
+                writer.appendLine(encode(record).toString())
+            }
+        }
+        val backup = File(directory, target.name + ".bak")
+        if (backup.exists()) backup.delete()
+        if (target.exists() && !target.renameTo(backup)) {
+            temp.delete()
+            throw IOException("Eski resmî sicil önbelleği güvenli yedeğe taşınamadı.")
+        }
+        if (!temp.renameTo(target)) {
+            temp.delete()
+            if (backup.exists()) backup.renameTo(target)
+            throw IOException("Resmî sicil verisi güvenli şekilde kaydedilemedi; önceki kayıt korundu.")
+        }
+        if (backup.exists()) backup.delete()
+    }
+
+    private fun deduplicateNewest(
+        records: List<OfficialRegistryRecord>,
+    ): List<OfficialRegistryRecord> {
+        val byIdentity = LinkedHashMap<String, OfficialRegistryRecord>()
+        records.forEach { record ->
+            val key = recordIdentityKey(record)
+            val previous = byIdentity[key]
+            if (previous == null || record.importedAtEpochMs >= previous.importedAtEpochMs) {
+                byIdentity[key] = record
+            }
+        }
+        return byIdentity.values.toList()
+    }
+
+    private fun recordIdentityKey(record: OfficialRegistryRecord): String =
+        listOf(
+            record.source.name,
+            record.registrationNumber.orEmpty(),
+            OfficialRegistryNormalizer.text(record.businessName),
+            OfficialRegistryNormalizer.text(record.city.orEmpty()),
+            OfficialRegistryNormalizer.text(record.district.orEmpty()),
+            OfficialRegistryNormalizer.phones(record.phone).sorted().joinToString(","),
+        ).joinToString("|")
+
+    private fun partitionToken(city: String?): String {
+        val normalized = city
+            ?.takeIf(String::isNotBlank)
+            ?.let(OfficialRegistryNormalizer::text)
+            .orEmpty()
+        if (normalized.isBlank()) return UNKNOWN_PARTITION
+        return normalized
+            .map { char -> if (char.isLetterOrDigit()) char else '_' }
+            .joinToString("")
+            .trim('_')
+            .take(80)
+            .ifBlank { UNKNOWN_PARTITION }
+    }
+
+    private fun partitionPrefix(source: OfficialRegistrySource): String =
+        "registry_${source.name.lowercase(Locale.ROOT)}__"
+
+    private fun partitionFile(
+        source: OfficialRegistrySource,
+        partition: String,
+    ): File = File(directory, partitionPrefix(source) + partition + PARTITION_SUFFIX)
+
+    private fun legacySourceFile(source: OfficialRegistrySource): File =
         File(directory, "registry_${source.name.lowercase(Locale.ROOT)}.jsonl")
+
+    private fun sourceFromFileName(fileName: String): OfficialRegistrySource? =
+        OfficialRegistrySource.entries.firstOrNull { source ->
+            fileName == legacySourceFile(source).name ||
+                fileName.startsWith(partitionPrefix(source))
+        }
 
     private fun encode(record: OfficialRegistryRecord): JSONObject =
         JSONObject().apply {
@@ -327,7 +454,9 @@ class OfficialRegistryStore(
     private companion object {
         const val DIRECTORY_NAME = "official_registry"
         const val MAX_IMPORT_BYTES = 25 * 1024 * 1024
-        const val MAX_RECORDS = 100_000
+        const val MAX_RECORDS_PER_PARTITION = 250_000
+        const val UNKNOWN_PARTITION = "unknown"
+        const val PARTITION_SUFFIX = ".jsonl"
     }
 }
 
@@ -355,17 +484,26 @@ object OfficialRegistryEnricher {
                 return@forEach
             }
 
-            if (match.status?.let(OfficialRegistryStatus::isInactive) == true) {
-                return@forEach
+            val fieldsUsed = linkedSetOf<String>()
+            val inactive = match.status?.let(OfficialRegistryStatus::isInactive) == true
+            val officialAddress = if (inactive) null else {
+                match.address?.trim()?.takeIf(String::isNotEmpty)
+            }
+            val officialPhone = if (inactive) null else {
+                match.phone?.trim()?.takeIf(String::isNotEmpty)
+            }
+            val officialWebsite = if (inactive) null else {
+                match.website?.trim()?.takeIf(String::isNotEmpty)
+            }
+            val officialDistrict = if (inactive) null else {
+                match.district?.trim()?.takeIf(String::isNotEmpty)
+            }
+            val officialNeighborhood = if (inactive) null else {
+                match.neighborhood?.trim()?.takeIf(String::isNotEmpty)
             }
 
-            val fieldsUsed = linkedSetOf<String>()
-            val officialAddress = match.address?.trim()?.takeIf(String::isNotEmpty)
-            val officialPhone = match.phone?.trim()?.takeIf(String::isNotEmpty)
-            val officialWebsite = match.website?.trim()?.takeIf(String::isNotEmpty)
-            val officialDistrict = match.district?.trim()?.takeIf(String::isNotEmpty)
-            val officialNeighborhood = match.neighborhood?.trim()?.takeIf(String::isNotEmpty)
-
+            if (!match.status.isNullOrBlank()) fieldsUsed += "status"
+            if (!match.registrationNumber.isNullOrBlank()) fieldsUsed += "registration_number"
             if (officialAddress != null) fieldsUsed += "address"
             if (officialPhone != null) fieldsUsed += "phone"
             if (officialWebsite != null) fieldsUsed += "website"
@@ -392,6 +530,104 @@ object OfficialRegistryEnricher {
 
 }
  
+object OfficialRegistryDiscovery {
+    /**
+     * Broad inventory must not depend on OSM already knowing a business.
+     * Identity-verified official registry rows can therefore become standalone
+     * radar records. Records without a registry id are still allowed to enrich
+     * an OSM point, but they are not promoted to standalone verified inventory.
+     */
+    fun mergeIntoBroadInventory(
+        discovered: List<VerifiedBusiness>,
+        records: List<OfficialRegistryRecord>,
+        selectedCity: String,
+        selectedDistrict: String?,
+    ): List<VerifiedBusiness> {
+        val enriched = OfficialRegistryEnricher.enrich(discovered, records)
+        if (records.isEmpty()) return enriched
+
+        val matchedOfficialKeys = enriched.mapNotNull { business ->
+            val evidence = business.officialRegistryEvidence ?: return@mapNotNull null
+            val registrationNumber = evidence.registrationNumber
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
+                ?: return@mapNotNull null
+            evidence.source.id + "|" + registrationNumber
+        }.toSet()
+
+        val officialOnly = OfficialRegistryTrust.verified(records)
+            .asSequence()
+            .filterNot { record -> officialIdentityKey(record) in matchedOfficialKeys }
+            .mapNotNull { record ->
+                toVerifiedBusiness(
+                    record = record,
+                    selectedCity = selectedCity,
+                    selectedDistrict = selectedDistrict,
+                )
+            }
+            .toList()
+
+        return BusinessDeduplication.deduplicateCrossSource(enriched + officialOnly)
+    }
+
+    internal fun toVerifiedBusiness(
+        record: OfficialRegistryRecord,
+        selectedCity: String,
+        selectedDistrict: String?,
+    ): VerifiedBusiness? {
+        if (!OfficialRegistryTrust.isIdentityVerified(record)) return null
+        val registrationNumber = record.registrationNumber
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: return null
+        val name = record.businessName.trim().takeIf(String::isNotEmpty) ?: return null
+        val city = record.city?.trim()?.takeIf(String::isNotEmpty) ?: selectedCity.trim()
+        if (city.isEmpty()) return null
+        val district = record.district?.trim()?.takeIf(String::isNotEmpty)
+            ?: selectedDistrict?.trim()?.takeIf(String::isNotEmpty)
+            ?: "Bilinmiyor"
+
+        val fieldsUsed = linkedSetOf("registration_number")
+        if (!record.status.isNullOrBlank()) fieldsUsed += "status"
+        if (!record.address.isNullOrBlank()) fieldsUsed += "address"
+        if (!record.phone.isNullOrBlank()) fieldsUsed += "phone"
+        if (!record.website.isNullOrBlank()) fieldsUsed += "website"
+        if (!record.district.isNullOrBlank()) fieldsUsed += "district"
+        if (!record.neighborhood.isNullOrBlank()) fieldsUsed += "neighborhood"
+        if (!record.naceCode.isNullOrBlank()) fieldsUsed += "nace_code"
+
+        return VerifiedBusiness(
+            id = record.source.name.lowercase(Locale.ROOT) + ":" + registrationNumber,
+            name = name,
+            city = city,
+            district = district,
+            neighborhood = record.neighborhood?.trim()?.takeIf(String::isNotEmpty),
+            source = record.source.descriptor,
+            verifiedAtEpochMs = record.importedAtEpochMs,
+            category = record.naceCode
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
+                ?.let { "NACE " + it }
+                ?: "Resmî Sicil Kaydı",
+            address = record.address?.trim()?.takeIf(String::isNotEmpty),
+            phone = record.phone?.trim()?.takeIf(String::isNotEmpty),
+            website = record.website?.trim()?.takeIf(String::isNotEmpty),
+            officialRegistryEvidence = OfficialRegistryEvidence(
+                source = record.source.descriptor,
+                registrationNumber = registrationNumber,
+                status = record.status,
+                importedAtEpochMs = record.importedAtEpochMs,
+                fieldsUsed = fieldsUsed,
+            ),
+        )
+    }
+
+    private fun officialIdentityKey(record: OfficialRegistryRecord): String {
+        val registrationNumber = record.registrationNumber?.trim().orEmpty()
+        return record.source.descriptor.id + "|" + registrationNumber
+    }
+}
+
 object OfficialRegistryMatcher {
     fun bestMatch(
         name: String,

@@ -186,11 +186,37 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val productCatalogRepository = remember(context) { ProductCatalogRepository(context) }
     val officialRegistryStore = remember(context) { OfficialRegistryStore(context) }
 
-    LaunchedEffect(Unit) {
+    val cloudSessionState = auth?.session?.collectAsState()
+    val activeOwnerUserId = cloudSessionState?.value?.userId
+    val allCrmCustomers by localCrmRepository.observeCustomers(null).collectAsState(initial = emptyList())
+    val crmCustomers = remember(allCrmCustomers, activeOwnerUserId) {
+        if (activeOwnerUserId == null) {
+            allCrmCustomers.filter { it.ownerUserId == null }
+        } else {
+            allCrmCustomers.filter { it.ownerUserId == activeOwnerUserId }
+        }
+    }
+    val pendingSyncFlow = remember(localCrmRepository, activeOwnerUserId) {
+        localCrmRepository.observePendingSyncCount(activeOwnerUserId)
+    }
+    val pendingSyncCount by pendingSyncFlow.collectAsState(initial = 0)
+    val crmRegistryCities = remember(crmCustomers) {
+        crmCustomers.map { it.city.trim() }
+            .filter(String::isNotBlank)
+            .distinct()
+            .sorted()
+    }
+    LaunchedEffect(crmRegistryCities, activeOwnerUserId) {
+        if (crmRegistryCities.isEmpty()) return@LaunchedEffect
         runCatching {
-            val records = withContext(Dispatchers.IO) { officialRegistryStore.allRecords() }
+            val records = withContext(Dispatchers.IO) {
+                crmRegistryCities.flatMap { city -> officialRegistryStore.recordsFor(city, null) }
+            }
             if (records.isEmpty()) return@runCatching null
-            localCrmRepository.enrichCustomersFromOfficialRegistry(records)
+            localCrmRepository.enrichCustomersFromOfficialRegistryForOwner(
+                records = records,
+                ownerUserId = activeOwnerUserId,
+            )
         }.onSuccess { enriched ->
             if (enriched != null && enriched.updated > 0) {
                 crmMessage = "Mevcut resmî sicil kayıtları CRM'e uygulandı: " +
@@ -200,9 +226,6 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
             Log.w("LanuRegistry", "Başlangıç resmî sicil zenginleştirmesi tamamlanamadı.", error)
         }
     }
-
-    val crmCustomers by localCrmRepository.observeCustomers(null).collectAsState(initial = emptyList())
-    val pendingSyncCount by localCrmRepository.observePendingSyncCount().collectAsState(initial = 0)
     val filteredCrmCustomers = remember(crmCustomers, selectedCity.name, selectedDistrict) {
         scopeCrmCustomers(crmCustomers, selectedCity.name, selectedDistrict)
     }
@@ -215,9 +238,28 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
 
     val regionKey = "${selectedCity.name}|$selectedDistrict"
     val regionDistrict = selectedDistrict.takeUnless { it == "Tümü" }
-    val regionActivities by remember(regionKey) { localCrmRepository.observeActivitiesForRegion(selectedCity.name, regionDistrict) }.collectAsState(initial = emptyList())
-    val regionNextActions by remember(regionKey) { localCrmRepository.observeOpenNextActionsForRegion(selectedCity.name, regionDistrict) }.collectAsState(initial = emptyList())
-    val regionOpportunities by remember(regionKey) { localCrmRepository.observeOpportunitiesForRegion(selectedCity.name, regionDistrict) }.collectAsState(initial = emptyList())
+    val allRegionActivities by remember(regionKey) {
+        localCrmRepository.observeActivitiesForRegion(selectedCity.name, regionDistrict)
+    }.collectAsState(initial = emptyList())
+    val allRegionNextActions by remember(regionKey) {
+        localCrmRepository.observeOpenNextActionsForRegion(selectedCity.name, regionDistrict)
+    }.collectAsState(initial = emptyList())
+    val allRegionOpportunities by remember(regionKey) {
+        localCrmRepository.observeOpportunitiesForRegion(selectedCity.name, regionDistrict)
+    }.collectAsState(initial = emptyList())
+    val regionCustomerIds = remember(crmCustomers, selectedCity.name, selectedDistrict) {
+        scopeCrmCustomers(crmCustomers, selectedCity.name, selectedDistrict)
+            .mapTo(mutableSetOf()) { it.id }
+    }
+    val regionActivities = remember(allRegionActivities, regionCustomerIds) {
+        allRegionActivities.filter { it.customerId in regionCustomerIds }
+    }
+    val regionNextActions = remember(allRegionNextActions, regionCustomerIds) {
+        allRegionNextActions.filter { it.customerId in regionCustomerIds }
+    }
+    val regionOpportunities = remember(allRegionOpportunities, regionCustomerIds) {
+        allRegionOpportunities.filter { it.customerId in regionCustomerIds }
+    }
     val presenceOptions = listOf("Tümü", "Var", "Yok")
     val categoryOptions = remember {
         listOf("Tümü") + BusinessCategoryLabels.searchLabels
@@ -312,7 +354,10 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             OfficialRegistryImportCard(defaultCity = selectedCity.name) { summary, records ->
                                 scope.launch {
                                     runCatching {
-                                        localCrmRepository.enrichCustomersFromOfficialRegistry(records)
+                                        localCrmRepository.enrichCustomersFromOfficialRegistryForOwner(
+                                            records = records,
+                                            ownerUserId = activeOwnerUserId,
+                                        )
                                     }.onSuccess { enriched ->
                                         crmMessage = buildString {
                                             append(summary.source.name)
@@ -345,9 +390,22 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         item {
                             OutlinedTextField(
                                 value = query,
-                                onValueChange = { query = it },
+                                onValueChange = { value ->
+                                    query = value
+                                    if (value.isNotBlank() && categoryFilter != "Tümü") {
+                                        invalidateSearch()
+                                        categoryFilter = "Tümü"
+                                        results = emptyList()
+                                        selectedBusiness = null
+                                    }
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                                 label = { Text("İşletme adı veya kategori ara") },
+                                supportingText = {
+                                    if (query.isNotBlank()) {
+                                        Text("Serbest arama kullanılırken kategori filtresi Tümü olarak uygulanır.")
+                                    }
+                                },
                                 singleLine = true,
                             )
                         }
@@ -549,7 +607,12 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     onClick = {
                                         bulkSaving = true
                                         scope.launch {
-                                            runCatching { localCrmRepository.addBusinessesAsCustomers(results) }
+                                            runCatching {
+                                                localCrmRepository.addBusinessesAsCustomers(
+                                                    visibleResults,
+                                                    ownerUserId = activeOwnerUserId,
+                                                )
+                                            }
                                                 .onSuccess { saved ->
                                                     crmMessage = if (saved.alreadyExisting > 0) {
                                                         "${saved.inserted} yeni nokta CRM'e kaydedildi; ${saved.alreadyExisting} nokta zaten kayıtlıydı."
@@ -565,7 +628,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         }
                                     },
                                 ) {
-                                    Text(if (bulkSaving) "CRM'e kaydediliyor…" else "Tüm Sonuçları CRM'e Kaydet (${results.size})")
+                                    Text(if (bulkSaving) "CRM'e kaydediliyor…" else "Görünen Sonuçları CRM'e Kaydet (${visibleResults.size})")
                                 }
                             }
                         }
@@ -627,7 +690,12 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 onClick = { selectedBusiness = business },
                             ) {
                                 scope.launch {
-                                    runCatching { localCrmRepository.addBusinessAsCustomer(business) }
+                                    runCatching {
+                                        localCrmRepository.addBusinessAsCustomer(
+                                            business,
+                                            ownerUserId = activeOwnerUserId,
+                                        )
+                                    }
                                         .onSuccess { crmMessage = "${it.businessName} CRM'e kaydedildi." }
                                         .onFailure {
                                             Log.e("LanuCrm", "CRM kaydı başarısız oldu.", it)
@@ -638,7 +706,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         }
                         if (filteredCrmCustomers.isNotEmpty()) {
                             item { Text("CRM müşterileri", style = MaterialTheme.typography.titleMedium) }
-                            items(filteredCrmCustomers.take(25), key = { it.id }) { customer ->
+                            items(filteredCrmCustomers, key = { it.id }) { customer ->
                                 Card(Modifier.fillMaxWidth()) {
                                     Row(Modifier.padding(14.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Column(Modifier.weight(1f)) { Text(customer.businessName, style = MaterialTheme.typography.titleMedium); Text("${customer.city} • ${customer.district} • ${customer.stage.name}", style = MaterialTheme.typography.bodySmall) }
@@ -653,7 +721,11 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         auth?.let { cloudAuth -> item { SupabaseSessionCard(cloudAuth) } }
                     }
                     AppSection.PRODUCT_CATALOG -> ProductCatalogScreen(productCatalogRepository)
-                    AppSection.MANUAL_POINT -> ManualPointScreen(localCrmRepository, selectedCity.name) { navigateTo(AppSection.ROUTINE) }
+                    AppSection.MANUAL_POINT -> ManualPointScreen(
+                        repository = localCrmRepository,
+                        defaultCity = selectedCity.name,
+                        ownerUserId = activeOwnerUserId,
+                    ) { navigateTo(AppSection.ROUTINE) }
                     AppSection.ROUTINE -> RoutineScreen(crmCustomers, selectedCity.name, selectedDistrict)
                     AppSection.AI_ASSISTANT -> SalesAiScreen(salesAiContext)
                     }
@@ -666,13 +738,22 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         transitions = selectedCustomerTransitions,
                         opportunities = selectedCustomerOpportunities,
                         onBack = { selectedCustomerId = null },
-                        onStageChange = { target, note -> scope.launch { runCatching { localCrmRepository.transitionStage(customer.id, target, null, note) }.onSuccess { crmMessage = "Aşama güncellendi." }.onFailure { crmMessage = "Aşama değiştirilemedi: ${it.message.orEmpty()}" } } },
-                        onRecordActivity = { type, note -> scope.launch { runCatching { localCrmRepository.recordActivity(customer.id, type, note) }.onSuccess { crmMessage = "Aktivite kaydedildi." }.onFailure { crmMessage = "Aktivite kaydedilemedi: ${it.message.orEmpty()}" } } },
-                        onCreateNextAction = { type, dueAt, note -> scope.launch { runCatching { localCrmRepository.createNextAction(customer.id, type, dueAt, note) }.onSuccess { crmMessage = "Takip planlandı." }.onFailure { crmMessage = "Takip planlanamadı: ${it.message.orEmpty()}" } } },
-                        onCompleteNextAction = { actionId -> scope.launch { runCatching { localCrmRepository.completeNextAction(actionId) }.onSuccess { crmMessage = "Takip tamamlandı." }.onFailure { crmMessage = "Takip tamamlanamadı: ${it.message.orEmpty()}" } } },
-                        onCreateOpportunity = { title, notes, estimatedValueMinor, currency -> scope.launch { runCatching { localCrmRepository.createOpportunity(customer.id, title, notes, estimatedValueMinor, currency, if (estimatedValueMinor == null) com.lanu.globaldonuksatisradari.crm.CrmValueOrigin.UNKNOWN else com.lanu.globaldonuksatisradari.crm.CrmValueOrigin.USER_ENTERED) }.onSuccess { crmMessage = "Satış fırsatı kaydedildi." }.onFailure { crmMessage = "Fırsat kaydedilemedi: ${it.message.orEmpty()}" } } },
+                        onStageChange = { target, note -> scope.launch { runCatching { localCrmRepository.transitionStage(customer.id, target, activeOwnerUserId, note) }.onSuccess { crmMessage = "Aşama güncellendi." }.onFailure { crmMessage = "Aşama değiştirilemedi: ${it.message.orEmpty()}" } } },
+                        onRecordActivity = { type, note -> scope.launch { runCatching { localCrmRepository.recordActivity(customer.id, type, note = note, createdByUserId = activeOwnerUserId) }.onSuccess { crmMessage = "Aktivite kaydedildi." }.onFailure { crmMessage = "Aktivite kaydedilemedi: ${it.message.orEmpty()}" } } },
+                        onCreateNextAction = { type, dueAt, note -> scope.launch { runCatching { localCrmRepository.createNextAction(customer.id, type, dueAt, note, createdByUserId = activeOwnerUserId) }.onSuccess { crmMessage = "Takip planlandı." }.onFailure { crmMessage = "Takip planlanamadı: ${it.message.orEmpty()}" } } },
+                        onCompleteNextAction = { actionId -> scope.launch { runCatching { localCrmRepository.completeNextAction(actionId, completedByUserId = activeOwnerUserId) }.onSuccess { crmMessage = "Takip tamamlandı." }.onFailure { crmMessage = "Takip tamamlanamadı: ${it.message.orEmpty()}" } } },
+                        onCreateOpportunity = { title, notes, estimatedValueMinor, currency -> scope.launch { runCatching { localCrmRepository.createOpportunity(
+                                        customer.id,
+                                        title,
+                                        notes,
+                                        estimatedValueMinor,
+                                        currency,
+                                        if (estimatedValueMinor == null) com.lanu.globaldonuksatisradari.crm.CrmValueOrigin.UNKNOWN else com.lanu.globaldonuksatisradari.crm.CrmValueOrigin.USER_ENTERED,
+                                        createdByUserId = activeOwnerUserId,
+                                    ) }.onSuccess { crmMessage = "Satış fırsatı kaydedildi." }.onFailure { crmMessage = "Fırsat kaydedilemedi: ${it.message.orEmpty()}" } } },
                         onTransitionOpportunity = { opportunityId, status -> scope.launch { runCatching { localCrmRepository.transitionOpportunity(opportunityId, status) }.onSuccess { crmMessage = "Fırsat durumu güncellendi." }.onFailure { crmMessage = "Fırsat durumu güncellenemedi: ${it.message.orEmpty()}" } } },
                         onSaveNotes = { notes -> scope.launch { runCatching { localCrmRepository.updateCustomerNotes(customer.id, notes) }.onSuccess { crmMessage = "Müşteri notu kaydedildi." }.onFailure { crmMessage = "Müşteri notu kaydedilemedi: ${it.message.orEmpty()}" } } },
+                        onWorkspaceMessage = { crmMessage = it },
                         message = crmMessage,
                     )
                     }
@@ -708,14 +789,21 @@ private fun BusinessResultCard(
                             style = MaterialTheme.typography.labelLarge,
                         )
                     }
-                    business.officialRegistryEvidence?.let { evidence ->
-                        Text(
-                            if (evidence.explicitlyActive) "RESMÎ • FAAL" else "RESMÎ",
-                            modifier = Modifier.testTag("official_registry_badge"),
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                    }
+                    val registryEvidence = business.officialRegistryEvidence
+                    Text(
+                        when {
+                            registryEvidence?.explicitlyActive == true -> "DURUM • AKTİF"
+                            registryEvidence?.explicitlyInactive == true -> "DURUM • PASİF"
+                            else -> "DURUM • DOĞRULANMADI"
+                        },
+                        modifier = Modifier.testTag("official_registry_badge"),
+                        color = if (registryEvidence?.explicitlyInactive == true) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                    )
                     Text(
                         "${BusinessQualityEvaluator.evaluate(business).score}/100",
                         color = MaterialTheme.colorScheme.primary,

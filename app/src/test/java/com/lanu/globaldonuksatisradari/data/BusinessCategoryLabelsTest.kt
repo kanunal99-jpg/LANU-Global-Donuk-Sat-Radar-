@@ -61,6 +61,10 @@ class BusinessCategoryLabelsTest {
         assertEquals("İnşaat", BusinessCategoryLabels.displayName("construction"))
         assertEquals("Çiftlik / Tarım", BusinessCategoryLabels.displayName("farm"))
         assertEquals("Lojistik", BusinessCategoryLabels.displayName("logistics"))
+        assertEquals("Elektronik", BusinessCategoryLabels.displayName("electronics"))
+        assertEquals("Mobilya", BusinessCategoryLabels.displayName("furniture"))
+        assertEquals("Hastane", BusinessCategoryLabels.displayName("hospital"))
+        assertEquals("Seyahat Acentesi", BusinessCategoryLabels.displayName("travel_agency"))
     }
 
 }

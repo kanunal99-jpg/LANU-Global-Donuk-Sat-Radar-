@@ -3,11 +3,15 @@ package com.lanu.globaldonuksatisradari.crm
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.lanu.globaldonuksatisradari.data.DataSourceDescriptor
+import com.lanu.globaldonuksatisradari.data.OfficialRegistryEvidence
+import com.lanu.globaldonuksatisradari.data.OfficialRegistryRecord
+import com.lanu.globaldonuksatisradari.data.OfficialRegistrySource
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import com.lanu.globaldonuksatisradari.data.VerifiedBusinessValidator
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.json.JSONObject
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -42,6 +46,15 @@ class CrmRoomInstrumentationTest {
                 latitude = 40.99,
                 longitude = 29.03,
                 category = "cafe",
+                phone = "05550000000",
+                website = "https://smoke.example",
+                officialRegistryEvidence = OfficialRegistryEvidence(
+                    source = OfficialRegistrySource.ITO.descriptor,
+                    registrationNumber = "SICIL-123",
+                    status = "Faal",
+                    importedAtEpochMs = 900L,
+                    fieldsUsed = setOf("status", "phone", "website"),
+                ),
             )
             assertTrue(VerifiedBusinessValidator.validate(business).isSuccess)
 
@@ -88,10 +101,27 @@ class CrmRoomInstrumentationTest {
             assertEquals(4, repository.pendingSync().size)
 
             assertEquals("Smoke Test Kafe", observed.single().businessName)
+            assertEquals("Smoke Test Kafe", observed.single().signboardName)
+            assertEquals(CrmRegistryStatus.ACTIVE, observed.single().registryStatus)
+            assertEquals("İTO Resmî Üye/Firma Kaydı", observed.single().registrySource)
+            assertEquals("SICIL-123", observed.single().registryNumber)
             assertEquals(DataQuality.OBSERVED, observed.single().dataQuality)
             assertEquals(SyncState.PENDING_UPLOAD, observed.single().syncState)
             assertEquals(customer.id, pending.single().entityId)
             assertEquals(LocalCrmRepository.OP_CREATE, pending.single().operation)
+            val pendingEntity = database.syncOperationDao().pending(100)
+                .single {
+                    it.entityType == LocalCrmRepository.ENTITY_CUSTOMER &&
+                        it.entityId == customer.id
+                }
+            val pendingPayload = JSONObject(pendingEntity.payloadJson)
+            assertEquals("05550000000", pendingPayload.getString("phone"))
+            assertEquals("https://smoke.example", pendingPayload.getString("website"))
+            assertEquals("Smoke Test Kafe", pendingPayload.getString("signboardName"))
+            assertEquals("ACTIVE", pendingPayload.getString("registryStatus"))
+            assertEquals("İTO Resmî Üye/Firma Kaydı", pendingPayload.getString("registrySource"))
+            assertEquals("SICIL-123", pendingPayload.getString("registryNumber"))
+            assertEquals("https://smoke.example", observed.single().website)
             assertEquals(1, transitions.size)
             assertEquals(CrmStage.PROSPECT.name, transitions.single().toStage)
 
@@ -116,6 +146,85 @@ class CrmRoomInstrumentationTest {
             val won = repository.transitionOpportunity(opportunity.id, CrmOpportunityStatus.WON)
             assertEquals(CrmOpportunityStatus.WON, won.status)
             assertEquals(6, repository.pendingSync().size)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun inactiveRegistryEvidence_marksOnlyTargetOwnerAndPreservesOperationalFields() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, LanuCrmDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+
+        try {
+            var idIndex = 0
+            val repository = LocalCrmRepository(
+                database = database,
+                now = { 3_000L },
+                idGenerator = { "registry-test-" + (idIndex++) },
+            )
+            val source = DataSourceDescriptor(
+                id = "osm-overpass",
+                name = "OpenStreetMap Overpass",
+                publisher = "OpenStreetMap",
+                licenseOrTerms = "ODbL",
+                sourceUrl = "https://www.openstreetmap.org/",
+                lastVerifiedAtEpochMs = 1L,
+            )
+            val business = VerifiedBusiness(
+                id = "osm-registry-owner-test",
+                name = "Pasif Sicil Test",
+                city = "İstanbul",
+                district = "Kadıköy",
+                neighborhood = "Caferağa",
+                source = source,
+                verifiedAtEpochMs = 1L,
+                latitude = 40.991,
+                longitude = 29.031,
+                address = "Güncel Operasyon Adresi",
+                phone = "05551112233",
+            )
+
+            val ownerA = repository.addBusinessAsCustomer(business, ownerUserId = "owner-a")
+            val ownerB = repository.addBusinessAsCustomer(business, ownerUserId = "owner-b")
+
+            val result = repository.enrichCustomersFromOfficialRegistryForOwner(
+                records = listOf(
+                    OfficialRegistryRecord(
+                        source = OfficialRegistrySource.ITO,
+                        registrationNumber = "PASIF-99",
+                        businessName = "Pasif Sicil Test",
+                        status = "Pasif",
+                        city = "İstanbul",
+                        district = "Kadıköy",
+                        neighborhood = "Eski Mahalle",
+                        address = "Eski Sicil Adresi",
+                        phone = "02160000000",
+                        website = "https://eski.example",
+                        importedAtEpochMs = 2_000L,
+                    ),
+                ),
+                ownerUserId = "owner-a",
+            )
+
+            assertEquals(1, result.matched)
+            assertEquals(1, result.inactiveMatches)
+            assertEquals(1, result.updated)
+
+            val updatedA = database.customerDao().findById(ownerA.id)!!
+            val untouchedB = database.customerDao().findById(ownerB.id)!!
+
+            assertEquals(CrmRegistryStatus.INACTIVE.name, updatedA.registryStatus)
+            assertEquals("PASIF-99", updatedA.registryNumber)
+            assertEquals("İTO Resmî Üye/Firma Kaydı", updatedA.registrySource)
+            assertEquals("Güncel Operasyon Adresi", updatedA.address)
+            assertEquals("05551112233", updatedA.phone)
+            assertEquals(CrmRegistryStatus.UNVERIFIED.name, untouchedB.registryStatus)
+            assertEquals(null, untouchedB.registryNumber)
+            assertEquals("Güncel Operasyon Adresi", untouchedB.address)
+            assertEquals("05551112233", untouchedB.phone)
         } finally {
             database.close()
         }
@@ -147,9 +256,10 @@ class CrmRoomInstrumentationTest {
             assertEquals(40.991, observed.latitude ?: Double.NaN, 0.000001)
             assertEquals(29.031, observed.longitude ?: Double.NaN, 0.000001)
             assertEquals(DataQuality.USER_ENTERED, observed.dataQuality)
+            assertEquals(SyncState.LOCAL_ONLY, observed.syncState)
             assertEquals(customer.id, observed.id)
             assertEquals(listOf(customer.id), CrmRoutePlanner.plan(listOf(observed)).map { it.customer.id })
-            assertTrue(repository.pendingSync().any { it.entityId == customer.id })
+            assertTrue(repository.pendingSync().none { it.entityId == customer.id })
         } finally {
             database.close()
         }

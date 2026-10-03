@@ -9,6 +9,7 @@ import com.lanu.globaldonuksatisradari.data.OfficialRegistryTrust
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOf
 import org.json.JSONObject
 import java.util.UUID
 
@@ -55,7 +56,7 @@ class LocalCrmRepository(
             notes = notes?.trim()?.takeIf { it.isNotEmpty() },
             updatedAtEpochMs = timestamp,
             version = current.version + 1L,
-            syncState = SyncState.PENDING_UPLOAD.name,
+            syncState = syncStateFor(current.ownerUserId).name,
         )
         database.withTransaction {
             check(
@@ -67,7 +68,8 @@ class LocalCrmRepository(
                     state = updated.syncState,
                 ) == 1,
             ) { "CRM notu güncellenemedi: $customerId" }
-            database.syncOperationDao().insert(
+            enqueueIfCloudOwned(
+                current.ownerUserId,
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_CUSTOMER,
@@ -88,7 +90,10 @@ class LocalCrmRepository(
         business: VerifiedBusiness,
         ownerUserId: String? = null,
     ): CrmCustomer = database.withTransaction {
-        val existing = database.customerDao().findByBusinessSourceId(business.id)
+        val existing = database.customerDao().findByBusinessSourceIdForOwner(
+            businessSourceId = business.id,
+            ownerUserId = ownerUserId,
+        )
         if (existing != null) {
             return@withTransaction CrmMappings.toDomain(enrichBusinessMetadata(existing, business))
         }
@@ -102,7 +107,10 @@ class LocalCrmRepository(
         var inserted = 0
         var alreadyExisting = 0
         businesses.distinctBy { it.id }.forEach { business ->
-            val existing = database.customerDao().findByBusinessSourceId(business.id)
+            val existing = database.customerDao().findByBusinessSourceIdForOwner(
+                businessSourceId = business.id,
+                ownerUserId = ownerUserId,
+            )
             if (existing != null) {
                 enrichBusinessMetadata(existing, business)
                 alreadyExisting++
@@ -116,6 +124,27 @@ class LocalCrmRepository(
 
     suspend fun enrichCustomersFromOfficialRegistry(
         records: List<OfficialRegistryRecord>,
+    ): OfficialRegistryCrmEnrichmentResult =
+        enrichCustomersFromOfficialRegistryInternal(
+            records = records,
+            ownerUserId = null,
+            ownerScoped = false,
+        )
+
+    suspend fun enrichCustomersFromOfficialRegistryForOwner(
+        records: List<OfficialRegistryRecord>,
+        ownerUserId: String?,
+    ): OfficialRegistryCrmEnrichmentResult =
+        enrichCustomersFromOfficialRegistryInternal(
+            records = records,
+            ownerUserId = ownerUserId,
+            ownerScoped = true,
+        )
+
+    private suspend fun enrichCustomersFromOfficialRegistryInternal(
+        records: List<OfficialRegistryRecord>,
+        ownerUserId: String?,
+        ownerScoped: Boolean,
     ): OfficialRegistryCrmEnrichmentResult = database.withTransaction {
         if (records.isEmpty()) return@withTransaction OfficialRegistryCrmEnrichmentResult()
         val verifiedRecords = OfficialRegistryTrust.verified(records)
@@ -125,6 +154,7 @@ class LocalCrmRepository(
         var updated = 0
         var inactiveMatches = 0
         val customers = database.customerDao().all()
+            .filter { !ownerScoped || it.ownerUserId == ownerUserId }
 
         customers.forEach { existing ->
             val match = OfficialRegistryMatcher.bestMatch(
@@ -137,18 +167,33 @@ class LocalCrmRepository(
             ) ?: return@forEach
 
             matched++
-            if (match.status?.let(OfficialRegistryStatus::isInactive) == true) {
-                inactiveMatches++
-                return@forEach
-            }
+            val inactive = match.status?.let(OfficialRegistryStatus::isInactive) == true
+            if (inactive) inactiveMatches++
 
             val candidate = existing.copy(
-                city = match.city?.trim()?.takeIf(String::isNotEmpty) ?: existing.city,
-                district = match.district?.trim()?.takeIf(String::isNotEmpty) ?: existing.district,
-                neighborhood = match.neighborhood?.trim()?.takeIf(String::isNotEmpty) ?: existing.neighborhood,
-                address = match.address?.trim()?.takeIf(String::isNotEmpty) ?: existing.address,
-                phone = match.phone?.trim()?.takeIf(String::isNotEmpty) ?: existing.phone,
+                signboardName = existing.signboardName ?: existing.businessName,
+                city = if (inactive) existing.city else {
+                    match.city?.trim()?.takeIf(String::isNotEmpty) ?: existing.city
+                },
+                district = if (inactive) existing.district else {
+                    match.district?.trim()?.takeIf(String::isNotEmpty) ?: existing.district
+                },
+                neighborhood = if (inactive) existing.neighborhood else {
+                    match.neighborhood?.trim()?.takeIf(String::isNotEmpty) ?: existing.neighborhood
+                },
+                address = if (inactive) existing.address else {
+                    match.address?.trim()?.takeIf(String::isNotEmpty) ?: existing.address
+                },
+                phone = if (inactive) existing.phone else {
+                    match.phone?.trim()?.takeIf(String::isNotEmpty) ?: existing.phone
+                },
+                website = if (inactive) existing.website else {
+                    match.website?.trim()?.takeIf(String::isNotEmpty) ?: existing.website
+                },
                 dataQuality = DataQuality.OBSERVED.name,
+                registryStatus = registryStatusFor(match.status).name,
+                registrySource = match.source.descriptor.name,
+                registryNumber = match.registrationNumber?.trim()?.takeIf(String::isNotEmpty),
             )
 
             if (candidate == existing) return@forEach
@@ -157,10 +202,11 @@ class LocalCrmRepository(
             val enriched = candidate.copy(
                 updatedAtEpochMs = timestamp,
                 version = existing.version + 1L,
-                syncState = SyncState.PENDING_UPLOAD.name,
+                syncState = syncStateFor(existing.ownerUserId).name,
             )
             database.customerDao().upsert(enriched)
-            database.syncOperationDao().insert(
+            enqueueIfCloudOwned(
+                existing.ownerUserId,
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_CUSTOMER,
@@ -188,8 +234,10 @@ class LocalCrmRepository(
         business: VerifiedBusiness,
     ): CrmCustomerEntity {
         val timestamp = now()
+        val evidence = business.officialRegistryEvidence
         val enrichedCandidate = existing.copy(
             businessName = business.name.trim().takeIf { it.isNotEmpty() } ?: existing.businessName,
+            signboardName = business.name.trim().takeIf { it.isNotEmpty() } ?: existing.signboardName,
             city = business.city.trim().takeIf { it.isNotEmpty() } ?: existing.city,
             district = business.district.trim()
                 .takeIf { it.isNotEmpty() && !it.equals("Bilinmiyor", ignoreCase = true) }
@@ -204,6 +252,14 @@ class LocalCrmRepository(
                 ?: BusinessCategoryLabels.displayName(existing.businessType),
             phone = business.phone?.trim()?.takeIf { it.isNotEmpty() }
                 ?: existing.phone,
+            website = business.website?.trim()?.takeIf { it.isNotEmpty() }
+                ?: existing.website,
+            registryStatus = evidence?.let {
+                registryStatusFor(it.status).name
+            } ?: existing.registryStatus,
+            registrySource = evidence?.source?.name ?: existing.registrySource,
+            registryNumber = evidence?.registrationNumber?.trim()?.takeIf { it.isNotEmpty() }
+                ?: existing.registryNumber,
         )
 
         if (enrichedCandidate == existing) return existing
@@ -211,10 +267,11 @@ class LocalCrmRepository(
         val enriched = enrichedCandidate.copy(
             updatedAtEpochMs = timestamp,
             version = existing.version + 1L,
-            syncState = SyncState.PENDING_UPLOAD.name,
+            syncState = syncStateFor(existing.ownerUserId).name,
         )
         database.customerDao().upsert(enriched)
-        database.syncOperationDao().insert(
+        enqueueIfCloudOwned(
+            existing.ownerUserId,
             SyncOperationEntity(
                 id = idGenerator(),
                 entityType = ENTITY_CUSTOMER,
@@ -235,10 +292,12 @@ class LocalCrmRepository(
         ownerUserId: String?,
     ): CrmCustomer {
         val timestamp = now()
+        val evidence = business.officialRegistryEvidence
         val customer = CrmCustomer(
             id = idGenerator(),
             businessSourceId = business.id,
             businessName = business.name,
+            signboardName = business.name.trim().takeIf { it.isNotEmpty() },
             city = business.city,
             district = business.district,
             neighborhood = business.neighborhood,
@@ -250,10 +309,15 @@ class LocalCrmRepository(
             ownerUserId = ownerUserId,
             businessType = BusinessCategoryLabels.displayName(business.category),
             phone = business.phone?.trim()?.takeIf { it.isNotEmpty() },
+            website = business.website?.trim()?.takeIf { it.isNotEmpty() },
+            registryStatus = evidence?.let { registryStatusFor(it.status) }
+                ?: CrmRegistryStatus.UNVERIFIED,
+            registrySource = evidence?.source?.name,
+            registryNumber = evidence?.registrationNumber?.trim()?.takeIf { it.isNotEmpty() },
             createdAtEpochMs = timestamp,
             updatedAtEpochMs = timestamp,
             version = 1L,
-            syncState = SyncState.PENDING_UPLOAD,
+            syncState = syncStateFor(ownerUserId),
         )
 
         database.customerDao().upsert(CrmMappings.toEntity(customer))
@@ -268,7 +332,8 @@ class LocalCrmRepository(
                 clientVersion = customer.version,
             ),
         )
-        database.syncOperationDao().insert(
+        enqueueIfCloudOwned(
+            ownerUserId,
             SyncOperationEntity(
                 id = idGenerator(),
                 entityType = ENTITY_CUSTOMER,
@@ -293,6 +358,7 @@ class LocalCrmRepository(
         latitude: Double,
         longitude: Double,
         contactName: String? = null,
+        signboardName: String? = null,
         businessType: String? = null,
         taxOrNationalId: String? = null,
         phone: String? = null,
@@ -312,6 +378,7 @@ class LocalCrmRepository(
             id = id,
             businessSourceId = sourceId,
             businessName = businessName.trim(),
+            signboardName = signboardName?.trim()?.takeIf { it.isNotEmpty() },
             city = city.trim(),
             district = district.trim(),
             neighborhood = neighborhood?.trim()?.takeIf { it.isNotEmpty() },
@@ -328,7 +395,7 @@ class LocalCrmRepository(
             createdAtEpochMs = timestamp,
             updatedAtEpochMs = timestamp,
             version = 1L,
-            syncState = SyncState.PENDING_UPLOAD,
+            syncState = syncStateFor(ownerUserId),
         )
         database.customerDao().upsert(CrmMappings.toEntity(customer))
         database.stageTransitionDao().insert(
@@ -342,7 +409,8 @@ class LocalCrmRepository(
                 clientVersion = customer.version,
             ),
         )
-        database.syncOperationDao().insert(
+        enqueueIfCloudOwned(
+            ownerUserId,
             SyncOperationEntity(
                 id = idGenerator(),
                 entityType = ENTITY_CUSTOMER,
@@ -376,7 +444,7 @@ class LocalCrmRepository(
             stage = to.name,
             updatedAtEpochMs = timestamp,
             version = current.version + 1L,
-            syncState = SyncState.PENDING_UPLOAD.name,
+            syncState = syncStateFor(current.ownerUserId).name,
             notes = note ?: current.notes,
         )
         database.withTransaction {
@@ -392,7 +460,8 @@ class LocalCrmRepository(
                     clientVersion = updated.version,
                 ),
             )
-            database.syncOperationDao().insert(
+            enqueueIfCloudOwned(
+                current.ownerUserId,
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_CUSTOMER,
@@ -416,9 +485,8 @@ class LocalCrmRepository(
         note: String? = null,
         createdByUserId: String? = null,
     ): CrmActivity {
-        require(database.customerDao().findById(customerId) != null) {
-            "Aktivite için CRM müşterisi bulunamadı: $customerId"
-        }
+        val customer = database.customerDao().findById(customerId)
+            ?: error("Aktivite için CRM müşterisi bulunamadı: $customerId")
         val timestamp = now()
         val activity = CrmActivity(
             id = idGenerator(),
@@ -429,12 +497,13 @@ class LocalCrmRepository(
             createdByUserId = createdByUserId,
             createdAtEpochMs = timestamp,
             version = 1L,
-            syncState = SyncState.PENDING_UPLOAD,
+            syncState = syncStateFor(customer.ownerUserId),
         )
 
         database.withTransaction {
             database.activityDao().upsert(CrmMappings.toEntity(activity))
-            database.syncOperationDao().insert(
+            enqueueIfCloudOwned(
+                customer.ownerUserId,
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_ACTIVITY,
@@ -499,9 +568,8 @@ class LocalCrmRepository(
         valueOrigin: CrmValueOrigin = CrmValueOrigin.USER_ENTERED,
         createdByUserId: String? = null,
     ): CrmOpportunity {
-        require(database.customerDao().findById(customerId) != null) {
-            "Fırsat için CRM müşterisi bulunamadı: $customerId"
-        }
+        val customer = database.customerDao().findById(customerId)
+            ?: error("Fırsat için CRM müşterisi bulunamadı: $customerId")
         val normalizedTitle = title.trim()
         require(normalizedTitle.isNotEmpty()) { "Fırsat başlığı boş olamaz." }
         require(estimatedValueMinor == null || estimatedValueMinor >= 0L) {
@@ -523,12 +591,13 @@ class LocalCrmRepository(
             valueOrigin = if (estimatedValueMinor == null) CrmValueOrigin.UNKNOWN else valueOrigin,
             createdAtEpochMs = timestamp,
             updatedAtEpochMs = timestamp,
-            syncState = SyncState.PENDING_UPLOAD,
+            syncState = syncStateFor(customer.ownerUserId),
         )
 
         database.withTransaction {
             database.opportunityDao().upsert(CrmMappings.toEntity(opportunity))
-            database.syncOperationDao().insert(
+            enqueueIfCloudOwned(
+                customer.ownerUserId,
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_OPPORTUNITY,
@@ -551,6 +620,8 @@ class LocalCrmRepository(
     ): CrmOpportunity {
         val current = database.opportunityDao().findById(opportunityId)
             ?: error("Satış fırsatı bulunamadı: $opportunityId")
+        val customer = database.customerDao().findById(current.customerId)
+            ?: error("Satış fırsatının CRM müşterisi bulunamadı: ${current.customerId}")
         val timestamp = now()
         return database.withTransaction {
             check(
@@ -558,13 +629,14 @@ class LocalCrmRepository(
                     id = opportunityId,
                     status = status.name,
                     updatedAtEpochMs = timestamp,
-                    syncState = SyncState.PENDING_UPLOAD.name,
+                    syncState = syncStateFor(customer.ownerUserId).name,
                 ) == 1,
             ) { "Satış fırsatı güncellenemedi: $opportunityId" }
             val latest = database.opportunityDao().findById(opportunityId)
                 ?: error("Güncel satış fırsatı okunamadı: $opportunityId")
             val updated = CrmMappings.toDomain(latest)
-            database.syncOperationDao().insert(
+            enqueueIfCloudOwned(
+                customer.ownerUserId,
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_OPPORTUNITY,
@@ -588,9 +660,8 @@ class LocalCrmRepository(
         note: String? = null,
         createdByUserId: String? = null,
     ): CrmNextAction {
-        require(database.customerDao().findById(customerId) != null) {
-            "Takip aksiyonu için CRM müşterisi bulunamadı: $customerId"
-        }
+        val customer = database.customerDao().findById(customerId)
+            ?: error("Takip aksiyonu için CRM müşterisi bulunamadı: $customerId")
         require(dueAtEpochMs > 0L) { "Takip zamanı geçerli olmalıdır." }
 
         val timestamp = now()
@@ -602,11 +673,12 @@ class LocalCrmRepository(
             note = note,
             createdByUserId = createdByUserId,
             createdAtEpochMs = timestamp,
-            syncState = SyncState.PENDING_UPLOAD,
+            syncState = syncStateFor(customer.ownerUserId),
         )
         database.withTransaction {
             database.nextActionDao().upsert(CrmMappings.toEntity(action))
-            database.syncOperationDao().insert(
+            enqueueIfCloudOwned(
+                customer.ownerUserId,
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_NEXT_ACTION,
@@ -629,6 +701,8 @@ class LocalCrmRepository(
     ): CrmNextAction {
         val current = database.nextActionDao().findById(actionId)
             ?: error("Takip aksiyonu bulunamadı: $actionId")
+        val customer = database.customerDao().findById(current.customerId)
+            ?: error("Takip aksiyonunun CRM müşterisi bulunamadı: ${current.customerId}")
         require(current.completedAtEpochMs == null) { "Takip aksiyonu zaten tamamlandı." }
 
         val timestamp = now()
@@ -637,13 +711,14 @@ class LocalCrmRepository(
                 id = actionId,
                 completedAtEpochMs = timestamp,
                 completedByUserId = completedByUserId,
-                syncState = SyncState.PENDING_UPLOAD.name,
+                syncState = syncStateFor(customer.ownerUserId).name,
             )
             check(updated == 1) { "Takip aksiyonu tamamlanamadı: $actionId" }
             val latest = database.nextActionDao().findById(actionId)
                 ?: error("Tamamlanan takip aksiyonu okunamadı: $actionId")
             val completedAction = CrmMappings.toDomain(latest)
-            database.syncOperationDao().insert(
+            enqueueIfCloudOwned(
+                customer.ownerUserId,
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_NEXT_ACTION,
@@ -666,10 +741,11 @@ class LocalCrmRepository(
                 createdByUserId = completedByUserId,
                 createdAtEpochMs = timestamp,
                 version = 1L,
-                syncState = SyncState.PENDING_UPLOAD,
+                syncState = syncStateFor(customer.ownerUserId),
             )
             database.activityDao().upsert(CrmMappings.toEntity(activity))
-            database.syncOperationDao().insert(
+            enqueueIfCloudOwned(
+                customer.ownerUserId,
                 SyncOperationEntity(
                     id = idGenerator(),
                     entityType = ENTITY_ACTIVITY,
@@ -689,8 +765,32 @@ class LocalCrmRepository(
     fun observePendingSyncCount(): Flow<Int> =
         database.syncOperationDao().observePendingCount()
 
+    fun observePendingSyncCount(ownerUserId: String?): Flow<Int> =
+        if (ownerUserId.isNullOrBlank()) {
+            flowOf(0)
+        } else {
+            database.syncOperationDao().observePendingCountForOwner(ownerUserId)
+        }
+
     suspend fun pendingSync(limit: Int = 100): List<SyncOperation> =
         database.syncOperationDao().pending(limit).map(CrmMappings::toDomain)
+
+    private fun registryStatusFor(rawStatus: String?): CrmRegistryStatus = when {
+        rawStatus?.let(OfficialRegistryStatus::isActive) == true -> CrmRegistryStatus.ACTIVE
+        rawStatus?.let(OfficialRegistryStatus::isInactive) == true -> CrmRegistryStatus.INACTIVE
+        else -> CrmRegistryStatus.UNVERIFIED
+    }
+
+    private fun syncStateFor(ownerUserId: String?): SyncState =
+        if (ownerUserId.isNullOrBlank()) SyncState.LOCAL_ONLY else SyncState.PENDING_UPLOAD
+
+    private suspend fun enqueueIfCloudOwned(
+        ownerUserId: String?,
+        operation: SyncOperationEntity,
+    ) {
+        if (ownerUserId.isNullOrBlank()) return
+        database.syncOperationDao().insert(operation)
+    }
 
     companion object {
         const val ENTITY_CUSTOMER = "customer"
@@ -707,6 +807,7 @@ private object CrmMappings {
         id = model.id,
         businessSourceId = model.businessSourceId,
         businessName = model.businessName,
+        signboardName = model.signboardName,
         city = model.city,
         district = model.district,
         neighborhood = model.neighborhood,
@@ -721,6 +822,10 @@ private object CrmMappings {
         businessType = model.businessType,
         taxOrNationalId = model.taxOrNationalId,
         phone = model.phone,
+        website = model.website,
+        registryStatus = model.registryStatus.name,
+        registrySource = model.registrySource,
+        registryNumber = model.registryNumber,
         createdAtEpochMs = model.createdAtEpochMs,
         updatedAtEpochMs = model.updatedAtEpochMs,
         version = model.version,
@@ -731,6 +836,7 @@ private object CrmMappings {
         id = entity.id,
         businessSourceId = entity.businessSourceId,
         businessName = entity.businessName,
+        signboardName = entity.signboardName,
         city = entity.city,
         district = entity.district,
         neighborhood = entity.neighborhood,
@@ -745,6 +851,12 @@ private object CrmMappings {
         businessType = entity.businessType,
         taxOrNationalId = entity.taxOrNationalId,
         phone = entity.phone,
+        website = entity.website,
+        registryStatus = runCatching {
+            CrmRegistryStatus.valueOf(entity.registryStatus)
+        }.getOrDefault(CrmRegistryStatus.UNVERIFIED),
+        registrySource = entity.registrySource,
+        registryNumber = entity.registryNumber,
         createdAtEpochMs = entity.createdAtEpochMs,
         updatedAtEpochMs = entity.updatedAtEpochMs,
         version = entity.version,
@@ -870,6 +982,7 @@ private object CrmPayloads {
         put("id", customer.id)
         put("businessSourceId", customer.businessSourceId)
         put("businessName", customer.businessName)
+        put("signboardName", customer.signboardName)
         put("city", customer.city)
         put("district", customer.district)
         put("neighborhood", customer.neighborhood)
@@ -880,6 +993,13 @@ private object CrmPayloads {
         put("stage", customer.stage.name)
         put("ownerUserId", customer.ownerUserId)
         put("notes", customer.notes)
+        put("contactName", customer.contactName)
+        put("businessType", customer.businessType)
+        put("phone", customer.phone)
+        put("website", customer.website)
+        put("registryStatus", customer.registryStatus.name)
+        put("registrySource", customer.registrySource)
+        put("registryNumber", customer.registryNumber)
         put("createdAtEpochMs", customer.createdAtEpochMs)
         put("updatedAtEpochMs", customer.updatedAtEpochMs)
         put("version", customer.version)

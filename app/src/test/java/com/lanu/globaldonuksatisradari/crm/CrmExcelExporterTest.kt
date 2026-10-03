@@ -12,6 +12,7 @@ class CrmExcelExporterTest {
             id = "1",
             businessSourceId = "osm:1",
             businessName = "Test Noktası",
+            signboardName = "Test Tabelası",
             city = "İstanbul",
             district = "Kadıköy",
             neighborhood = "Caferağa",
@@ -22,6 +23,10 @@ class CrmExcelExporterTest {
             businessType = "Restoran",
             taxOrNationalId = "1234567890",
             phone = "05550000000",
+            website = "https://example.com",
+            registryStatus = CrmRegistryStatus.ACTIVE,
+            registrySource = "İTO Resmî Üye/Firma Kaydı",
+            registryNumber = "SICIL-123",
             createdAtEpochMs = 1L,
             updatedAtEpochMs = 1L,
         )
@@ -45,9 +50,15 @@ class CrmExcelExporterTest {
         }
         assertTrue(sheetXml.contains("Ayşe Yılmaz"))
         assertTrue(sheetXml.contains("Test Noktası"))
+        assertTrue(sheetXml.contains("Test Tabelası"))
         assertTrue(sheetXml.contains("Restoran"))
+        assertTrue(sheetXml.contains("AKTİF"))
+        assertTrue(sheetXml.contains("İTO Resmî Üye/Firma Kaydı"))
+        assertTrue(sheetXml.contains("SICIL-123"))
+        assertTrue(sheetXml.contains("Radar"))
         assertTrue(sheetXml.contains("1234567890"))
         assertTrue(sheetXml.contains("05550000000"))
+        assertTrue(sheetXml.contains("https://example.com"))
         assertTrue(sheetXml.contains("29.123456"))
         assertTrue(sheetXml.contains("40.987654"))
         assertTrue(sheetXml.contains("maps.google.com/?q=40.987654,29.123456"))

@@ -91,6 +91,11 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
 
     fun save() {
         editorError = runCatching {
+            val normalizedSourceUrl = sourceUrl.trim().takeIf { it.isNotEmpty() }
+            val existingProduct = editingId?.let { id -> products.firstOrNull { it.id == id } }
+            val preservedVerification = existingProduct
+                ?.sourceVerifiedAtEpochMs
+                ?.takeIf { existingProduct.sourceUrl == normalizedSourceUrl }
             repository.upsert(
                 id = editingId,
                 name = name,
@@ -102,7 +107,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                 description = description,
                 imageUrl = imageUrl,
                 sourceUrl = sourceUrl,
-                sourceVerifiedAtEpochMs = System.currentTimeMillis(),
+                sourceVerifiedAtEpochMs = preservedVerification,
             )
             editorOpen = false
         }.exceptionOrNull()?.message
@@ -154,13 +159,13 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        if (products.isEmpty()) "Doğrulanmış ürün kataloğu henüz yüklenmedi" else "Eşleşen ürün bulunamadı",
+                        if (products.isEmpty()) "Ürün kataloğu henüz yüklenmedi" else "Eşleşen ürün bulunamadı",
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
                         if (products.isEmpty()) {
                             "Yetkili SKU/fiyat kaynağı olmadan ürün veya fiyat uydurulmaz. " +
-                                "Doğrulanmış bir ürünü “Yeni ürün ekle” ile kaydedebilirsiniz."
+                                "Ürünü manuel kaydedebilirsiniz; kaynak doğrulaması ayrıca yapılmalıdır."
                         } else {
                             "Arama metnini değiştirerek tekrar deneyin."
                         },
@@ -198,7 +203,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                     OutlinedTextField(value = price, onValueChange = { price = it }, modifier = Modifier.fillMaxWidth().testTag("product_price_input"), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), label = { Text("Birim fiyat *") }, placeholder = { Text("Örn. 1250,50") })
                     OutlinedTextField(value = description, onValueChange = { description = it }, modifier = Modifier.fillMaxWidth(), minLines = 3, label = { Text("Ürün açıklaması") })
                     OutlinedTextField(value = imageUrl, onValueChange = { imageUrl = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Ürün fotoğrafı URL") })
-                    OutlinedTextField(value = sourceUrl, onValueChange = { sourceUrl = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Resmî kaynak URL") })
+                    OutlinedTextField(value = sourceUrl, onValueChange = { sourceUrl = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Kaynak URL (opsiyonel)") })
                     OutlinedTextField(value = note, onValueChange = { note = it }, modifier = Modifier.fillMaxWidth(), minLines = 2, label = { Text("Not") })
                     editorError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                 }
@@ -240,7 +245,7 @@ private fun ProductCard(product: CatalogProduct, onEdit: () -> Unit, onDelete: (
             }
             product.description?.let { HorizontalDivider(); Text(it, style = MaterialTheme.typography.bodyMedium) }
             product.note?.let { HorizontalDivider(); Text(it, style = MaterialTheme.typography.bodySmall) }
-            product.sourceUrl?.let { Text("Kaynak: $it", style = MaterialTheme.typography.labelSmall) }
+            product.sourceUrl?.let { Text("Kaynak URL: $it", style = MaterialTheme.typography.labelSmall) }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 OutlinedButton(onClick = onEdit) { Text("Düzenle") }
                 TextButton(onClick = onDelete) { Text("Sil") }

@@ -38,4 +38,34 @@ class BusinessMapPreviewTest {
         assertTrue(html.contains("40.987"))
         assertTrue(html.contains("29.028"))
     }
+
+    @Test
+    fun mapHtml_rendersUntrustedNamesThroughTextContentInsteadOfPopupHtml() {
+        val business = VerifiedBusiness(
+            id = "osm-node-xss",
+            name = "<img src=x onerror=alert(1)>",
+            city = "İstanbul",
+            district = "<script>alert(2)</script>",
+            neighborhood = null,
+            source = DataSourceDescriptor(
+                id = "osm-overpass",
+                name = "OSM",
+                publisher = "OpenStreetMap",
+                licenseOrTerms = "ODbL",
+                sourceUrl = "https://www.openstreetmap.org/",
+                lastVerifiedAtEpochMs = 1L,
+            ),
+            verifiedAtEpochMs = 1L,
+            latitude = 41.0,
+            longitude = 29.0,
+            category = "<b>restaurant</b>",
+        )
+
+        val html = buildMapHtml(listOf(business))
+
+        assertTrue(html.contains("title.textContent = business.name"))
+        assertTrue(html.contains("document.createTextNode(business.district)"))
+        assertTrue(html.contains("document.createTextNode('Kategori: ' + business.category)"))
+        assertTrue(!html.contains("bindPopup('<strong>'"))
+    }
 }
