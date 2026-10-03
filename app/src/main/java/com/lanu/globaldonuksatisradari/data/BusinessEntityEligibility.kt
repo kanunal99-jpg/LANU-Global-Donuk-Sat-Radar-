@@ -70,6 +70,16 @@ object BusinessEntityEligibility {
         "stoop_sale",
         "hotel_pool",
         "marketplace",
+        "townhall",
+        "courthouse",
+        "police",
+        "fire_station",
+        "post_box",
+        "place_of_worship",
+        "library",
+        "community_centre",
+        "social_centre",
+        "crematorium",
     )
 
     fun keepForBusinessInventory(business: VerifiedBusiness): Boolean =
