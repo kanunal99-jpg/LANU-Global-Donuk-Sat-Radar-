@@ -177,7 +177,12 @@ def smoke_validate_sources(release: str) -> dict:
         con.close()
 
 
-def build_snapshot(output_dir: pathlib.Path, release: str, min_confidence: float) -> dict:
+def build_snapshot(
+    output_dir: pathlib.Path,
+    release: str,
+    min_confidence: float,
+    selected_region_codes: set[str] | None = None,
+) -> dict:
     if not 0.0 <= min_confidence <= 1.0:
         raise ValueError("--min-confidence must be between 0 and 1")
 
@@ -256,6 +261,16 @@ def build_snapshot(output_dir: pathlib.Path, release: str, min_confidence: float
         raise RuntimeError(
             f"Overture Turkey region coverage is incomplete: {len(dedup_regions)} regions"
         )
+
+    if selected_region_codes:
+        unknown = sorted(set(selected_region_codes) - set(dedup_regions))
+        if unknown:
+            raise RuntimeError("Unknown Turkey region code(s): " + ", ".join(unknown))
+        dedup_regions = {
+            code: value
+            for code, value in dedup_regions.items()
+            if code in selected_region_codes
+        }
 
     counts = {region_code: 0 for region_code in dedup_regions}
     top_levels_sql = ",".join(
@@ -465,6 +480,12 @@ def main() -> int:
     parser.add_argument("--release", default="")
     parser.add_argument("--min-confidence", type=float, default=0.0)
     parser.add_argument(
+        "--region-code",
+        action="append",
+        default=[],
+        help="Optional TR-## province code; repeat to build only selected provinces.",
+    )
+    parser.add_argument(
         "--smoke-only",
         action="store_true",
         help="Validate current Overture S3 paths and nested fields without building the snapshot.",
@@ -479,8 +500,22 @@ def main() -> int:
         print(json.dumps(smoke_validate_sources(release), ensure_ascii=False))
         return 0
 
+    selected_region_codes = {
+        value.strip().upper()
+        for value in args.region_code
+        if value.strip()
+    }
+    for region_code in selected_region_codes:
+        if not re.fullmatch(r"TR-\d{2}", region_code):
+            raise RuntimeError(f"Invalid --region-code: {region_code!r}")
+
     output_dir = pathlib.Path(args.output_dir).resolve()
-    manifest = build_snapshot(output_dir, release, args.min_confidence)
+    manifest = build_snapshot(
+        output_dir,
+        release,
+        args.min_confidence,
+        selected_region_codes=selected_region_codes or None,
+    )
     print(
         json.dumps(
             {
