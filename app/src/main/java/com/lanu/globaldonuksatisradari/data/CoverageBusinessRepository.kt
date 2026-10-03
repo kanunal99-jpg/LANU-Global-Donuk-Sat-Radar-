@@ -72,6 +72,7 @@ class CoverageBusinessRepository(
 ) : BusinessRepository {
 
     private val overture = OvertureBusinessSourceAdapter(context)
+    private val supplemental = SupplementalBusinessDirectory(context)
     private val overpass = OverpassBusinessSourceAdapter()
     private val nominatim = NominatimBusinessSourceAdapter()
     private val districtCatalog = DistrictCatalogRepository(context)
@@ -174,9 +175,19 @@ class CoverageBusinessRepository(
             )
         }.getOrDefault(emptyList())
 
+        // Curated corrections fill documented blind spots in the bulk/open providers.
+        // This layer is small, source-attributed and validation-gated; it is not a
+        // replacement for Overture/OSM or official registry data.
+        val supplementalRecords = supplemental.search(
+            query = query,
+            city = city,
+            district = normalizedDistrict,
+            neighborhood = normalizedNeighborhood,
+        )
+
         val scans = engine.scanAll(scopes)
         var discovered = BusinessDeduplication.deduplicateCrossSource(
-            overtureRecords + CoverageResultMerger.merge(
+            supplementalRecords + overtureRecords + CoverageResultMerger.merge(
                 scans = scans,
                 localCache = localCache,
                 nowEpochMs = System.currentTimeMillis(),
@@ -200,6 +211,10 @@ class CoverageBusinessRepository(
             discovered = districtFallback.filter { business ->
                 normalizeNeighborhoodForComparison(business.neighborhood.orEmpty()) == wanted
             }
+        }
+
+        if (query.isBlank()) {
+            discovered = discovered.filter(BusinessEntityEligibility::keepForBusinessInventory)
         }
 
         val registryRecords = officialRegistryStore.recordsFor(city, normalizedDistrict)
