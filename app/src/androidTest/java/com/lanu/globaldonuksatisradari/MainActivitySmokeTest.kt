@@ -279,7 +279,7 @@ class MainActivitySmokeTest {
 
         composeRule.activityRule.scenario.recreate()
         waitForText("Rutin").performClick()
-        waitForText("Aylık Rutin Planı").assertIsDisplayed()
+        waitForText("Otomatik Aylık Ziyaret Planı").assertIsDisplayed()
         waitForTag("routine_excel_save")
             .performScrollTo()
             .assertIsDisplayed()

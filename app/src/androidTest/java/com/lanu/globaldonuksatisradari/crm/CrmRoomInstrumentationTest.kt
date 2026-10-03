@@ -109,7 +109,11 @@ class CrmRoomInstrumentationTest {
             assertEquals(SyncState.PENDING_UPLOAD, observed.single().syncState)
             assertEquals(customer.id, pending.single().entityId)
             assertEquals(LocalCrmRepository.OP_CREATE, pending.single().operation)
-            val pendingEntity = database.syncOperationDao().pending(100).single()
+            val pendingEntity = database.syncOperationDao().pending(100)
+                .single {
+                    it.entityType == LocalCrmRepository.ENTITY_CUSTOMER &&
+                        it.entityId == customer.id
+                }
             val pendingPayload = JSONObject(pendingEntity.payloadJson)
             assertEquals("05550000000", pendingPayload.getString("phone"))
             assertEquals("https://smoke.example", pendingPayload.getString("website"))
