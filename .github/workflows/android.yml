@@ -19,6 +19,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate business directory builder
+        run: |
+          if [[ -f scripts/build_overture_turkey_directory.py ]]; then
+            python3 -m py_compile scripts/build_overture_turkey_directory.py
+          fi
       - uses: actions/setup-java@v5
         with:
           distribution: temurin

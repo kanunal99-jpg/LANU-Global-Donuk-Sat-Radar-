@@ -83,12 +83,32 @@ class BusinessCoverageEngineTest {
     }
 
     @Test
-    fun broadEmptyPrimaryRemainsAuthoritativeAndDoesNotTriggerTargetedFallback() = runTest {
+    fun broadScanMergesComplementarySuccessfulSources() = runTest {
         val engine = BusinessCoverageEngine(
             sources = listOf(
                 CoverageSource {
-                    Result.success(CoverageSourceResult(primary, emptyList(), 10L))
+                    Result.success(CoverageSourceResult(primary, listOf(business("b1")), 10L))
                 },
+                CoverageSource {
+                    Result.success(CoverageSourceResult(fallback, listOf(business("b2", fallback)), 11L))
+                },
+            ),
+            nowEpochMs = { 20L },
+        )
+
+        val result = engine.scan(scope.copy(category = "*"))
+
+        assertEquals("multi-source", result.selectedSourceId)
+        assertEquals(setOf("b1", "b2"), result.businesses.map { it.id }.toSet())
+        assertEquals(2, result.successfulSourceCount)
+        assertEquals(2, result.attemptedSourceCount)
+    }
+
+    @Test
+    fun broadScanStillUsesFallbackWhenFirstBulkSourceFails() = runTest {
+        val engine = BusinessCoverageEngine(
+            sources = listOf(
+                CoverageSource { Result.failure(IllegalStateException("snapshot unavailable")) },
                 CoverageSource {
                     Result.success(CoverageSourceResult(fallback, listOf(business("b1", fallback)), 11L))
                 },
@@ -98,9 +118,9 @@ class BusinessCoverageEngineTest {
 
         val result = engine.scan(scope.copy(category = "*"))
 
-        assertEquals("primary", result.selectedSourceId)
-        assertTrue(result.businesses.isEmpty())
-        assertEquals(1, result.successfulSourceCount)
+        assertEquals("fallback", result.selectedSourceId)
+        assertEquals(1, result.businesses.size)
+        assertEquals(2, result.attemptedSourceCount)
     }
 
     @Test
