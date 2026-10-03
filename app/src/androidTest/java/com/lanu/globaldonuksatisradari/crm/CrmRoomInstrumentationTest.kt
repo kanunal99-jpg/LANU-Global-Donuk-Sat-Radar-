@@ -6,6 +6,7 @@ import com.lanu.globaldonuksatisradari.data.DataSourceDescriptor
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryEvidence
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryRecord
 import com.lanu.globaldonuksatisradari.data.OfficialRegistrySource
+import com.lanu.globaldonuksatisradari.data.SupplementalBusinessDirectory
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import com.lanu.globaldonuksatisradari.data.VerifiedBusinessValidator
 import kotlinx.coroutines.flow.first
@@ -16,6 +17,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import java.io.ByteArrayInputStream
+import java.util.zip.ZipInputStream
 
 @RunWith(AndroidJUnit4::class)
 class CrmRoomInstrumentationTest {
@@ -264,4 +267,71 @@ class CrmRoomInstrumentationTest {
             database.close()
         }
     }
+
+    @Test
+    fun sandoraCoverageAcceptance_reachesCrmAndExcel() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, LanuCrmDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+
+        try {
+            val business = SupplementalBusinessDirectory(context)
+                .search(
+                    query = "sandora cafe",
+                    city = "İstanbul",
+                    district = "Sultanbeyli",
+                    neighborhood = "Mimar Sinan",
+                )
+                .single { it.name == "Sandora Fast Food & Cafe" }
+
+            assertEquals("Sultanbeyli", business.district)
+            assertEquals("Mimar Sinan", business.neighborhood)
+            assertEquals("+90 537 519 74 53", business.phone)
+            assertTrue(business.address.orEmpty().contains("Özgürlük Cd. No:76/A"))
+
+            var idIndex = 0
+            val repository = LocalCrmRepository(
+                database = database,
+                now = { 10_000L },
+                idGenerator = { "sandora-test-" + (idIndex++) },
+            )
+            val saved = repository.addBusinessAsCustomer(
+                business = business,
+                ownerUserId = null,
+            )
+
+            assertEquals("Sandora Fast Food & Cafe", saved.businessName)
+            assertEquals("Sandora Fast Food & Cafe", saved.signboardName)
+            assertEquals("Sultanbeyli", saved.district)
+            assertEquals("Mimar Sinan", saved.neighborhood)
+            assertEquals("+90 537 519 74 53", saved.phone)
+            assertEquals(CrmRegistryStatus.UNVERIFIED, saved.registryStatus)
+
+            val persisted = repository.observeCustomers("İstanbul")
+                .first()
+                .single { it.businessName == "Sandora Fast Food & Cafe" }
+            val workbook = CrmExcelExporter.build(listOf(persisted))
+
+            var sheetXml = ""
+            ZipInputStream(ByteArrayInputStream(workbook)).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    if (entry.name == "xl/worksheets/sheet1.xml") {
+                        sheetXml = zip.bufferedReader(Charsets.UTF_8).readText()
+                        break
+                    }
+                }
+            }
+
+            assertTrue(sheetXml.contains("Sandora Fast Food &amp; Cafe"))
+            assertTrue(sheetXml.contains("Sultanbeyli"))
+            assertTrue(sheetXml.contains("Mimar Sinan"))
+            assertTrue(sheetXml.contains("+90 537 519 74 53"))
+            assertTrue(sheetXml.contains("DOĞRULANMADI"))
+        } finally {
+            database.close()
+        }
+    }
+
 }
