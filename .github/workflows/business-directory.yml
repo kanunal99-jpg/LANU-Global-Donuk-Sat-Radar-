@@ -75,60 +75,6 @@ jobs:
           print(json.dumps({"city": city["city"], "records": count}, ensure_ascii=False))
           PY
 
-  fsq-source-smoke:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install GDAL PMTiles reader
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gdal-bin
-          ogrinfo --version
-          ogrinfo --formats | grep -i PMTiles
-      - name: Probe public Foursquare OS Places PMTiles around Sultanbeyli
-        env:
-          AWS_NO_SIGN_REQUEST: "YES"
-          AWS_REGION: "us-east-1"
-        run: |
-          set -euo pipefail
-          src="/vsis3/fsq-os-places-us-east-1/release/vector-tiles/latest/fsq-os-places.pmtiles"
-          ogrinfo -ro -so "$src" > /tmp/fsq-info.txt
-          cat /tmp/fsq-info.txt
-
-          layer="$(awk -F': ' '/^[0-9]+: / {print $2; exit}' /tmp/fsq-info.txt)"
-          test -n "$layer"
-
-          ogr2ogr             -f GeoJSONSeq             /tmp/fsq-sultanbeyli.geojsonl             "$src"             "$layer"             -spat 29.18 40.90 29.38 41.05             -spat_srs EPSG:4326             -t_srs EPSG:4326             -oo ZOOM_LEVEL_AUTO=YES
-
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          path = Path("/tmp/fsq-sultanbeyli.geojsonl")
-          rows = []
-          sandora = []
-          for line in path.read_text(encoding="utf-8").splitlines():
-              if not line.strip():
-                  continue
-              feature = json.loads(line)
-              props = feature.get("properties") or {}
-              rows.append(props)
-              if "sandora" in str(props.get("name", "")).casefold():
-                  sandora.append(props)
-
-          if not rows:
-              raise SystemExit("Foursquare PMTiles Sultanbeyli smoke returned no places")
-
-          print(json.dumps({
-              "records": len(rows),
-              "sampleKeys": sorted(rows[0].keys()),
-              "sampleName": rows[0].get("name"),
-              "sandoraFound": bool(sandora),
-              "sandora": sandora[:3],
-          }, ensure_ascii=False))
-          PY
-
   build-directory:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
