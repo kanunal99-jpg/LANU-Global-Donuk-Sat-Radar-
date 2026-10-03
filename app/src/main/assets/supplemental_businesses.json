@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "records": [
+    {
+      "id": "supplemental:tr-34:sandora-fast-food-cafe-sultanbeyli",
+      "name": "Sandora Fast Food & Cafe",
+      "city": "İstanbul",
+      "district": "Sultanbeyli",
+      "neighborhood": "Mimar Sinan",
+      "category": "fast_food_restaurant",
+      "address": "Mimar Sinan, Özgürlük Cd. No:76/A, 34920 Sultanbeyli/İstanbul",
+      "phone": "+90 537 519 74 53",
+      "verifiedAtEpochMs": 1790985600000,
+      "source": {
+        "id": "public-evidence-restaurantguru",
+        "name": "Restaurant Guru",
+        "publisher": "Restaurant Guru",
+        "licenseOrTerms": "Public listing used only for factual business identity/contact fields; no reviews or photos copied.",
+        "sourceUrl": "https://tr.restaurantguru.com/Sandora-Fast-Food-and-Cafe-Sultanbeyli",
+        "lastVerifiedAtEpochMs": 1790985600000
+      }
+    }
+  ]
+}
