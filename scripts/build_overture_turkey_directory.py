@@ -57,6 +57,78 @@ BUSINESS_TOP_LEVELS = (
 # polygons, so neighboring-country records are not accepted from this bbox.
 TURKEY_SCAN_BBOX = (25.0, 35.0, 45.5, 42.7)
 
+NON_BUSINESS_CATEGORIES = {
+    "park",
+    "playground",
+    "garden",
+    "square",
+    "monument",
+    "memorial",
+    "cemetery",
+    "grave_yard",
+    "bench",
+    "shelter",
+    "toilets",
+    "drinking_water",
+    "waste_basket",
+    "recycling",
+    "parking",
+    "parking_entrance",
+    "bicycle_parking",
+    "motorcycle_parking",
+    "public_bookcase",
+    "fountain",
+    "clock",
+    "airport_gate",
+    "bus_line",
+    "intersection",
+    "island",
+    "line",
+    "moving_target",
+    "plane",
+    "platform",
+    "polling_place",
+    "road",
+    "taxi",
+    "train",
+    "tree",
+    "village",
+    "town",
+    "city",
+    "county",
+    "country",
+    "state",
+    "states_and_municipalities",
+    "neighborhood",
+    "event",
+    "conference",
+    "convention",
+    "festival",
+    "beer_festival",
+    "music_festival",
+    "entertainment_event",
+    "sporting_event",
+    "other_event",
+    "parade",
+    "street_fair",
+    "street_food_gathering",
+    "trade_fair",
+    "christmas_market",
+    "stoop_sale",
+    "hotel_pool",
+    "marketplace",
+    "townhall",
+    "courthouse",
+    "police",
+    "fire_station",
+    "post_box",
+    "place_of_worship",
+    "library",
+    "community_centre",
+    "social_centre",
+    "crematorium",
+}
+
 
 def latest_release() -> str:
     request = urllib.request.Request(
@@ -102,6 +174,27 @@ def sha256_file(path: pathlib.Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def normalized_category(value: object) -> str:
+    return (
+        normalize_text(str(value or ""))
+        .replace(" ", "_")
+        .strip("_")
+    )
+
+
+def is_business_candidate(item: dict) -> bool:
+    categories = (
+        item.get("basic_category"),
+        item.get("category"),
+        item.get("top_level_category"),
+    )
+    return not any(
+        normalized_category(value) in NON_BUSINESS_CATEGORIES
+        for value in categories
+        if value is not None
+    )
 
 
 def safe_region_asset(region_code: str) -> str:
@@ -398,6 +491,9 @@ def build_snapshot(
                                     county_names[int(index)] for index in matches
                                 )[0]
 
+                        if not is_business_candidate(item):
+                            continue
+
                         locality = first_nonempty(item.get("address_locality"))
                         neighborhood = locality
                         if neighborhood and normalize_text(neighborhood) in {
@@ -493,6 +589,7 @@ def build_snapshot(
         "countryCode": COUNTRY_CODE,
         "minConfidence": min_confidence,
         "businessTopLevels": list(BUSINESS_TOP_LEVELS),
+        "excludedNonBusinessCategories": sorted(NON_BUSINESS_CATEGORIES),
         "attribution": "Overture Maps Foundation; see per-theme source attribution at docs.overturemaps.org/attribution/",
         "cities": cities,
         "totalRecordCount": sum(counts.values()),
