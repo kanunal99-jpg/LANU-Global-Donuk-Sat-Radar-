@@ -207,7 +207,11 @@ internal object OvertureDirectoryParser {
         val wantedDistrict = district
             ?.takeUnless { it.isBlank() || it.equals("Tümü", ignoreCase = true) }
             ?.let(::normalize)
-        if (wantedDistrict != null && normalize(record.district.orEmpty()) != wantedDistrict) return false
+        if (wantedDistrict != null &&
+            normalizeDistrict(record.district.orEmpty()) != normalizeDistrict(wantedDistrict)
+        ) {
+            return false
+        }
 
         val wantedNeighborhood = neighborhood
             ?.takeUnless { it.isBlank() || it.equals("Tümü", ignoreCase = true) }
@@ -238,10 +242,18 @@ internal object OvertureDirectoryParser {
             value.replace('_', ' ').replace('-', ' '),
         )
 
+    private fun normalizeDistrict(value: String): String =
+        normalize(value)
+            .removeSuffix(" district")
+            .removeSuffix(" ilcesi")
+            .removeSuffix(" ilce")
+            .trim()
+
     private fun normalizeNeighborhood(value: String): String =
         normalize(value)
             .removeSuffix(" mahallesi")
             .removeSuffix(" mah")
+            .removeSuffix(" neighborhood")
             .trim()
 }
 
