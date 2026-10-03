@@ -41,11 +41,39 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install smoke dependency
-        run: python -m pip install "duckdb>=1.4,<2"
+        run: python -m pip install "duckdb>=1.4,<2" "shapely>=2,<3"
       - name: Validate builder syntax
         run: python -m py_compile scripts/build_overture_turkey_directory.py
       - name: Validate live Overture release schema
         run: python scripts/build_overture_turkey_directory.py --smoke-only
+      - name: Build Istanbul province with production path
+        run: |
+          python scripts/build_overture_turkey_directory.py \
+            --output-dir build/business-directory-smoke \
+            --region-code TR-34 \
+            --min-confidence 0.0
+      - name: Validate Istanbul smoke output
+        run: |
+          python - <<'PY'
+          import gzip
+          import hashlib
+          import json
+          from pathlib import Path
+
+          root = Path("build/business-directory-smoke")
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          assert len(manifest["cities"]) == 1
+          city = manifest["cities"][0]
+          assert city["regionCode"] == "TR-34"
+          assert city["recordCount"] > 0
+          asset = root / city["asset"]
+          assert asset.exists()
+          assert hashlib.sha256(asset.read_bytes()).hexdigest() == city["sha256"]
+          with gzip.open(asset, "rt", encoding="utf-8") as stream:
+              count = sum(1 for line in stream if line.strip())
+          assert count == city["recordCount"]
+          print(json.dumps({"city": city["city"], "records": count}, ensure_ascii=False))
+          PY
 
   build-directory:
     if: github.event_name != 'pull_request'
@@ -64,7 +92,7 @@ jobs:
       - name: Install directory builder dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install "duckdb>=1.4,<2"
+          python -m pip install "duckdb>=1.4,<2" "shapely>=2,<3"
 
       - name: Validate builder syntax
         run: python -m py_compile scripts/build_overture_turkey_directory.py

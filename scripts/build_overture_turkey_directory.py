@@ -25,6 +25,10 @@ import unicodedata
 import urllib.request
 
 import duckdb
+from shapely import from_wkb
+from shapely.geometry import Point
+from shapely.ops import unary_union
+from shapely.strtree import STRtree
 
 STAC_URL = "https://stac.overturemaps.org/catalog.json"
 S3_ROOT = "s3://overturemaps-us-west-2/release"
@@ -107,12 +111,19 @@ def safe_region_asset(region_code: str) -> str:
 
 
 def open_overture_connection() -> duckdb.DuckDBPyConnection:
+    spill_dir = pathlib.Path("/tmp/lanu-overture-duckdb")
+    spill_dir.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect()
     con.execute("INSTALL spatial")
     con.execute("LOAD spatial")
     con.execute("INSTALL httpfs")
     con.execute("LOAD httpfs")
     con.execute("SET s3_region='us-west-2'")
+    con.execute("SET threads=2")
+    con.execute("SET preserve_insertion_order=false")
+    # Keep RAM headroom for Python, gzip and runner services.
+    con.execute("SET memory_limit='4GB'")
+    con.execute("SET temp_directory='/tmp/lanu-overture-duckdb'")
     return con
 
 
@@ -174,7 +185,12 @@ def smoke_validate_sources(release: str) -> dict:
         con.close()
 
 
-def build_snapshot(output_dir: pathlib.Path, release: str, min_confidence: float) -> dict:
+def build_snapshot(
+    output_dir: pathlib.Path,
+    release: str,
+    min_confidence: float,
+    selected_region_codes: set[str] | None = None,
+) -> dict:
     if not 0.0 <= min_confidence <= 1.0:
         raise ValueError("--min-confidence must be between 0 and 1")
 
@@ -195,7 +211,11 @@ def build_snapshot(output_dir: pathlib.Path, release: str, min_confidence: float
             d.id AS division_id,
             CAST(d.names.primary AS VARCHAR) AS city,
             CAST(d.region AS VARCHAR) AS region_code,
-            a.geometry AS geometry
+            ST_AsWKB(a.geometry) AS geometry_wkb,
+            CAST(a.bbox.xmin AS DOUBLE) AS xmin,
+            CAST(a.bbox.ymin AS DOUBLE) AS ymin,
+            CAST(a.bbox.xmax AS DOUBLE) AS xmax,
+            CAST(a.bbox.ymax AS DOUBLE) AS ymax
         FROM read_parquet('{division_path}', hive_partitioning=1) AS d
         INNER JOIN read_parquet('{division_area_path}', hive_partitioning=1) AS a
             ON a.division_id = d.id
@@ -203,7 +223,7 @@ def build_snapshot(output_dir: pathlib.Path, release: str, min_confidence: float
           AND d.country = '{COUNTRY_CODE}'
           AND CAST(d.region AS VARCHAR) LIKE 'TR-%'
           AND d.names.primary IS NOT NULL
-          AND (a.is_land = TRUE OR a.is_territorial = TRUE)
+          AND a.is_land = TRUE
         """
     )
 
@@ -214,7 +234,7 @@ def build_snapshot(output_dir: pathlib.Path, release: str, min_confidence: float
             d.id AS division_id,
             CAST(d.names.primary AS VARCHAR) AS district,
             CAST(d.region AS VARCHAR) AS region_code,
-            a.geometry AS geometry
+            ST_AsWKB(a.geometry) AS geometry_wkb
         FROM read_parquet('{division_path}', hive_partitioning=1) AS d
         INNER JOIN read_parquet('{division_area_path}', hive_partitioning=1) AS a
             ON a.division_id = d.id
@@ -226,165 +246,231 @@ def build_snapshot(output_dir: pathlib.Path, release: str, min_confidence: float
         """
     )
 
-    regions = [
-        (str(code), str(city))
-        for code, city in con.execute(
-            "SELECT region_code, city FROM tr_regions ORDER BY region_code"
-        ).fetchall()
-    ]
-    dedup_regions = dict(regions)
+    region_rows = con.execute(
+        """
+        SELECT region_code, city, geometry_wkb
+        FROM tr_regions
+        ORDER BY region_code
+        """
+    ).fetchall()
+    region_parts: dict[str, dict[str, object]] = {}
+    for code, city, geometry_wkb in region_rows:
+        region_code = str(code)
+        bucket = region_parts.setdefault(
+            region_code,
+            {"city": str(city), "geometries": []},
+        )
+        bucket["geometries"].append(from_wkb(bytes(geometry_wkb)))
+
+    dedup_regions: dict[str, tuple[str, float, float, float, float, object]] = {}
+    for region_code, bucket in region_parts.items():
+        geometry = unary_union(bucket["geometries"])
+        if geometry.is_empty:
+            continue
+        xmin, ymin, xmax, ymax = geometry.bounds
+        dedup_regions[region_code] = (
+            str(bucket["city"]),
+            float(xmin),
+            float(ymin),
+            float(xmax),
+            float(ymax),
+            geometry,
+        )
+
     if len(dedup_regions) < 81:
         raise RuntimeError(
             f"Overture Turkey region coverage is incomplete: {len(dedup_regions)} regions"
         )
 
-    writers: dict[str, tuple[gzip.GzipFile, object]] = {}
+    if selected_region_codes:
+        unknown = sorted(set(selected_region_codes) - set(dedup_regions))
+        if unknown:
+            raise RuntimeError("Unknown Turkey region code(s): " + ", ".join(unknown))
+        dedup_regions = {
+            code: value
+            for code, value in dedup_regions.items()
+            if code in selected_region_codes
+        }
+
     counts = {region_code: 0 for region_code in dedup_regions}
+    top_levels_sql = ",".join(
+        "'" + value.replace("'", "''") + "'" for value in BUSINESS_TOP_LEVELS
+    )
+    confidence_sql = f"{min_confidence:.6f}"
 
     try:
-        for region_code in dedup_regions:
+        # Process one province at a time. The original all-Türkiye spatial join
+        # exceeded the GitHub runner's 12.4 GiB RAM. Province bbox predicates let
+        # GeoParquet prune remote row groups before spatial joins, while each query
+        # keeps only one province and its districts in memory.
+        for region_code, region_info in sorted(dedup_regions.items()):
+            city, xmin, ymin, xmax, ymax, region_geometry = region_info
+
+            county_rows = con.execute(
+                """
+                SELECT district, geometry_wkb
+                FROM tr_counties
+                WHERE region_code = ?
+                ORDER BY district
+                """,
+                [region_code],
+            ).fetchall()
+            county_parts: dict[str, list[object]] = {}
+            for district_name, county_wkb in county_rows:
+                if district_name is None or county_wkb is None:
+                    continue
+                county_parts.setdefault(str(district_name), []).append(
+                    from_wkb(bytes(county_wkb))
+                )
+            county_names = sorted(county_parts)
+            county_geometries = [
+                unary_union(county_parts[name]) for name in county_names
+            ]
+            county_tree = STRtree(county_geometries) if county_geometries else None
+
             asset = output_dir / safe_region_asset(region_code)
+            raw_file = asset.open("wb")
             binary = gzip.GzipFile(
                 filename="",
                 mode="wb",
-                fileobj=asset.open("wb"),
+                fileobj=raw_file,
                 compresslevel=6,
                 mtime=0,
             )
-            text = __import__("io").TextIOWrapper(binary, encoding="utf-8", newline="\n")
-            writers[region_code] = (binary, text)
-
-        top_levels_sql = ",".join("'" + value.replace("'", "''") + "'" for value in BUSINESS_TOP_LEVELS)
-        xmin, ymin, xmax, ymax = TURKEY_SCAN_BBOX
-        confidence_sql = f"{min_confidence:.6f}"
-
-        cursor = con.execute(
-            f"""
-            WITH candidates AS (
-                SELECT
-                    CAST(p.id AS VARCHAR) AS id,
-                    CAST(p.names.primary AS VARCHAR) AS name,
-                    CAST(p.basic_category AS VARCHAR) AS basic_category,
-                    CAST(p.taxonomy.primary AS VARCHAR) AS category,
-                    CAST(p.taxonomy.hierarchy[1] AS VARCHAR) AS top_level_category,
-                    CAST(p.operating_status AS VARCHAR) AS operating_status,
-                    CAST(p.confidence AS DOUBLE) AS confidence,
-                    CAST(p.phones[1] AS VARCHAR) AS phone,
-                    CAST(p.websites[1] AS VARCHAR) AS website,
-                    CAST(p.addresses[1].freeform AS VARCHAR) AS address_freeform,
-                    CAST(p.addresses[1].locality AS VARCHAR) AS address_locality,
-                    CAST(p.addresses[1].postcode AS VARCHAR) AS postcode,
-                    p.geometry AS geometry
-                FROM read_parquet('{places_path}', hive_partitioning=1) AS p
-                WHERE p.names.primary IS NOT NULL
-                  AND p.bbox.xmin BETWEEN {xmin} AND {xmax}
-                  AND p.bbox.ymin BETWEEN {ymin} AND {ymax}
-                  AND CAST(p.taxonomy.hierarchy[1] AS VARCHAR) IN ({top_levels_sql})
-                  AND (p.confidence IS NULL OR p.confidence >= {confidence_sql})
+            text_writer = __import__("io").TextIOWrapper(
+                binary,
+                encoding="utf-8",
+                newline="\n",
             )
-            SELECT
-                p.id,
-                p.name,
-                r.city,
-                r.region_code,
-                c.district,
-                p.address_locality,
-                p.address_freeform,
-                p.postcode,
-                ST_Y(p.geometry) AS latitude,
-                ST_X(p.geometry) AS longitude,
-                p.basic_category,
-                p.category,
-                p.top_level_category,
-                p.phone,
-                p.website,
-                p.operating_status,
-                p.confidence
-            FROM candidates AS p
-            INNER JOIN tr_regions AS r
-                ON ST_WITHIN(p.geometry, r.geometry)
-            LEFT JOIN tr_counties AS c
-                ON c.region_code = r.region_code
-               AND ST_WITHIN(p.geometry, c.geometry)
-            QUALIFY ROW_NUMBER() OVER (
-                PARTITION BY p.id
-                ORDER BY CASE WHEN c.district IS NULL THEN 1 ELSE 0 END, c.district
-            ) = 1
-            """
-        )
 
-        columns = [item[0] for item in cursor.description]
-        while True:
-            batch = cursor.fetchmany(10_000)
-            if not batch:
-                break
-            for row in batch:
-                item = dict(zip(columns, row))
-                region_code = first_nonempty(item.get("region_code"))
-                if not region_code or region_code not in writers:
-                    continue
-
-                city = first_nonempty(item.get("city"))
-                district = first_nonempty(item.get("district"))
-                locality = first_nonempty(item.get("address_locality"))
-                neighborhood = locality
-                if neighborhood and normalize_text(neighborhood) in {
-                    normalize_text(city),
-                    normalize_text(district),
-                }:
-                    neighborhood = None
-
-                freeform = first_nonempty(item.get("address_freeform"))
-                postcode = first_nonempty(item.get("postcode"))
-                address_parts = []
-                for part in (freeform, locality, postcode):
-                    if part and normalize_text(part) not in {
-                        normalize_text(existing) for existing in address_parts
-                    }:
-                        address_parts.append(part)
-                address = ", ".join(address_parts) or None
-
-                record = {
-                    "id": first_nonempty(item.get("id")),
-                    "name": first_nonempty(item.get("name")),
-                    "city": city,
-                    "regionCode": region_code,
-                    "district": district,
-                    "neighborhood": neighborhood,
-                    "address": address,
-                    "latitude": item.get("latitude"),
-                    "longitude": item.get("longitude"),
-                    "basicCategory": first_nonempty(item.get("basic_category")),
-                    "category": first_nonempty(item.get("category")),
-                    "topLevelCategory": first_nonempty(item.get("top_level_category")),
-                    "phone": first_nonempty(item.get("phone")),
-                    "website": first_nonempty(item.get("website")),
-                    "operatingStatus": first_nonempty(item.get("operating_status")),
-                    "confidence": item.get("confidence"),
-                }
-                if not record["id"] or not record["name"] or not record["city"]:
-                    continue
-
-                text_writer = writers[region_code][1]
-                text_writer.write(
-                    json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n"
-                )
-                counts[region_code] += 1
-    finally:
-        for binary, text_writer in writers.values():
             try:
-                text_writer.flush()
-                text_writer.close()
+                # Keep the remote DuckDB query filter-only and streaming. Exact
+                # province/county containment is done below in Python with a small
+                # Shapely polygon index, avoiding the SQL spatial join/window that
+                # exhausted runner RAM for İstanbul.
+                cursor = con.execute(
+                    f"""
+                    SELECT
+                        CAST(p.id AS VARCHAR) AS id,
+                        CAST(p.names.primary AS VARCHAR) AS name,
+                        CAST(p.addresses[1].locality AS VARCHAR) AS address_locality,
+                        CAST(p.addresses[1].freeform AS VARCHAR) AS address_freeform,
+                        CAST(p.addresses[1].postcode AS VARCHAR) AS postcode,
+                        ST_Y(p.geometry) AS latitude,
+                        ST_X(p.geometry) AS longitude,
+                        CAST(p.basic_category AS VARCHAR) AS basic_category,
+                        CAST(p.taxonomy.primary AS VARCHAR) AS category,
+                        CAST(p.taxonomy.hierarchy[1] AS VARCHAR) AS top_level_category,
+                        CAST(p.phones[1] AS VARCHAR) AS phone,
+                        CAST(p.websites[1] AS VARCHAR) AS website,
+                        CAST(p.operating_status AS VARCHAR) AS operating_status,
+                        CAST(p.confidence AS DOUBLE) AS confidence
+                    FROM read_parquet('{places_path}', hive_partitioning=1) AS p
+                    WHERE p.names.primary IS NOT NULL
+                      AND p.bbox.xmin BETWEEN {xmin} AND {xmax}
+                      AND p.bbox.ymin BETWEEN {ymin} AND {ymax}
+                      AND CAST(p.taxonomy.hierarchy[1] AS VARCHAR) IN ({top_levels_sql})
+                      AND (p.confidence IS NULL OR p.confidence >= {confidence_sql})
+                    """
+                )
+
+                columns = [item[0] for item in cursor.description]
+                while True:
+                    batch = cursor.fetchmany(5_000)
+                    if not batch:
+                        break
+                    for row in batch:
+                        item = dict(zip(columns, row))
+                        latitude = item.get("latitude")
+                        longitude = item.get("longitude")
+                        if latitude is None or longitude is None:
+                            continue
+
+                        point = Point(float(longitude), float(latitude))
+                        if not region_geometry.covers(point):
+                            continue
+
+                        district = None
+                        if county_tree is not None:
+                            matches = county_tree.query(point, predicate="intersects")
+                            if len(matches):
+                                district = sorted(
+                                    county_names[int(index)] for index in matches
+                                )[0]
+
+                        locality = first_nonempty(item.get("address_locality"))
+                        neighborhood = locality
+                        if neighborhood and normalize_text(neighborhood) in {
+                            normalize_text(city),
+                            normalize_text(district),
+                        }:
+                            neighborhood = None
+
+                        freeform = first_nonempty(item.get("address_freeform"))
+                        postcode = first_nonempty(item.get("postcode"))
+                        address_parts = []
+                        for part in (freeform, locality, postcode):
+                            if part and normalize_text(part) not in {
+                                normalize_text(existing) for existing in address_parts
+                            }:
+                                address_parts.append(part)
+                        address = ", ".join(address_parts) or None
+
+                        record = {
+                            "id": first_nonempty(item.get("id")),
+                            "name": first_nonempty(item.get("name")),
+                            "city": city,
+                            "regionCode": region_code,
+                            "district": district,
+                            "neighborhood": neighborhood,
+                            "address": address,
+                            "latitude": float(latitude),
+                            "longitude": float(longitude),
+                            "basicCategory": first_nonempty(item.get("basic_category")),
+                            "category": first_nonempty(item.get("category")),
+                            "topLevelCategory": first_nonempty(item.get("top_level_category")),
+                            "phone": first_nonempty(item.get("phone")),
+                            "website": first_nonempty(item.get("website")),
+                            "operatingStatus": first_nonempty(item.get("operating_status")),
+                            "confidence": item.get("confidence"),
+                        }
+                        if not record["id"] or not record["name"] or not record["city"]:
+                            continue
+
+                        text_writer.write(
+                            json.dumps(
+                                record,
+                                ensure_ascii=False,
+                                separators=(",", ":"),
+                            )
+                            + "\n"
+                        )
+                        counts[region_code] += 1
             finally:
                 try:
-                    binary.close()
-                except Exception:
-                    pass
+                    text_writer.flush()
+                finally:
+                    text_writer.close()
+                    raw_file.close()
+
+            print(
+                json.dumps(
+                    {
+                        "regionCode": region_code,
+                        "city": city,
+                        "records": counts[region_code],
+                    },
+                    ensure_ascii=False,
+                ),
+                flush=True,
+            )
+    finally:
         con.close()
 
     generated_at_epoch_ms = int(time.time() * 1000)
     cities = []
-    for region_code, city in sorted(dedup_regions.items()):
+    for region_code, region_info in sorted(dedup_regions.items()):
+        city = region_info[0]
         asset_name = safe_region_asset(region_code)
         asset_path = output_dir / asset_name
         if not asset_path.exists():
@@ -424,6 +510,12 @@ def main() -> int:
     parser.add_argument("--release", default="")
     parser.add_argument("--min-confidence", type=float, default=0.0)
     parser.add_argument(
+        "--region-code",
+        action="append",
+        default=[],
+        help="Optional TR-## province code; repeat to build only selected provinces.",
+    )
+    parser.add_argument(
         "--smoke-only",
         action="store_true",
         help="Validate current Overture S3 paths and nested fields without building the snapshot.",
@@ -438,8 +530,22 @@ def main() -> int:
         print(json.dumps(smoke_validate_sources(release), ensure_ascii=False))
         return 0
 
+    selected_region_codes = {
+        value.strip().upper()
+        for value in args.region_code
+        if value.strip()
+    }
+    for region_code in selected_region_codes:
+        if not re.fullmatch(r"TR-\d{2}", region_code):
+            raise RuntimeError(f"Invalid --region-code: {region_code!r}")
+
     output_dir = pathlib.Path(args.output_dir).resolve()
-    manifest = build_snapshot(output_dir, release, args.min_confidence)
+    manifest = build_snapshot(
+        output_dir,
+        release,
+        args.min_confidence,
+        selected_region_codes=selected_region_codes or None,
+    )
     print(
         json.dumps(
             {
