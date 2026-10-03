@@ -1,6 +1,11 @@
 name: Turkey Business Directory
 
 on:
+  push:
+    branches: [ main ]
+    paths:
+      - ".github/workflows/business-directory.yml"
+      - "scripts/build_overture_turkey_directory.py"
   workflow_dispatch:
     inputs:
       overture_release:
