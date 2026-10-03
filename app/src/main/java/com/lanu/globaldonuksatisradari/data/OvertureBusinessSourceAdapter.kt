@@ -222,16 +222,16 @@ internal object OvertureDirectoryParser {
             return false
         }
 
-        val wantedQuery = normalize(query)
-        if (wantedQuery.isBlank()) return true
-        val haystack = listOfNotNull(
+        return BusinessTextSearch.matches(
+            query,
             record.name,
             record.basicCategory,
             record.category,
             record.topLevelCategory,
             record.address,
-        ).joinToString(" ")
-        return normalize(haystack).contains(wantedQuery)
+            record.phone,
+            record.website,
+        )
     }
 
     private fun optionalString(item: JSONObject, key: String): String? =
