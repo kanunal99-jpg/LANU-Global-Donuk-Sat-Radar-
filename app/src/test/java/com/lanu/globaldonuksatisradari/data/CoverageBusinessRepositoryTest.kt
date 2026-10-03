@@ -9,10 +9,13 @@ class CoverageBusinessRepositoryTest {
 
     @Test
     fun coverageEngineUsesRealSourceDescriptors() {
+        assertEquals("overture-places", OvertureBusinessSource.contract.descriptor.id)
         assertEquals("osm-overpass", OverpassBusinessSource.contract.descriptor.id)
         assertEquals("osm-nominatim", NominatimBusinessSource.contract.descriptor.id)
+        assertTrue(OvertureBusinessSource.contract.permittedUseVerified)
         assertTrue(OverpassBusinessSource.contract.permittedUseVerified)
         assertTrue(NominatimBusinessSource.contract.permittedUseVerified)
+        assertTrue(OvertureBusinessSource.contract.supportsBulk)
         assertTrue(OverpassBusinessSource.contract.supportsBulk.not())
         assertTrue(NominatimBusinessSource.contract.supportsBulk.not())
     }
