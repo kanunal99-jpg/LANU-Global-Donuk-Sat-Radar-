@@ -552,4 +552,66 @@ class OfficialRegistryEnrichmentTest {
         assertTrue(OfficialRegistryTrust.isIdentityVerified(record))
     }
 
+
+    @Test
+    fun tobbAllMembersJsonExportMapsDocumentedBusinessFieldsAndIgnoresPersonalCardData() {
+        val json = """
+            {
+              "obResult": {
+                "hatali": false,
+                "donusDegeri": "[{\\\"uyeOid\\\":\\\"U-1\\\",\\\"mersisNo\\\":\\\"0123456789012345\\\",\\\"unvan\\\":\\\"TOBB TEST SANAYİ AŞ\\\",\\\"uyeOdaSicilNo\\\":\\\"5544\\\",\\\"ticaretSicilNo\\\":\\\"7788\\\",\\\"vergiNo\\\":\\\"1234567890\\\",\\\"durum\\\":\\\"Faal\\\",\\\"adres\\\":\\\"Organize Sanayi Bölgesi No:1\\\",\\\"il\\\":\\\"16\\\",\\\"ilce\\\":\\\"205\\\",\\\"mahalle\\\":\\\"OSB\\\",\\\"meslekGrubuAdi\\\":\\\"Makine ve İmalat\\\"}]"
+              }
+            }
+        """.trimIndent()
+
+        val record = OfficialRegistryImportParser.parseJsonExport(
+            payload = json,
+            source = OfficialRegistrySource.TOBB,
+            importedAtEpochMs = 903L,
+            defaultCity = "Bursa",
+        ).single()
+
+        assertEquals("TOBB TEST SANAYİ AŞ", record.businessName)
+        assertEquals("5544", record.registrationNumber)
+        assertEquals("1234567890", record.taxOrNationalId)
+        assertEquals("Bursa", record.city)
+        assertNull(record.district)
+        assertEquals("OSB", record.neighborhood)
+        assertEquals("Organize Sanayi Bölgesi No:1", record.address)
+        assertEquals("Faal", record.status)
+    }
+
+    @Test
+    fun tobbMemberCardJsonPreservesSignboardWebsitePhoneAndNace() {
+        val json = """
+            {
+              "uyelikTemelBilgileri": {
+                "unvan": "TOBB KART TEST LTD ŞTİ",
+                "tabelaUnvani": "Kart Test",
+                "uyeOdaSicilNo": "9900",
+                "vergiNo": "9876543210",
+                "uyelikDurum": "Faal",
+                "webAdresi": "https://kart.example",
+                "anaFaaliyetKodu": "46.90.01"
+              },
+              "telefonList": [
+                {"telefonNo": "02241112233", "birincilTelefon": "1"}
+              ]
+            }
+        """.trimIndent()
+
+        val record = OfficialRegistryImportParser.parseJsonExport(
+            payload = json,
+            source = OfficialRegistrySource.TOBB,
+            importedAtEpochMs = 904L,
+            defaultCity = "Bursa",
+        ).single()
+
+        assertEquals("Kart Test", record.signboardName)
+        assertEquals("9876543210", record.taxOrNationalId)
+        assertEquals("02241112233", record.phone)
+        assertEquals("https://kart.example", record.website)
+        assertEquals("46.90.01", record.naceCode)
+    }
+
 }
