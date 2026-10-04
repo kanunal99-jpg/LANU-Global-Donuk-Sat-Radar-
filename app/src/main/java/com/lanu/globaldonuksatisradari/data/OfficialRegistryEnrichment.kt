@@ -626,6 +626,7 @@ object OfficialRegistryDiscovery {
             ?: "Bilinmiyor"
 
         val fieldsUsed = linkedSetOf("registration_number")
+        if (!record.taxOrNationalId.isNullOrBlank()) fieldsUsed += "tax_or_national_id"
         if (!record.status.isNullOrBlank()) fieldsUsed += "status"
         if (!record.address.isNullOrBlank()) fieldsUsed += "address"
         if (!record.phone.isNullOrBlank()) fieldsUsed += "phone"
