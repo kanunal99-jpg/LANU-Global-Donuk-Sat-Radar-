@@ -962,39 +962,72 @@ object OfficialRegistryImportParser {
         return buildList {
             for (index in 0 until array.length()) {
                 val item = array.optJSONObject(index) ?: continue
-                val name = jsonValue(item, JSON_NAME_KEYS) ?: continue
-                val city = jsonValue(item, JSON_CITY_KEYS)
+                val businessItem = item.optJSONObject("uyelikTemelBilgileri") ?: item
+                val addressItem = preferredTobbAddress(item.optJSONArray("adresList"))
+                val name = jsonValue(businessItem, JSON_NAME_KEYS)
+                    ?: jsonValue(item, JSON_NAME_KEYS)
+                    ?: continue
+                val city = jsonValue(businessItem, JSON_CITY_KEYS)
+                    ?: addressItem?.let { jsonValue(it, JSON_CITY_KEYS) }
+                    ?: jsonValue(item, JSON_CITY_KEYS)
                     ?: when (source) {
                         OfficialRegistrySource.ITO -> "İstanbul"
                         OfficialRegistrySource.CHAMBER -> defaultCity?.trim()?.takeIf(String::isNotBlank)
                         else -> defaultCity?.trim()?.takeIf(String::isNotBlank)
                     }
+                val phoneValues = buildList {
+                    addAll(jsonValues(businessItem, JSON_PHONE_KEYS))
+                    addAll(jsonValues(item, JSON_PHONE_KEYS))
+                    addAll(tobbPhoneValues(item.optJSONArray("telefonList")))
+                }
                 add(
                     OfficialRegistryRecord(
                         source = source,
-                        registrationNumber = jsonValue(item, JSON_REGISTRATION_KEYS)
+                        registrationNumber = jsonValue(businessItem, JSON_REGISTRATION_KEYS)
+                            ?: jsonValue(item, JSON_REGISTRATION_KEYS)
+                            ?: jsonValue(businessItem, JSON_MERSIS_KEYS)
                             ?: jsonValue(item, JSON_MERSIS_KEYS),
                         businessName = name,
-                        status = jsonValue(item, JSON_STATUS_KEYS),
+                        status = jsonValue(businessItem, JSON_STATUS_KEYS)
+                            ?: jsonValue(item, JSON_STATUS_KEYS),
                         city = city,
-                        district = jsonValue(item, JSON_DISTRICT_KEYS),
-                        neighborhood = jsonValue(item, JSON_NEIGHBORHOOD_KEYS),
-                        address = jsonValue(item, JSON_ADDRESS_KEYS),
-                        phone = jsonValues(item, JSON_PHONE_KEYS)
+                        district = jsonValue(businessItem, JSON_DISTRICT_KEYS)
+                            ?: addressItem?.let { jsonValue(it, JSON_DISTRICT_KEYS) }
+                            ?: jsonValue(item, JSON_DISTRICT_KEYS),
+                        neighborhood = jsonValue(businessItem, JSON_NEIGHBORHOOD_KEYS)
+                            ?: addressItem?.let { jsonValue(it, JSON_NEIGHBORHOOD_KEYS) }
+                            ?: jsonValue(item, JSON_NEIGHBORHOOD_KEYS),
+                        address = jsonValue(businessItem, JSON_ADDRESS_KEYS)
+                            ?: addressItem?.let(::tobbAddressText)
+                            ?: jsonValue(item, JSON_ADDRESS_KEYS),
+                        phone = phoneValues
                             .mapNotNull(::sanitizePhone)
                             .distinctBy(OfficialRegistryNormalizer::phone)
-                            .takeIf(List<String>::isNotEmpty)
+                            .takeIf { it.isNotEmpty() }
                             ?.joinToString(" / "),
-                        website = jsonValue(item, JSON_WEBSITE_KEYS)?.let(::sanitizeWebsite),
+                        website = (
+                            jsonValue(businessItem, JSON_WEBSITE_KEYS)
+                                ?: jsonValue(item, JSON_WEBSITE_KEYS)
+                            )?.let(::sanitizeWebsite),
                         importedAtEpochMs = importedAtEpochMs,
-                        naceCode = jsonValue(item, JSON_NACE_KEYS),
-                        mersisNumber = jsonValue(item, JSON_MERSIS_KEYS),
-                        signboardName = jsonValue(item, JSON_SIGNBOARD_KEYS),
-                        businessType = jsonValue(item, JSON_BUSINESS_TYPE_KEYS),
-                        email = jsonValue(item, JSON_EMAIL_KEYS)?.let(::sanitizeEmail),
-                        chamberCode = jsonValue(item, JSON_CHAMBER_CODE_KEYS),
-                        sourceRecordId = jsonValue(item, JSON_SOURCE_RECORD_ID_KEYS),
-                        taxNumber = jsonValue(item, JSON_TAX_NUMBER_KEYS),
+                        naceCode = jsonValue(businessItem, JSON_NACE_KEYS)
+                            ?: jsonValue(item, JSON_NACE_KEYS),
+                        mersisNumber = jsonValue(businessItem, JSON_MERSIS_KEYS)
+                            ?: jsonValue(item, JSON_MERSIS_KEYS),
+                        signboardName = jsonValue(businessItem, JSON_SIGNBOARD_KEYS)
+                            ?: jsonValue(item, JSON_SIGNBOARD_KEYS),
+                        businessType = jsonValue(businessItem, JSON_BUSINESS_TYPE_KEYS)
+                            ?: jsonValue(item, JSON_BUSINESS_TYPE_KEYS),
+                        email = (
+                            jsonValue(businessItem, JSON_EMAIL_KEYS)
+                                ?: jsonValue(item, JSON_EMAIL_KEYS)
+                            )?.let(::sanitizeEmail),
+                        chamberCode = jsonValue(businessItem, JSON_CHAMBER_CODE_KEYS)
+                            ?: jsonValue(item, JSON_CHAMBER_CODE_KEYS),
+                        sourceRecordId = jsonValue(businessItem, JSON_SOURCE_RECORD_ID_KEYS)
+                            ?: jsonValue(item, JSON_SOURCE_RECORD_ID_KEYS),
+                        taxNumber = jsonValue(businessItem, JSON_TAX_NUMBER_KEYS)
+                            ?: jsonValue(item, JSON_TAX_NUMBER_KEYS),
                     ),
                 )
             }
@@ -1018,9 +1051,62 @@ object OfficialRegistryImportParser {
 
         obj.optJSONArray("records")?.let { return it }
         obj.optJSONArray("data")?.let { return it }
+        if (obj.optJSONObject("uyelikTemelBilgileri") != null) {
+            return org.json.JSONArray().put(obj)
+        }
         throw IllegalArgumentException(
             "JSON içinde TOBB obResult/donusDegeri veya records/data dizisi bulunamadı.",
         )
+    }
+
+    private fun preferredTobbAddress(
+        array: org.json.JSONArray?,
+    ): JSONObject? {
+        if (array == null || array.length() == 0) return null
+        val candidates = buildList {
+            for (index in 0 until array.length()) {
+                array.optJSONObject(index)?.let(::add)
+            }
+        }
+        return candidates.firstOrNull { address ->
+            jsonValue(address, setOf("bitisTarihi", "bitis tarihi")).isNullOrBlank() &&
+                jsonValue(address, setOf("yazismaAdresi", "yazisma adresi")) == "1"
+        } ?: candidates.firstOrNull { address ->
+            jsonValue(address, setOf("bitisTarihi", "bitis tarihi")).isNullOrBlank()
+        } ?: candidates.firstOrNull()
+    }
+
+    private fun tobbAddressText(item: JSONObject): String? =
+        jsonValue(
+            item,
+            setOf("butunlesikAdres", "butunlesik adres", "serbestMetin", "serbest metin", "adres"),
+        ) ?: listOfNotNull(
+            jsonValue(item, setOf("mahalle")),
+            jsonValue(item, setOf("cadde")),
+            jsonValue(item, setOf("sokak")),
+            jsonValue(item, setOf("bulvar")),
+            jsonValue(item, setOf("meydan")),
+            jsonValue(item, setOf("siteAdi", "site adi")),
+            jsonValue(item, setOf("apartmanAdi", "apartman adi")),
+            jsonValue(item, setOf("dkno", "dis kapi no")),
+            jsonValue(item, setOf("ikno", "ic kapi no")),
+            jsonValue(item, setOf("postaKodu", "posta kodu")),
+        ).filter(String::isNotBlank)
+            .joinToString(" ")
+            .takeIf(String::isNotBlank)
+
+    private fun tobbPhoneValues(array: org.json.JSONArray?): List<String> {
+        if (array == null) return emptyList()
+        return buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val phone = jsonValue(item, setOf("telefonNo", "telefon no", "telefon"))
+                    ?: continue
+                val country = jsonValue(item, setOf("ulkeTelKodu", "ulke tel kodu"))
+                    ?.takeIf { it.isNotBlank() && it != "90" }
+                add(listOfNotNull(country, phone).joinToString(" "))
+            }
+        }
     }
 
     private fun parseJsonValue(value: String): Any {
