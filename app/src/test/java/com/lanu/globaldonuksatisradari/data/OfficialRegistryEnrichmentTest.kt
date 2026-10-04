@@ -469,4 +469,68 @@ class OfficialRegistryEnrichmentTest {
         assertNull(standalone)
     }
 
+
+    @Test
+    fun authorizedTobbAllMemberJsonParsesOfficialBusinessFields() {
+        val payload = """
+            {
+              "obResult": {
+                "hatali": false,
+                "donusDegeri": "[{\"uyeOid\":\"OID-1\",\"mersisNo\":\"0123456789000011\",\"unvan\":\"ÖRNEK MAKİNE SANAYİ AŞ\",\"ticaretSicilNo\":\"778899\",\"uyeOdaSicilNo\":\"445566\",\"vergiNo\":\"1234567890\",\"tckNo\":\"11111111111\",\"durum\":\"1\",\"adres\":\"Organize Sanayi Bölgesi No:1\",\"il\":\"16\",\"ilce\":\"Nilüfer\",\"mahalle\":\"Minareliçavuş\"}]"
+              }
+            }
+        """.trimIndent()
+
+        val record = OfficialRegistryImportParser.parse(
+            bytes = payload.toByteArray(Charsets.UTF_8),
+            fileName = "tobb-odaya-ait-uyeler.json",
+            source = OfficialRegistrySource.TOBB,
+            importedAtEpochMs = 900L,
+            defaultCity = "Bursa",
+        ).single()
+
+        assertEquals("0123456789000011", record.registrationNumber)
+        assertEquals("ÖRNEK MAKİNE SANAYİ AŞ", record.businessName)
+        assertEquals("1", record.status)
+        assertEquals("Bursa", record.city)
+        assertEquals("Nilüfer", record.district)
+        assertEquals("Minareliçavuş", record.neighborhood)
+        assertEquals("Organize Sanayi Bölgesi No:1", record.address)
+        assertTrue(OfficialRegistryTrust.isIdentityVerified(record))
+    }
+
+    @Test
+    fun authorizedTobbJsonRejectsNonTobbSourceDeclaration() {
+        val payload = """[{"mersisNo":"0123456789000011","unvan":"Örnek AŞ"}]"""
+
+        val result = runCatching {
+            OfficialRegistryImportParser.parse(
+                bytes = payload.toByteArray(Charsets.UTF_8),
+                fileName = "uye-listesi.json",
+                source = OfficialRegistrySource.MERSIS,
+                importedAtEpochMs = 901L,
+            )
+        }
+
+        assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun authorizedTobbJsonFallsBackToTradeRegistryWhenMersisIsMissing() {
+        val payload = """
+            [{"ticaretSicilNo":"778899","uyeOdaSicilNo":"445566","unvan":"Örnek Ticaret Ltd.","il":"Bursa","ilce":"Osmangazi"}]
+        """.trimIndent()
+
+        val record = OfficialRegistryImportParser.parse(
+            bytes = payload.toByteArray(Charsets.UTF_8),
+            fileName = "tobb.json",
+            source = OfficialRegistrySource.TOBB,
+            importedAtEpochMs = 902L,
+        ).single()
+
+        assertEquals("778899", record.registrationNumber)
+        assertEquals("Bursa", record.city)
+        assertEquals("Osmangazi", record.district)
+    }
+
 }
