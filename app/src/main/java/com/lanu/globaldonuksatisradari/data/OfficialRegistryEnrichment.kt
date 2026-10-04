@@ -150,7 +150,7 @@ object OfficialRegistryTrust {
      * file contains a registry identifier (oda sicil, MERSİS no, ESBİS sicil, etc.).
      */
     fun isIdentityVerified(record: OfficialRegistryRecord): Boolean =
-        !record.registrationNumber.isNullOrBlank()
+        !record.registrationNumber.isNullOrBlank() || !record.mersisNumber.isNullOrBlank()
 
     fun verified(records: List<OfficialRegistryRecord>): List<OfficialRegistryRecord> =
         records.filter(::isIdentityVerified)
@@ -546,7 +546,8 @@ object OfficialRegistryEnricher {
                 website = officialWebsite ?: business.website,
                 officialRegistryEvidence = OfficialRegistryEvidence(
                     source = match.source.descriptor,
-                    registrationNumber = match.registrationNumber,
+                    registrationNumber = match.registrationNumber
+                        ?: match.mersisNumber,
                     status = match.status,
                     importedAtEpochMs = match.importedAtEpochMs,
                     fieldsUsed = fieldsUsed,
@@ -608,7 +609,7 @@ object OfficialRegistryDiscovery {
         selectedDistrict: String?,
     ): VerifiedBusiness? {
         if (!OfficialRegistryTrust.isIdentityVerified(record)) return null
-        val registrationNumber = record.registrationNumber
+        val registrationNumber = (record.registrationNumber ?: record.mersisNumber)
             ?.trim()
             ?.takeIf(String::isNotEmpty)
             ?: return null
