@@ -59,4 +59,37 @@ class OfficialRegistryStoreInstrumentationTest {
         assertTrue(refreshed.any { it.registrationNumber == "AUDIT-$token-B" })
     }
 
+
+    @Test
+    fun registryRowsWithoutLocationNeverLeakIntoArbitraryCityOrDistrict() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val store = OfficialRegistryStore(context)
+        val token = System.nanoTime().toString()
+        val registration = "UNSCOPED-" + token
+        val csv = """
+            MERSİS No;Firma Ünvanı;Durum
+            $registration;Konumu Bilinmeyen Resmî Firma;Faal
+        """.trimIndent().toByteArray(Charsets.UTF_8)
+
+        store.importDocument(
+            source = OfficialRegistrySource.MERSIS,
+            fileName = "unscoped.csv",
+            bytes = csv,
+            importedAtEpochMs = 20_000L,
+        )
+
+        assertTrue(
+            store.records(OfficialRegistrySource.MERSIS)
+                .any { it.registrationNumber == registration },
+        )
+        assertTrue(
+            store.recordsFor(OfficialRegistrySource.MERSIS, "Bursa", null)
+                .none { it.registrationNumber == registration },
+        )
+        assertTrue(
+            store.recordsFor(OfficialRegistrySource.MERSIS, "İstanbul", "Kadıköy")
+                .none { it.registrationNumber == registration },
+        )
+    }
+
 }
