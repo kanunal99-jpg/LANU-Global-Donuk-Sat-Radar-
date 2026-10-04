@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.lanu.globaldonuksatisradari.data.OfficialRegistryImportDocument
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryImportSummary
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryRecord
 import com.lanu.globaldonuksatisradari.data.OfficialRegistrySource
@@ -36,6 +37,7 @@ import com.lanu.globaldonuksatisradari.data.OfficialRegistryTrust
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 
 @Composable
 fun OfficialRegistryImportCard(
@@ -65,23 +67,39 @@ fun OfficialRegistryImportCard(
     }
 
     val picker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
+        ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
         importing = true
-        status = "Resmî sicil dosyası kontrol ediliyor…"
+        status = "${uris.size} resmî sicil dosyası kontrol ediliyor…"
         val source = pendingSource
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    val fileName = displayName(context.contentResolver, uri)
-                        ?: "resmi-sicil-verisi"
-                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                        ?: error("Dosya okunamadı.")
-                    store.importDocument(
+                    require(uris.size <= MAX_SELECTED_FILES) {
+                        "Tek seferde en fazla $MAX_SELECTED_FILES dosya seçilebilir."
+                    }
+                    var totalBytes = 0L
+                    val documents = uris.map { uri ->
+                        val fileName = displayName(context.contentResolver, uri)
+                            ?: "resmi-sicil-verisi"
+                        val bytes = readBytesLimited(
+                            resolver = context.contentResolver,
+                            uri = uri,
+                            maxBytes = MAX_SINGLE_IMPORT_BYTES,
+                        )
+                        totalBytes += bytes.size
+                        require(totalBytes <= MAX_SELECTED_TOTAL_BYTES) {
+                            "Seçilen dosyaların toplamı 100 MB sınırını aşıyor."
+                        }
+                        OfficialRegistryImportDocument(
+                            fileName = fileName,
+                            bytes = bytes,
+                        )
+                    }
+                    store.importDocuments(
                         source = source,
-                        fileName = fileName,
-                        bytes = bytes,
+                        documents = documents,
                         defaultCity = if (source == OfficialRegistrySource.CHAMBER) defaultCity else null,
                     )
                 }
@@ -103,6 +121,8 @@ fun OfficialRegistryImportCard(
                 val message = buildString {
                     append(summary.source.displayName())
                     append(": ")
+                    append(summary.fileCount)
+                    append(" dosyadan ")
                     append(summary.importedCount)
                     append(" kayıt içe aktarıldı")
                     if (summary.activeCount > 0 || summary.inactiveCount > 0) {
@@ -119,14 +139,14 @@ fun OfficialRegistryImportCard(
                     if (summary.verifiedIdentityCount > 0) {
                         append("Sicil kimliği doğrulanan eşleşmeler CRM'i güvenli şekilde zenginleştirebilir.")
                     } else {
-                        append("Sicil/kayıt numarası bulunmadığı için bu dosya resmî kimlik kanıtı olarak kullanılmayacak.")
+                        append("Sicil/kayıt numarası bulunmadığı için bu dosyalar resmî kimlik kanıtı olarak kullanılmayacak.")
                     }
                 }
                 status = message
                 onImported(summary, records)
             }.onFailure { error ->
-                status = "Resmî sicil dosyası içe aktarılamadı: " +
-                    (error.message ?: "CSV/TSV/TXT veya XLSX sütunlarını kontrol edin.")
+                status = "Resmî sicil dosyaları içe aktarılamadı: " +
+                    (error.message ?: "CSV/TSV/TXT/XLSX/ZIP sütunlarını kontrol edin.")
             }
             importing = false
         }
@@ -140,7 +160,8 @@ fun OfficialRegistryImportCard(
             Text("Resmî sicil doğrulaması", style = MaterialTheme.typography.titleMedium)
             Text(
                 "İTO, diğer Ticaret/Ticaret ve Sanayi Odaları, TOBB, MERSİS veya ESBİS üzerinden resmî olarak " +
-                    "temin ettiğiniz CSV/XLSX çıktısını içe aktarın. Telefon 1/2, GSM, Cep ve Mobil alanları da okunur.",
+                    "temin ettiğiniz CSV/XLSX/ZIP çıktılarını tek seferde çoklu seçerek içe aktarın. " +
+                    "Telefon 1/2, GSM, Cep ve Mobil alanları da okunur.",
                 style = MaterialTheme.typography.bodySmall,
             )
 
@@ -184,6 +205,8 @@ fun OfficialRegistryImportCard(
                             "text/tab-separated-values",
                             "text/plain",
                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            "application/zip",
+                            "application/x-zip-compressed",
                             "application/octet-stream",
                         ),
                     )
@@ -191,7 +214,7 @@ fun OfficialRegistryImportCard(
                 enabled = !importing,
                 modifier = Modifier.fillMaxWidth().testTag("official_registry_import_button"),
             ) {
-                Text(if (importing) "İçe aktarılıyor…" else "${selectedSource.shortLabel()} dosyası içe aktar")
+                Text(if (importing) "İçe aktarılıyor…" else "${selectedSource.shortLabel()} dosyalarını içe aktar")
             }
 
             OutlinedButton(
@@ -351,7 +374,7 @@ fun OfficialRegistryImportCard(
             Text(
                 buildString {
                     append("Not: ODA/TOBB dahil kaynak seçimi dosyanın nereden alındığını beyan eder; resmî kimlik için sicil/kayıt numarası aranır. ")
-                    append("Giriş gerektiren oda/TOBB sistemleri otomatik kazınmaz; yetkili çıktı içe aktarılır.")
+                    append("Giriş gerektiren oda/TOBB/MERSİS/ESBİS sistemleri otomatik kazınmaz; yetkili çıktı çoklu dosya veya ZIP olarak içe aktarılır.")
                     if (!defaultCity.isNullOrBlank()) {
                         append(" ODA dosyasında İl sütunu yoksa seçili şehir ($defaultCity) kullanılır.")
                     }
@@ -377,6 +400,33 @@ private fun OfficialRegistrySource.displayName(): String = when (this) {
     OfficialRegistrySource.MERSIS -> "MERSİS"
     OfficialRegistrySource.ESBIS -> "ESBİS"
 }
+
+private fun readBytesLimited(
+    resolver: android.content.ContentResolver,
+    uri: Uri,
+    maxBytes: Int,
+): ByteArray {
+    val input = resolver.openInputStream(uri) ?: error("Dosya okunamadı.")
+    return input.use { stream ->
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(16 * 1024)
+        var total = 0
+        while (true) {
+            val read = stream.read(buffer)
+            if (read <= 0) break
+            total += read
+            require(total <= maxBytes) {
+                "Tek bir resmî sicil dosyası 25 MB sınırını aşıyor."
+            }
+            output.write(buffer, 0, read)
+        }
+        output.toByteArray()
+    }
+}
+
+private const val MAX_SELECTED_FILES = 100
+private const val MAX_SINGLE_IMPORT_BYTES = 25 * 1024 * 1024
+private const val MAX_SELECTED_TOTAL_BYTES = 100L * 1024L * 1024L
 
 private fun displayName(
     resolver: android.content.ContentResolver,
