@@ -58,7 +58,7 @@ object OfficialRegistryExcelExporter {
                     "",
                     record.businessName,
                     "",
-                    "",
+                    record.taxOrNationalId.orEmpty(),
                     record.phone.orEmpty(),
                     record.city.orEmpty(),
                     record.district.orEmpty(),
