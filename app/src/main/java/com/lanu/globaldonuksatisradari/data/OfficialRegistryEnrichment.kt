@@ -39,8 +39,8 @@ enum class OfficialRegistrySource {
                 id = "official-tobb",
                 name = "TOBB Resmî Üye / Sanayi Kaydı",
                 publisher = "Türkiye Odalar ve Borsalar Birliği",
-                licenseOrTerms = "https://uye.tobb.org.tr/organizasyon/firma-index.jsp",
-                sourceUrl = "https://www.tobb.org.tr/",
+                licenseOrTerms = "https://webservistest.tobb.org.tr/Kilavuz2.pdf",
+                sourceUrl = "https://webservistest.tobb.org.tr/",
                 lastVerifiedAtEpochMs = SOURCE_POLICY_REVIEWED_AT,
             )
             MERSIS -> DataSourceDescriptor(
@@ -69,7 +69,10 @@ enum class OfficialRegistrySource {
                 TOBB -> SourceAccessMethod.API
                 MERSIS, ESBIS -> SourceAccessMethod.AUTHENTICATED_EXPORT
             },
-            scope = "Kullanıcının resmî kanaldan temin ettiği firma/esnaf çıktısındaki işletme adı, sicil durumu, adres, telefon ve web alanları",
+            scope = when (this) {
+                TOBB -> "Yetkili Oda/Borsa web servisinden veya resmî exporttan alınan işletme kimliği, sicil durumu, MERSİS/oda sicil, NACE, adres ve kurumsal iletişim alanları"
+                else -> "Kullanıcının resmî kanaldan temin ettiği firma/esnaf çıktısındaki işletme adı, sicil durumu, adres, telefon ve web alanları"
+            },
             permittedUseVerified = true,
             supportsBulk = true,
             fieldNames = setOf(
@@ -83,6 +86,12 @@ enum class OfficialRegistrySource {
                 "phone",
                 "website",
                 "nace_code",
+                "mersis_number",
+                "signboard_name",
+                "business_type",
+                "tax_number",
+                "chamber_code",
+                "source_record_id",
             ),
         )
 
