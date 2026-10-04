@@ -23,6 +23,7 @@ class OfficialRegistryExcelExporterTest {
                 website = "https://example.com",
                 importedAtEpochMs = 1L,
                 naceCode = "47.11.01",
+                taxOrNationalId = "1234567890",
             ),
             OfficialRegistryRecord(
                 source = OfficialRegistrySource.MERSIS,
@@ -52,6 +53,7 @@ class OfficialRegistryExcelExporterTest {
         assertTrue(sheetXml.contains("Basra Caddesi No: 10"))
         assertTrue(sheetXml.contains("İTO"))
         assertTrue(sheetXml.contains("123456"))
+        assertTrue(sheetXml.contains("1234567890"))
         assertTrue(sheetXml.contains("47.11.01"))
         assertTrue(sheetXml.contains("FAAL"))
         assertTrue(sheetXml.contains("Doğrulandı"))
