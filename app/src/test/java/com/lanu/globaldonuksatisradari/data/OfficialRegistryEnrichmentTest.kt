@@ -401,12 +401,18 @@ class OfficialRegistryEnrichmentTest {
     fun officialSourceContractsRequireAuthorizedImportInsteadOfAnonymousScraping() {
         assertEquals(SourceAccessMethod.OFFICIAL_BULK_REQUEST, OfficialRegistrySource.ITO.contract.accessMethod)
         assertEquals(SourceAccessMethod.OFFICIAL_BULK_REQUEST, OfficialRegistrySource.CHAMBER.contract.accessMethod)
-        assertEquals(SourceAccessMethod.AUTHENTICATED_EXPORT, OfficialRegistrySource.TOBB.contract.accessMethod)
-        assertEquals(SourceAccessMethod.AUTHENTICATED_EXPORT, OfficialRegistrySource.MERSIS.contract.accessMethod)
-        assertEquals(SourceAccessMethod.AUTHENTICATED_EXPORT, OfficialRegistrySource.ESBIS.contract.accessMethod)
+        assertEquals(SourceAccessMethod.MANUAL_IMPORT, OfficialRegistrySource.TOBB.contract.accessMethod)
+        assertEquals(SourceAccessMethod.MANUAL_IMPORT, OfficialRegistrySource.MERSIS.contract.accessMethod)
+        assertEquals(SourceAccessMethod.MANUAL_IMPORT, OfficialRegistrySource.ESBIS.contract.accessMethod)
         assertTrue(OfficialRegistrySource.entries.all { it.contract.permittedUseVerified })
-        assertTrue(OfficialRegistrySource.entries.all { it.contract.supportsBulk })
+        assertTrue(OfficialRegistrySource.ITO.contract.supportsBulk)
+        assertTrue(OfficialRegistrySource.CHAMBER.contract.supportsBulk)
+        assertFalse(OfficialRegistrySource.TOBB.contract.supportsBulk)
+        assertFalse(OfficialRegistrySource.MERSIS.contract.supportsBulk)
+        assertFalse(OfficialRegistrySource.ESBIS.contract.supportsBulk)
         assertFalse(OfficialRegistrySource.entries.any { it.contract.accessMethod == SourceAccessMethod.PUBLIC_SEARCH })
+        assertTrue(OfficialRegistrySource.MERSIS.acquisitionGuidance.contains("Firma Sorgu"))
+        assertTrue(OfficialRegistrySource.ESBIS.acquisitionGuidance.contains("yetkili", ignoreCase = true))
     }
 
     @Test
@@ -467,6 +473,27 @@ class OfficialRegistryEnrichmentTest {
         )
 
         assertNull(standalone)
+    }
+
+
+    @Test
+    fun authorizedMersisExportPreservesExplicitVknWithoutInferringIt() {
+        val csv = """
+            MERSİS No;Firma Ünvanı;Vergi Kimlik No;Durum;İl;İlçe
+            0123456789012345;Örnek MERSİS Firma;1234567890;Faal;Bursa;Nilüfer
+            9999999999999999;Geçersiz Kimlikli Firma;ABC123;Faal;Bursa;Nilüfer
+        """.trimIndent()
+
+        val records = OfficialRegistryImportParser.parse(
+            bytes = csv.toByteArray(Charsets.UTF_8),
+            fileName = "yetkili-mersis.csv",
+            source = OfficialRegistrySource.MERSIS,
+            importedAtEpochMs = 900L,
+        )
+
+        assertEquals("1234567890", records[0].taxOrNationalId)
+        assertNull(records[1].taxOrNationalId)
+        assertTrue(OfficialRegistryTrust.isIdentityVerified(records[0]))
     }
 
 }
