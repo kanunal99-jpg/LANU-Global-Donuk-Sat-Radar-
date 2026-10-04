@@ -233,6 +233,83 @@ class CrmRoomInstrumentationTest {
         }
     }
 
+
+    @Test
+    fun activeOfficialRegistryEnrichment_preservesSignboardTaxAndNaceFields() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, LanuCrmDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+
+        try {
+            var idIndex = 0
+            val repository = LocalCrmRepository(
+                database = database,
+                now = { 4_000L },
+                idGenerator = { "active-registry-" + (idIndex++) },
+            )
+            val source = DataSourceDescriptor(
+                id = "osm-overpass",
+                name = "OpenStreetMap Overpass",
+                publisher = "OpenStreetMap",
+                licenseOrTerms = "ODbL",
+                sourceUrl = "https://www.openstreetmap.org/",
+                lastVerifiedAtEpochMs = 1L,
+            )
+            val customer = repository.addBusinessAsCustomer(
+                business = VerifiedBusiness(
+                    id = "osm-active-registry-test",
+                    name = "Örnek Ticaret Limited Şirketi",
+                    city = "Bursa",
+                    district = "İnegöl",
+                    neighborhood = "Cuma",
+                    source = source,
+                    verifiedAtEpochMs = 1L,
+                    latitude = 40.08,
+                    longitude = 29.51,
+                    address = "Eski Adres",
+                ),
+                ownerUserId = "owner-a",
+            )
+
+            val result = repository.enrichCustomersFromOfficialRegistryForOwner(
+                records = listOf(
+                    OfficialRegistryRecord(
+                        source = OfficialRegistrySource.CHAMBER,
+                        registrationNumber = "ODA-778899",
+                        businessName = "Örnek Ticaret Limited Şirketi",
+                        signboardName = "Örnek Market",
+                        taxOrNationalId = "1234567890",
+                        status = "Faal",
+                        city = "Bursa",
+                        district = "İnegöl",
+                        neighborhood = "Cuma",
+                        address = "Yeni Resmî Adres",
+                        phone = "02240000000",
+                        website = "https://ornek.example",
+                        importedAtEpochMs = 3_000L,
+                        naceCode = "47.11.01",
+                    ),
+                ),
+                ownerUserId = "owner-a",
+            )
+
+            assertEquals(1, result.matched)
+            assertEquals(1, result.updated)
+            val updated = database.customerDao().findById(customer.id)!!
+            assertEquals("Örnek Market", updated.signboardName)
+            assertEquals("1234567890", updated.taxOrNationalId)
+            assertEquals("NACE 47.11.01", updated.businessType)
+            assertEquals("Yeni Resmî Adres", updated.address)
+            assertEquals("02240000000", updated.phone)
+            assertEquals("https://ornek.example", updated.website)
+            assertEquals(CrmRegistryStatus.ACTIVE.name, updated.registryStatus)
+            assertEquals("ODA-778899", updated.registryNumber)
+        } finally {
+            database.close()
+        }
+    }
+
     @Test
     fun manualCustomerPoint_persistsAddressCoordinatesAndEntersRoutinePool() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
