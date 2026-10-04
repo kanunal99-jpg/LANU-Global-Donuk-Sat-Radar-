@@ -110,6 +110,8 @@ data class OfficialRegistryEvidence(
     val signboardName: String? = null,
     val businessType: String? = null,
     val taxNumber: String? = null,
+    val provinceCode: String? = null,
+    val districtCode: String? = null,
 ) {
     val explicitlyActive: Boolean
         get() = status?.let(OfficialRegistryStatus::isActive) == true
@@ -469,6 +471,8 @@ class OfficialRegistryStore(
             put("chamberCode", record.chamberCode ?: JSONObject.NULL)
             put("sourceRecordId", record.sourceRecordId ?: JSONObject.NULL)
             put("taxNumber", record.taxNumber ?: JSONObject.NULL)
+            put("provinceCode", record.provinceCode ?: JSONObject.NULL)
+            put("districtCode", record.districtCode ?: JSONObject.NULL)
             put("importedAtEpochMs", record.importedAtEpochMs)
         }
 
@@ -493,6 +497,8 @@ class OfficialRegistryStore(
             chamberCode = optionalString(item, "chamberCode"),
             sourceRecordId = optionalString(item, "sourceRecordId"),
             taxNumber = optionalString(item, "taxNumber"),
+            provinceCode = optionalString(item, "provinceCode"),
+            districtCode = optionalString(item, "districtCode"),
         )
 
     private fun optionalString(item: JSONObject, key: String): String? =
@@ -817,6 +823,39 @@ internal object OfficialRegistryNormalizer {
     fun phone(value: String?): String = phones(value).firstOrNull().orEmpty()
 }
 
+internal object TurkeyProvinceCodes {
+    private val names = mapOf(
+        "01" to "Adana", "02" to "Adıyaman", "03" to "Afyonkarahisar", "04" to "Ağrı",
+        "05" to "Amasya", "06" to "Ankara", "07" to "Antalya", "08" to "Artvin",
+        "09" to "Aydın", "10" to "Balıkesir", "11" to "Bilecik", "12" to "Bingöl",
+        "13" to "Bitlis", "14" to "Bolu", "15" to "Burdur", "16" to "Bursa",
+        "17" to "Çanakkale", "18" to "Çankırı", "19" to "Çorum", "20" to "Denizli",
+        "21" to "Diyarbakır", "22" to "Edirne", "23" to "Elazığ", "24" to "Erzincan",
+        "25" to "Erzurum", "26" to "Eskişehir", "27" to "Gaziantep", "28" to "Giresun",
+        "29" to "Gümüşhane", "30" to "Hakkâri", "31" to "Hatay", "32" to "Isparta",
+        "33" to "Mersin", "34" to "İstanbul", "35" to "İzmir", "36" to "Kars",
+        "37" to "Kastamonu", "38" to "Kayseri", "39" to "Kırklareli", "40" to "Kırşehir",
+        "41" to "Kocaeli", "42" to "Konya", "43" to "Kütahya", "44" to "Malatya",
+        "45" to "Manisa", "46" to "Kahramanmaraş", "47" to "Mardin", "48" to "Muğla",
+        "49" to "Muş", "50" to "Nevşehir", "51" to "Niğde", "52" to "Ordu",
+        "53" to "Rize", "54" to "Sakarya", "55" to "Samsun", "56" to "Siirt",
+        "57" to "Sinop", "58" to "Sivas", "59" to "Tekirdağ", "60" to "Tokat",
+        "61" to "Trabzon", "62" to "Tunceli", "63" to "Şanlıurfa", "64" to "Uşak",
+        "65" to "Van", "66" to "Yozgat", "67" to "Zonguldak", "68" to "Aksaray",
+        "69" to "Bayburt", "70" to "Karaman", "71" to "Kırıkkale", "72" to "Batman",
+        "73" to "Şırnak", "74" to "Bartın", "75" to "Ardahan", "76" to "Iğdır",
+        "77" to "Yalova", "78" to "Karabük", "79" to "Kilis", "80" to "Osmaniye",
+        "81" to "Düzce",
+    )
+
+    fun nameFor(rawCode: String): String? =
+        rawCode.trim().toIntOrNull()
+            ?.takeIf { it in 1..81 }
+            ?.toString()
+            ?.padStart(2, '0')
+            ?.let(names::get)
+}
+
 object OfficialRegistryImportParser {
     fun parse(
         bytes: ByteArray,
@@ -919,13 +958,17 @@ object OfficialRegistryImportParser {
                     ?: value(row, MERSIS_HEADERS),
                 businessName = name,
                 status = value(row, STATUS_HEADERS),
-                city = value(row, CITY_HEADERS)
-                    ?: when (source) {
+                city = resolveOfficialCity(
+                    value(row, CITY_HEADERS),
+                    when (source) {
                         OfficialRegistrySource.ITO -> "İstanbul"
-                        OfficialRegistrySource.CHAMBER -> defaultCity?.trim()?.takeIf(String::isNotBlank)
-                        else -> null
+                        OfficialRegistrySource.CHAMBER -> defaultCity
+                        else -> defaultCity
                     },
-                district = value(row, DISTRICT_HEADERS) ?: value(row, SEMT_HEADERS),
+                ),
+                district = resolveOfficialDistrict(
+                    value(row, DISTRICT_HEADERS) ?: value(row, SEMT_HEADERS),
+                ),
                 neighborhood = value(row, NEIGHBORHOOD_HEADERS),
                 address = value(row, ADDRESS_HEADERS),
                 phone = phoneValue(row),
@@ -939,6 +982,10 @@ object OfficialRegistryImportParser {
                 chamberCode = value(row, CHAMBER_CODE_HEADERS),
                 sourceRecordId = value(row, SOURCE_RECORD_ID_HEADERS),
                 taxNumber = value(row, TAX_NUMBER_HEADERS),
+                provinceCode = administrativeCode(value(row, CITY_HEADERS)),
+                districtCode = administrativeCode(
+                    value(row, DISTRICT_HEADERS) ?: value(row, SEMT_HEADERS),
+                ),
             )
         }
     }
@@ -967,14 +1014,19 @@ object OfficialRegistryImportParser {
                 val name = jsonValue(businessItem, JSON_NAME_KEYS)
                     ?: jsonValue(item, JSON_NAME_KEYS)
                     ?: continue
-                val city = jsonValue(businessItem, JSON_CITY_KEYS)
+                val rawCity = jsonValue(businessItem, JSON_CITY_KEYS)
                     ?: addressItem?.let { jsonValue(it, JSON_CITY_KEYS) }
                     ?: jsonValue(item, JSON_CITY_KEYS)
-                    ?: when (source) {
+                val rawDistrict = jsonValue(businessItem, JSON_DISTRICT_KEYS)
+                    ?: addressItem?.let { jsonValue(it, JSON_DISTRICT_KEYS) }
+                    ?: jsonValue(item, JSON_DISTRICT_KEYS)
+                val city = resolveOfficialCity(
+                    rawCity,
+                    when (source) {
                         OfficialRegistrySource.ITO -> "İstanbul"
-                        OfficialRegistrySource.CHAMBER -> defaultCity?.trim()?.takeIf(String::isNotBlank)
-                        else -> defaultCity?.trim()?.takeIf(String::isNotBlank)
-                    }
+                        else -> defaultCity
+                    },
+                )
                 val phoneValues = buildList {
                     addAll(jsonValues(businessItem, JSON_PHONE_KEYS))
                     addAll(jsonValues(item, JSON_PHONE_KEYS))
@@ -991,9 +1043,7 @@ object OfficialRegistryImportParser {
                         status = jsonValue(businessItem, JSON_STATUS_KEYS)
                             ?: jsonValue(item, JSON_STATUS_KEYS),
                         city = city,
-                        district = jsonValue(businessItem, JSON_DISTRICT_KEYS)
-                            ?: addressItem?.let { jsonValue(it, JSON_DISTRICT_KEYS) }
-                            ?: jsonValue(item, JSON_DISTRICT_KEYS),
+                        district = resolveOfficialDistrict(rawDistrict),
                         neighborhood = jsonValue(businessItem, JSON_NEIGHBORHOOD_KEYS)
                             ?: addressItem?.let { jsonValue(it, JSON_NEIGHBORHOOD_KEYS) }
                             ?: jsonValue(item, JSON_NEIGHBORHOOD_KEYS),
@@ -1028,6 +1078,8 @@ object OfficialRegistryImportParser {
                             ?: jsonValue(item, JSON_SOURCE_RECORD_ID_KEYS),
                         taxNumber = jsonValue(businessItem, JSON_TAX_NUMBER_KEYS)
                             ?: jsonValue(item, JSON_TAX_NUMBER_KEYS),
+                        provinceCode = administrativeCode(rawCity),
+                        districtCode = administrativeCode(rawDistrict),
                     ),
                 )
             }
@@ -1150,6 +1202,27 @@ object OfficialRegistryImportParser {
                 }
             }
         }
+    }
+
+    private fun resolveOfficialCity(value: String?, fallback: String?): String? {
+        val cleaned = value?.trim()?.takeIf(String::isNotEmpty)
+        val code = administrativeCode(cleaned)
+        if (code != null) {
+            TurkeyProvinceCodes.nameFor(code)?.let { return it }
+            return fallback?.trim()?.takeIf(String::isNotEmpty)
+        }
+        return cleaned ?: fallback?.trim()?.takeIf(String::isNotEmpty)
+    }
+
+    private fun resolveOfficialDistrict(value: String?): String? {
+        val cleaned = value?.trim()?.takeIf(String::isNotEmpty) ?: return null
+        return if (administrativeCode(cleaned) != null) null else cleaned
+    }
+
+    private fun administrativeCode(value: String?): String? {
+        val cleaned = value?.trim()?.takeIf(String::isNotEmpty) ?: return null
+        if (!cleaned.all(Char::isDigit)) return null
+        return cleaned
     }
 
     internal fun parseXlsx(bytes: ByteArray): List<List<String>> {
