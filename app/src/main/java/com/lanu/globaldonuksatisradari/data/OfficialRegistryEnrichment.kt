@@ -915,7 +915,8 @@ object OfficialRegistryImportParser {
             val name = value(row, NAME_HEADERS) ?: return@mapNotNull null
             OfficialRegistryRecord(
                 source = source,
-                registrationNumber = value(row, REGISTRATION_HEADERS),
+                registrationNumber = value(row, REGISTRATION_HEADERS)
+                    ?: value(row, MERSIS_HEADERS),
                 businessName = name,
                 status = value(row, STATUS_HEADERS),
                 city = value(row, CITY_HEADERS)
@@ -971,7 +972,8 @@ object OfficialRegistryImportParser {
                 add(
                     OfficialRegistryRecord(
                         source = source,
-                        registrationNumber = jsonValue(item, JSON_REGISTRATION_KEYS),
+                        registrationNumber = jsonValue(item, JSON_REGISTRATION_KEYS)
+                            ?: jsonValue(item, JSON_MERSIS_KEYS),
                         businessName = name,
                         status = jsonValue(item, JSON_STATUS_KEYS),
                         city = city,
@@ -1238,8 +1240,6 @@ object OfficialRegistryImportParser {
         "oda sicil numarasi",
         "ticaret sicil no",
         "ticaret sicil numarasi",
-        "mersis no",
-        "mersis numarasi",
         "esnaf sicil no",
         "esnaf sicil numarasi",
         "sicil kayit no",
