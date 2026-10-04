@@ -75,6 +75,8 @@ enum class OfficialRegistrySource {
             fieldNames = setOf(
                 "registration_number",
                 "business_name",
+                "signboard_name",
+                "tax_or_national_id",
                 "status",
                 "city",
                 "district",
@@ -118,6 +120,8 @@ data class OfficialRegistryRecord(
     val website: String?,
     val importedAtEpochMs: Long,
     val naceCode: String? = null,
+    val signboardName: String? = null,
+    val taxOrNationalId: String? = null,
 )
 
 data class OfficialRegistryImportDocument(
@@ -473,6 +477,8 @@ class OfficialRegistryStore(
             put("phone", record.phone ?: JSONObject.NULL)
             put("website", record.website ?: JSONObject.NULL)
             put("naceCode", record.naceCode ?: JSONObject.NULL)
+            put("signboardName", record.signboardName ?: JSONObject.NULL)
+            put("taxOrNationalId", record.taxOrNationalId ?: JSONObject.NULL)
             put("importedAtEpochMs", record.importedAtEpochMs)
         }
 
@@ -490,6 +496,8 @@ class OfficialRegistryStore(
             website = optionalString(item, "website"),
             importedAtEpochMs = item.getLong("importedAtEpochMs"),
             naceCode = optionalString(item, "naceCode"),
+            signboardName = optionalString(item, "signboardName"),
+            taxOrNationalId = optionalString(item, "taxOrNationalId"),
         )
 
     private fun optionalString(item: JSONObject, key: String): String? =
@@ -550,6 +558,8 @@ object OfficialRegistryEnricher {
 
             if (!match.status.isNullOrBlank()) fieldsUsed += "status"
             if (!match.registrationNumber.isNullOrBlank()) fieldsUsed += "registration_number"
+            if (!match.signboardName.isNullOrBlank()) fieldsUsed += "signboard_name"
+            if (!match.taxOrNationalId.isNullOrBlank()) fieldsUsed += "tax_or_national_id"
             if (officialAddress != null) fieldsUsed += "address"
             if (officialPhone != null) fieldsUsed += "phone"
             if (officialWebsite != null) fieldsUsed += "website"
@@ -635,6 +645,8 @@ object OfficialRegistryDiscovery {
 
         val fieldsUsed = linkedSetOf("registration_number")
         if (!record.status.isNullOrBlank()) fieldsUsed += "status"
+        if (!record.signboardName.isNullOrBlank()) fieldsUsed += "signboard_name"
+        if (!record.taxOrNationalId.isNullOrBlank()) fieldsUsed += "tax_or_national_id"
         if (!record.address.isNullOrBlank()) fieldsUsed += "address"
         if (!record.phone.isNullOrBlank()) fieldsUsed += "phone"
         if (!record.website.isNullOrBlank()) fieldsUsed += "website"
@@ -993,6 +1005,8 @@ object OfficialRegistryImportParser {
                 website = value(row, WEBSITE_HEADERS)?.let(::sanitizeWebsite),
                 importedAtEpochMs = importedAtEpochMs,
                 naceCode = value(row, NACE_HEADERS),
+                signboardName = value(row, SIGNBOARD_HEADERS),
+                taxOrNationalId = value(row, TAX_ID_HEADERS),
             )
         }
     }
@@ -1173,6 +1187,26 @@ object OfficialRegistryImportParser {
         "kayit no",
         "kayit numarasi",
     )
+    private val SIGNBOARD_HEADERS = setOf(
+        "tabela adi",
+        "tabela unvani",
+        "tabela unvan",
+        "isyeri adi",
+        "is yeri adi",
+        "magaza adi",
+    )
+    private val TAX_ID_HEADERS = setOf(
+        "vergi no",
+        "vergi numarasi",
+        "vergi kimlik no",
+        "vergi kimlik numarasi",
+        "vkn",
+        "tc vergi no",
+        "tc kimlik no",
+        "tc kimlik numarasi",
+        "tckn",
+    )
+
     private val STATUS_HEADERS = setOf(
         "durum",
         "uyelik durumu",
