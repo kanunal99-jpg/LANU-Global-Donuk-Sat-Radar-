@@ -476,7 +476,7 @@ class OfficialRegistryEnrichmentTest {
             {
               "obResult": {
                 "hatali": false,
-                "donusDegeri": "[{\\\"uyeOid\\\":\\\"OID-77\\\",\\\"unvan\\\":\\\"Örnek Makina Sanayi AŞ\\\",\\\"tabelaUnvani\\\":\\\"Örnek Makina\\\",\\\"mersisNo\\\":\\\"0123456789012345\\\",\\\"ticaretSicilNo\\\":\\\"556677\\\",\\\"uyeOdaSicilNo\\\":\\\"9988\\\",\\\"odaBorsaNo\\\":\\\"34\\\",\\\"durum\\\":\\\"FAAL\\\",\\\"adres\\\":\\\"Organize Sanayi Bölgesi No:5\\\",\\\"il\\\":\\\"İstanbul\\\",\\\"ilce\\\":\\\"Tuzla\\\",\\\"mahalle\\\":\\\"Aydınlı\\\",\\\"anaFaaliyetKodu\\\":\\\"28.29.90\\\",\\\"anaFaaliyetAciklamasi\\\":\\\"Diğer genel amaçlı makinelerin imalatı\\\",\\\"webAdresi\\\":\\\"ornekmakina.example\\\",\\\"epostaAdres\\\":\\\"INFO@ORNEKMAKINA.EXAMPLE\\\"}]"
+                "donusDegeri": "[{\\\"uyeOid\\\":\\\"OID-77\\\",\\\"unvan\\\":\\\"Örnek Makina Sanayi AŞ\\\",\\\"tabelaUnvani\\\":\\\"Örnek Makina\\\",\\\"mersisNo\\\":\\\"0123456789012345\\\",\\\"ticaretSicilNo\\\":\\\"556677\\\",\\\"uyeOdaSicilNo\\\":\\\"9988\\\",\\\"odaBorsaNo\\\":\\\"34\\\",\\\"vergiNo\\\":\\\"1234567890\\\",\\\"durum\\\":\\\"FAAL\\\",\\\"adres\\\":\\\"Organize Sanayi Bölgesi No:5\\\",\\\"il\\\":\\\"İstanbul\\\",\\\"ilce\\\":\\\"Tuzla\\\",\\\"mahalle\\\":\\\"Aydınlı\\\",\\\"anaFaaliyetKodu\\\":\\\"28.29.90\\\",\\\"anaFaaliyetAciklamasi\\\":\\\"Diğer genel amaçlı makinelerin imalatı\\\",\\\"webAdresi\\\":\\\"ornekmakina.example\\\",\\\"epostaAdres\\\":\\\"INFO@ORNEKMAKINA.EXAMPLE\\\"}]"
               }
             }
         """.trimIndent()
