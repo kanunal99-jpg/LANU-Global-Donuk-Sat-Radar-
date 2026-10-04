@@ -809,8 +809,13 @@ object OfficialRegistryImportParser {
         importedAtEpochMs: Long,
         defaultCity: String? = null,
     ): List<OfficialRegistryRecord> {
+        if (fileName.endsWith(".xlsx", ignoreCase = true)) {
+            return parseXlsxSheets(bytes).flatMap { rows ->
+                rowsToRecords(rows, source, importedAtEpochMs, defaultCity)
+            }
+        }
+
         val rows = when {
-            fileName.endsWith(".xlsx", ignoreCase = true) -> parseXlsx(bytes)
             fileName.endsWith(".csv", ignoreCase = true) ||
                 fileName.endsWith(".txt", ignoreCase = true) ||
                 fileName.endsWith(".tsv", ignoreCase = true) -> parseDelimited(bytes.toString(Charsets.UTF_8))
@@ -902,23 +907,34 @@ object OfficialRegistryImportParser {
         }
     }
 
-    internal fun parseXlsx(bytes: ByteArray): List<List<String>> {
+    internal fun parseXlsx(bytes: ByteArray): List<List<String>> =
+        parseXlsxSheets(bytes).firstOrNull().orEmpty()
+
+    internal fun parseXlsxSheets(bytes: ByteArray): List<List<List<String>>> {
         var sharedStringsXml: ByteArray? = null
-        var sheetXml: ByteArray? = null
+        val sheetXmls = mutableListOf<Pair<String, ByteArray>>()
         ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
             while (true) {
                 val entry = zip.nextEntry ?: break
                 when {
                     entry.name == "xl/sharedStrings.xml" -> sharedStringsXml = zip.readBytes()
-                    sheetXml == null &&
-                        entry.name.startsWith("xl/worksheets/") &&
-                        entry.name.endsWith(".xml") -> sheetXml = zip.readBytes()
+                    entry.name.startsWith("xl/worksheets/") &&
+                        entry.name.endsWith(".xml") -> sheetXmls += entry.name to zip.readBytes()
                 }
                 zip.closeEntry()
             }
         }
-        val sheet = sheetXml ?: throw IllegalArgumentException("XLSX içinde çalışma sayfası bulunamadı.")
+        require(sheetXmls.isNotEmpty()) { "XLSX içinde çalışma sayfası bulunamadı." }
         val sharedStrings = sharedStringsXml?.let(::parseSharedStrings).orEmpty()
+        return sheetXmls
+            .sortedBy { it.first }
+            .map { (_, sheet) -> parseSheetRows(sheet, sharedStrings) }
+    }
+
+    private fun parseSheetRows(
+        sheet: ByteArray,
+        sharedStrings: List<String>,
+    ): List<List<String>> {
         val document = secureFactory().newDocumentBuilder().parse(ByteArrayInputStream(sheet))
         val rowNodes = document.getElementsByTagNameNS("*", "row")
         val rows = mutableListOf<List<String>>()
