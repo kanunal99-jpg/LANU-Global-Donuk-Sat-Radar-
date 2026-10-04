@@ -160,7 +160,7 @@ fun OfficialRegistryImportCard(
             Text("Resmî sicil doğrulaması", style = MaterialTheme.typography.titleMedium)
             Text(
                 "İTO, diğer Ticaret/Ticaret ve Sanayi Odaları, TOBB, MERSİS veya ESBİS üzerinden resmî olarak " +
-                    "temin ettiğiniz CSV/XLSX/ZIP çıktılarını tek seferde çoklu seçerek içe aktarın. " +
+                    "temin ettiğiniz CSV/XLSX/JSON/ZIP çıktılarını tek seferde çoklu seçerek içe aktarın. " +
                     "Telefon 1/2, GSM, Cep ve Mobil alanları da okunur.",
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -205,6 +205,7 @@ fun OfficialRegistryImportCard(
                             "text/tab-separated-values",
                             "text/plain",
                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            "application/json",
                             "application/zip",
                             "application/x-zip-compressed",
                             "application/octet-stream",
