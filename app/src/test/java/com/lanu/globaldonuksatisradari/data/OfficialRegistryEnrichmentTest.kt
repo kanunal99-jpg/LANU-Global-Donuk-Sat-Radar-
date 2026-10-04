@@ -559,7 +559,7 @@ class OfficialRegistryEnrichmentTest {
             {
               "obResult": {
                 "hatali": false,
-                "donusDegeri": "[{\\\"uyeOid\\\":\\\"U-1\\\",\\\"mersisNo\\\":\\\"0123456789012345\\\",\\\"unvan\\\":\\\"TOBB TEST SANAYİ AŞ\\\",\\\"uyeOdaSicilNo\\\":\\\"5544\\\",\\\"ticaretSicilNo\\\":\\\"7788\\\",\\\"vergiNo\\\":\\\"1234567890\\\",\\\"durum\\\":\\\"Faal\\\",\\\"adres\\\":\\\"Organize Sanayi Bölgesi No:1\\\",\\\"il\\\":\\\"16\\\",\\\"ilce\\\":\\\"205\\\",\\\"mahalle\\\":\\\"OSB\\\",\\\"meslekGrubuAdi\\\":\\\"Makine ve İmalat\\\"}]"
+                "donusDegeri": "[{\"uyeOid\":\"U-1\",\"mersisNo\":\"0123456789012345\",\"unvan\":\"TOBB TEST SANAYİ AŞ\",\"uyeOdaSicilNo\":\"5544\",\"ticaretSicilNo\":\"7788\",\"vergiNo\":\"1234567890\",\"durum\":\"Faal\",\"adres\":\"Organize Sanayi Bölgesi No:1\",\"il\":\"16\",\"ilce\":\"205\",\"mahalle\":\"OSB\",\"meslekGrubuAdi\":\"Makine ve İmalat\"}]"
               }
             }
         """.trimIndent()
