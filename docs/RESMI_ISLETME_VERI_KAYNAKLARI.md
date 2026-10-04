@@ -42,7 +42,35 @@ LANU kararı:
 - Tescil/tadil/terkin durumu ACTIVE/INACTIVE/UNVERIFIED semantiğine dönüştürülür.
 - Yetkisiz oturum otomasyonu yapılmaz.
 
+## 3. TOBB / Oda-Borsa Web Servisleri / Üye Firma
+
+Resmî teknik kaynaklar:
+- https://webservistest.tobb.org.tr/
+- https://webservistest.tobb.org.tr/Kilavuz2.pdf
+- https://uye.tobb.org.tr/organizasyon/firma-index.jsp
+- https://ub.tobb.org.tr/oda
+- https://www.tobb.org.tr/OdaveBorsalarDB/Sayfalar/oda--borsa-sorgulama.php
+
+Doğrulanan web servis yolu:
+- TOBB'un Oda/Borsa Web Servis API referansı bulunmaktadır.
+- Sistem WS-I Basic Profile 1.1 SOAP kullanır.
+- Erişim WS-Security UsernameToken + PasswordDigest ile korunur.
+- Resmî test ekranı Api, Secret ve OdaKodu bilgileri ister.
+- `odayaAitUyeleriSorgula` parametresiz çağrılırsa yetkili olunan odaya ait tüm üyeleri döndürür.
+- Üye liste sonucunda MERSİS no, ticaret sicil no, oda sicil no, vergi no, durum, adres, il/ilçe/mahalle ve meslek grubu bilgileri bulunabilir.
+- `uyeKartiSorgula` ile tabela unvanı, web/e-posta, telefon, NACE/faaliyet, üyelik durumu gibi daha ayrıntılı alanlar dönebilir.
+- Değişiklik servisleri yeni/değişen kayıtların artımlı senkronuna imkân veren kayıt türleri tanımlar.
+
+Güvenlik/veri minimizasyonu:
+- LANU yalnız işletme envanteri için gerekli şirket/işletme alanlarını kullanacaktır.
+- Kişi kartı, ortak, temsilci, ceza, borç ve benzeri amaç dışı hassas alanlar toplanmayacaktır.
+- API/Secret uygulama kaynak koduna veya public repository'ye yazılmayacaktır.
+- Yetki bilgileri yoksa web servis kullanılmayacak; yetkili JSON/CSV/XLSX/ZIP export fallback'i kullanılacaktır.
+
 ## 3. TOBB / Üye Firma / Oda Üye Sorgulama
+
+> Not: Aşağıdaki kullanıcı arayüzü/CAPTCHA kanalları, web servis yetkisi olmayan kullanım senaryosudur.
+
 
 Resmî kaynaklar:
 - https://uye.tobb.org.tr/organizasyon/firma-index.jsp
