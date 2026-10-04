@@ -226,7 +226,17 @@ class OfficialRegistryStore(
 
         parsed.groupBy { partitionToken(it.city ?: defaultCity) }
             .forEach { (partition, records) ->
-                writeRecordsAtomically(partitionFile(source, partition), records)
+                val target = partitionFile(source, partition)
+                val existing = if (target.exists()) readFile(target) else emptyList()
+                // Official exports are often partial (one chamber, one date range, one
+                // authorized query). Never erase previously observed identities merely
+                // because they are absent from a later partial file. A newer record with
+                // the same stable identity replaces the older record.
+                val combined = deduplicateNewest(existing + records)
+                require(combined.size <= MAX_RECORDS_PER_PARTITION) {
+                    "Resmî sicil şehir partition'ı güvenli kayıt sınırını aşıyor; kaynak oda/district bazında bölünmeli."
+                }
+                writeRecordsAtomically(target, combined)
             }
 
         return OfficialRegistryImportSummary(
@@ -334,7 +344,7 @@ class OfficialRegistryStore(
                 line.takeIf(String::isNotBlank)?.let { raw ->
                     runCatching { decode(JSONObject(raw), source) }.getOrNull()
                 }
-            }.take(MAX_RECORDS_PER_PARTITION).toList()
+            }.toList()
         }
     }
 
@@ -491,7 +501,7 @@ class OfficialRegistryStore(
     private companion object {
         const val DIRECTORY_NAME = "official_registry"
         const val MAX_IMPORT_BYTES = 25 * 1024 * 1024
-        const val MAX_RECORDS_PER_PARTITION = 250_000
+        const val MAX_RECORDS_PER_PARTITION = 1_000_000
         const val UNKNOWN_PARTITION = "unknown"
         const val PARTITION_SUFFIX = ".jsonl"
     }
