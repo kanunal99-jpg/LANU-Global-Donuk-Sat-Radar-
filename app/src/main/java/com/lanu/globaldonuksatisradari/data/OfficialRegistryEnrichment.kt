@@ -117,6 +117,12 @@ data class OfficialRegistryRecord(
     val website: String?,
     val importedAtEpochMs: Long,
     val naceCode: String? = null,
+    val mersisNumber: String? = null,
+    val signboardName: String? = null,
+    val businessType: String? = null,
+    val email: String? = null,
+    val chamberCode: String? = null,
+    val sourceRecordId: String? = null,
 )
 
 data class OfficialRegistryImportSummary(
@@ -380,6 +386,8 @@ class OfficialRegistryStore(
         listOf(
             record.source.name,
             record.registrationNumber.orEmpty(),
+            record.mersisNumber.orEmpty(),
+            record.sourceRecordId.orEmpty(),
             OfficialRegistryNormalizer.text(record.businessName),
             OfficialRegistryNormalizer.text(record.city.orEmpty()),
             OfficialRegistryNormalizer.text(record.district.orEmpty()),
@@ -429,6 +437,12 @@ class OfficialRegistryStore(
             put("phone", record.phone ?: JSONObject.NULL)
             put("website", record.website ?: JSONObject.NULL)
             put("naceCode", record.naceCode ?: JSONObject.NULL)
+            put("mersisNumber", record.mersisNumber ?: JSONObject.NULL)
+            put("signboardName", record.signboardName ?: JSONObject.NULL)
+            put("businessType", record.businessType ?: JSONObject.NULL)
+            put("email", record.email ?: JSONObject.NULL)
+            put("chamberCode", record.chamberCode ?: JSONObject.NULL)
+            put("sourceRecordId", record.sourceRecordId ?: JSONObject.NULL)
             put("importedAtEpochMs", record.importedAtEpochMs)
         }
 
@@ -446,6 +460,12 @@ class OfficialRegistryStore(
             website = optionalString(item, "website"),
             importedAtEpochMs = item.getLong("importedAtEpochMs"),
             naceCode = optionalString(item, "naceCode"),
+            mersisNumber = optionalString(item, "mersisNumber"),
+            signboardName = optionalString(item, "signboardName"),
+            businessType = optionalString(item, "businessType"),
+            email = optionalString(item, "email"),
+            chamberCode = optionalString(item, "chamberCode"),
+            sourceRecordId = optionalString(item, "sourceRecordId"),
         )
 
     private fun optionalString(item: JSONObject, key: String): String? =
@@ -769,6 +789,15 @@ object OfficialRegistryImportParser {
         importedAtEpochMs: Long,
         defaultCity: String? = null,
     ): List<OfficialRegistryRecord> {
+        if (fileName.endsWith(".json", ignoreCase = true)) {
+            return parseAuthorizedJson(
+                text = bytes.toString(Charsets.UTF_8),
+                source = source,
+                importedAtEpochMs = importedAtEpochMs,
+                defaultCity = defaultCity,
+            )
+        }
+
         val rows = when {
             fileName.endsWith(".xlsx", ignoreCase = true) -> parseXlsx(bytes)
             fileName.endsWith(".csv", ignoreCase = true) ||
@@ -776,10 +805,19 @@ object OfficialRegistryImportParser {
                 fileName.endsWith(".tsv", ignoreCase = true) -> parseDelimited(bytes.toString(Charsets.UTF_8))
             else -> {
                 val asText = bytes.toString(Charsets.UTF_8)
-                if (asText.contains('\n') && (asText.contains(';') || asText.contains(',') || asText.contains('\t'))) {
-                    parseDelimited(asText)
-                } else {
-                    throw IllegalArgumentException("Yalnızca CSV, TSV, TXT veya XLSX resmî sicil çıktıları destekleniyor.")
+                when {
+                    asText.trimStart().startsWith("[") || asText.trimStart().startsWith("{") ->
+                        return parseAuthorizedJson(
+                            text = asText,
+                            source = source,
+                            importedAtEpochMs = importedAtEpochMs,
+                            defaultCity = defaultCity,
+                        )
+                    asText.contains('\n') && (asText.contains(';') || asText.contains(',') || asText.contains('\t')) ->
+                        parseDelimited(asText)
+                    else -> throw IllegalArgumentException(
+                        "Yalnızca CSV, TSV, TXT, JSON veya XLSX resmî sicil çıktıları destekleniyor.",
+                    )
                 }
             }
         }
@@ -857,7 +895,134 @@ object OfficialRegistryImportParser {
                 website = value(row, WEBSITE_HEADERS)?.let(::sanitizeWebsite),
                 importedAtEpochMs = importedAtEpochMs,
                 naceCode = value(row, NACE_HEADERS),
+                mersisNumber = value(row, MERSIS_HEADERS),
+                signboardName = value(row, SIGNBOARD_HEADERS),
+                businessType = value(row, BUSINESS_TYPE_HEADERS),
+                email = value(row, EMAIL_HEADERS)?.let(::sanitizeEmail),
+                chamberCode = value(row, CHAMBER_CODE_HEADERS),
+                sourceRecordId = value(row, SOURCE_RECORD_ID_HEADERS),
             )
+        }
+    }
+
+    internal fun parseAuthorizedJson(
+        text: String,
+        source: OfficialRegistrySource,
+        importedAtEpochMs: Long,
+        defaultCity: String? = null,
+    ): List<OfficialRegistryRecord> {
+        require(importedAtEpochMs > 0L) { "İçe aktarma zamanı geçersiz." }
+        val trimmed = text.trim().removePrefix("\uFEFF")
+        if (trimmed.isBlank()) return emptyList()
+
+        val root: Any = if (trimmed.startsWith("[")) {
+            org.json.JSONArray(trimmed)
+        } else {
+            JSONObject(trimmed)
+        }
+        val array = unwrapAuthorizedArray(root)
+        return buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val name = jsonValue(item, JSON_NAME_KEYS) ?: continue
+                val city = jsonValue(item, JSON_CITY_KEYS)
+                    ?: when (source) {
+                        OfficialRegistrySource.ITO -> "İstanbul"
+                        OfficialRegistrySource.CHAMBER -> defaultCity?.trim()?.takeIf(String::isNotBlank)
+                        else -> defaultCity?.trim()?.takeIf(String::isNotBlank)
+                    }
+                add(
+                    OfficialRegistryRecord(
+                        source = source,
+                        registrationNumber = jsonValue(item, JSON_REGISTRATION_KEYS),
+                        businessName = name,
+                        status = jsonValue(item, JSON_STATUS_KEYS),
+                        city = city,
+                        district = jsonValue(item, JSON_DISTRICT_KEYS),
+                        neighborhood = jsonValue(item, JSON_NEIGHBORHOOD_KEYS),
+                        address = jsonValue(item, JSON_ADDRESS_KEYS),
+                        phone = jsonValues(item, JSON_PHONE_KEYS)
+                            .mapNotNull(::sanitizePhone)
+                            .distinctBy(OfficialRegistryNormalizer::phone)
+                            .takeIf(List<String>::isNotEmpty)
+                            ?.joinToString(" / "),
+                        website = jsonValue(item, JSON_WEBSITE_KEYS)?.let(::sanitizeWebsite),
+                        importedAtEpochMs = importedAtEpochMs,
+                        naceCode = jsonValue(item, JSON_NACE_KEYS),
+                        mersisNumber = jsonValue(item, JSON_MERSIS_KEYS),
+                        signboardName = jsonValue(item, JSON_SIGNBOARD_KEYS),
+                        businessType = jsonValue(item, JSON_BUSINESS_TYPE_KEYS),
+                        email = jsonValue(item, JSON_EMAIL_KEYS)?.let(::sanitizeEmail),
+                        chamberCode = jsonValue(item, JSON_CHAMBER_CODE_KEYS),
+                        sourceRecordId = jsonValue(item, JSON_SOURCE_RECORD_ID_KEYS),
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun unwrapAuthorizedArray(root: Any): org.json.JSONArray {
+        if (root is org.json.JSONArray) return root
+        val obj = root as? JSONObject
+            ?: throw IllegalArgumentException("Resmî JSON kökü nesne veya dizi olmalı.")
+
+        obj.optJSONArray("donusDegeri")?.let { return it }
+        obj.optJSONObject("obResult")?.let { result ->
+            result.optJSONArray("donusDegeri")?.let { return it }
+            val nested = result.opt("donusDegeri")
+            if (nested is String && nested.isNotBlank()) return unwrapAuthorizedArray(parseJsonValue(nested))
+        }
+
+        val direct = obj.opt("donusDegeri")
+        if (direct is String && direct.isNotBlank()) return unwrapAuthorizedArray(parseJsonValue(direct))
+
+        obj.optJSONArray("records")?.let { return it }
+        obj.optJSONArray("data")?.let { return it }
+        throw IllegalArgumentException(
+            "JSON içinde TOBB obResult/donusDegeri veya records/data dizisi bulunamadı.",
+        )
+    }
+
+    private fun parseJsonValue(value: String): Any {
+        val trimmed = value.trim()
+        return when {
+            trimmed.startsWith("[") -> org.json.JSONArray(trimmed)
+            trimmed.startsWith("{") -> JSONObject(trimmed)
+            else -> throw IllegalArgumentException("JSON dönüş değeri geçersiz.")
+        }
+    }
+
+    private fun jsonValue(item: JSONObject, keys: Set<String>): String? {
+        val normalizedKeys = keys.map(OfficialRegistryNormalizer::text).toSet()
+        item.keys().forEach { rawKey ->
+            if (OfficialRegistryNormalizer.text(rawKey) !in normalizedKeys) return@forEach
+            val value = item.opt(rawKey)
+            if (value == null || value == JSONObject.NULL) return@forEach
+            return sanitizeCell(value.toString()).takeIf(String::isNotBlank)
+        }
+        return null
+    }
+
+    private fun jsonValues(item: JSONObject, keys: Set<String>): List<String> {
+        val normalizedKeys = keys.map(OfficialRegistryNormalizer::text).toSet()
+        return buildList {
+            item.keys().forEach { rawKey ->
+                if (OfficialRegistryNormalizer.text(rawKey) !in normalizedKeys) return@forEach
+                val value = item.opt(rawKey)
+                when (value) {
+                    null, JSONObject.NULL -> Unit
+                    is org.json.JSONArray -> {
+                        for (index in 0 until value.length()) {
+                            val child = value.opt(index)?.toString()?.let(::sanitizeCell)
+                            if (!child.isNullOrBlank()) add(child)
+                        }
+                    }
+                    else -> {
+                        val child = sanitizeCell(value.toString())
+                        if (child.isNotBlank()) add(child)
+                    }
+                }
+            }
         }
     }
 
@@ -1012,6 +1177,12 @@ object OfficialRegistryImportParser {
         return normalized.take(512)
     }
 
+    private fun sanitizeEmail(value: String): String? {
+        val trimmed = sanitizeCell(value).lowercase(Locale.ROOT)
+        if (!trimmed.matches(Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"))) return null
+        return trimmed.take(320)
+    }
+
     private val NAME_HEADERS = setOf(
         "firma unvani",
         "ticaret unvani",
@@ -1020,6 +1191,7 @@ object OfficialRegistryImportParser {
         "isletme adi",
         "isyeri unvani",
         "nokta adi",
+        "firmaunvani",
     )
     private val REGISTRATION_HEADERS = setOf(
         "sicil no",
@@ -1036,6 +1208,9 @@ object OfficialRegistryImportParser {
         "sicil kayit numarasi",
         "kayit no",
         "kayit numarasi",
+        "uyeodasicilno",
+        "ticaretsicilno",
+        "esnafsicilno",
     )
     private val STATUS_HEADERS = setOf(
         "durum",
@@ -1044,11 +1219,16 @@ object OfficialRegistryImportParser {
         "tescil durumu",
         "faaliyet durumu",
         "sicil durumu",
+        "uyelikdurum",
+        "durumkodu",
     )
     private val CITY_HEADERS = setOf("il", "sehir", "city")
     private val DISTRICT_HEADERS = setOf("ilce", "district")
     private val SEMT_HEADERS = setOf("semt", "bolge")
-    private val NACE_HEADERS = setOf("nace", "nace kodu", "nace kod", "nace code")
+    private val NACE_HEADERS = setOf(
+        "nace", "nace kodu", "nace kod", "nace code",
+        "nacekod", "anafaaliyetkodu", "faaliyetkodu",
+    )
     private val NEIGHBORHOOD_HEADERS = setOf("mahalle", "mah", "neighborhood")
     private val ADDRESS_HEADERS = setOf(
         "adres",
@@ -1098,11 +1278,51 @@ object OfficialRegistryImportParser {
         "telefon kodlu",
         "isyeri tel kodlu",
         "buro tel kodlu",
+        "telefonno",
+        "telefonnumarasi",
     )
     private val WEBSITE_HEADERS = setOf(
         "web",
         "website",
         "web sitesi",
         "internet sitesi",
+        "webadresi",
     )
+
+    private val MERSIS_HEADERS = setOf(
+        "mersis no", "mersis numarasi", "mersisno",
+    )
+    private val SIGNBOARD_HEADERS = setOf(
+        "tabela unvani", "tabela adi", "signboard name", "tabelaunvani",
+    )
+    private val BUSINESS_TYPE_HEADERS = setOf(
+        "firma tipi", "isletme turu", "firma turu", "ana faaliyet aciklamasi",
+        "firmatipi", "anafaaliyetaciklamasi", "faaliyetdetay",
+    )
+    private val EMAIL_HEADERS = setOf(
+        "e posta", "eposta", "email", "e mail", "epostaadres", "epostaadresi",
+    )
+    private val CHAMBER_CODE_HEADERS = setOf(
+        "oda borsa no", "oda kodu", "oda no", "odaborsano", "odakodu",
+    )
+    private val SOURCE_RECORD_ID_HEADERS = setOf(
+        "uye oid", "uyeoid", "firma oid", "firmaoid", "kayit oid", "kayitoid",
+    )
+
+    private val JSON_NAME_KEYS = NAME_HEADERS + setOf("unvan", "Unvan")
+    private val JSON_REGISTRATION_KEYS = REGISTRATION_HEADERS
+    private val JSON_STATUS_KEYS = STATUS_HEADERS
+    private val JSON_CITY_KEYS = CITY_HEADERS
+    private val JSON_DISTRICT_KEYS = DISTRICT_HEADERS + setOf("ilce")
+    private val JSON_NEIGHBORHOOD_KEYS = NEIGHBORHOOD_HEADERS
+    private val JSON_ADDRESS_KEYS = ADDRESS_HEADERS
+    private val JSON_PHONE_KEYS = PHONE_HEADERS + setOf("telefonList", "telefonNo")
+    private val JSON_WEBSITE_KEYS = WEBSITE_HEADERS
+    private val JSON_NACE_KEYS = NACE_HEADERS
+    private val JSON_MERSIS_KEYS = MERSIS_HEADERS
+    private val JSON_SIGNBOARD_KEYS = SIGNBOARD_HEADERS
+    private val JSON_BUSINESS_TYPE_KEYS = BUSINESS_TYPE_HEADERS
+    private val JSON_EMAIL_KEYS = EMAIL_HEADERS
+    private val JSON_CHAMBER_CODE_KEYS = CHAMBER_CODE_HEADERS
+    private val JSON_SOURCE_RECORD_ID_KEYS = SOURCE_RECORD_ID_HEADERS
 }
