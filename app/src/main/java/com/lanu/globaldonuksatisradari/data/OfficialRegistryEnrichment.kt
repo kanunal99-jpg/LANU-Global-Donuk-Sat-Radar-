@@ -1,6 +1,7 @@
 package com.lanu.globaldonuksatisradari.data
 
 import android.content.Context
+import org.json.JSONArray
 import org.json.JSONObject
 import org.w3c.dom.Element
 import java.io.ByteArrayInputStream
@@ -836,6 +837,15 @@ object OfficialRegistryImportParser {
             )
         }
 
+        if (fileName.endsWith(".json", ignoreCase = true)) {
+            return parseJsonExport(
+                payload = bytes.toString(Charsets.UTF_8),
+                source = source,
+                importedAtEpochMs = importedAtEpochMs,
+                defaultCity = defaultCity,
+            )
+        }
+
         val rows = when {
             fileName.endsWith(".xlsx", ignoreCase = true) -> parseXlsx(bytes)
             fileName.endsWith(".csv", ignoreCase = true) ||
@@ -847,7 +857,7 @@ object OfficialRegistryImportParser {
                     parseDelimited(asText)
                 } else {
                     throw IllegalArgumentException(
-                        "Yalnızca CSV, TSV, TXT, XLSX veya bunları içeren ZIP resmî sicil çıktıları destekleniyor.",
+                        "Yalnızca CSV, TSV, TXT, XLSX, JSON veya bunları içeren ZIP resmî sicil çıktıları destekleniyor.",
                     )
                 }
             }
@@ -881,7 +891,8 @@ object OfficialRegistryImportParser {
                 val supported = lower.endsWith(".csv") ||
                     lower.endsWith(".tsv") ||
                     lower.endsWith(".txt") ||
-                    lower.endsWith(".xlsx")
+                    lower.endsWith(".xlsx") ||
+                    lower.endsWith(".json")
                 if (!supported || fileName.isBlank()) {
                     zip.closeEntry()
                     continue
@@ -910,7 +921,7 @@ object OfficialRegistryImportParser {
         }
 
         require(supportedEntries > 0) {
-            "ZIP paketinde CSV, TSV, TXT veya XLSX resmî sicil dosyası bulunamadı."
+            "ZIP paketinde CSV, TSV, TXT, XLSX veya JSON resmî sicil dosyası bulunamadı."
         }
         return records
     }
@@ -933,6 +944,159 @@ object OfficialRegistryImportParser {
         }
         return output.toByteArray()
     }
+
+    internal fun parseJsonExport(
+        payload: String,
+        source: OfficialRegistrySource,
+        importedAtEpochMs: Long,
+        defaultCity: String? = null,
+    ): List<OfficialRegistryRecord> {
+        val trimmed = payload.trim()
+        require(trimmed.isNotEmpty()) { "JSON resmî sicil çıktısı boş." }
+
+        val members = when {
+            trimmed.startsWith("[") -> jsonObjects(JSONArray(trimmed))
+            trimmed.startsWith("{") -> extractMemberObjects(JSONObject(trimmed))
+            else -> emptyList()
+        }
+        require(members.isNotEmpty()) {
+            "JSON çıktısında TOBB/oda üye kaydı bulunamadı."
+        }
+
+        return members.mapNotNull { item ->
+            val temel = item.optJSONObject("uyelikTemelBilgileri") ?: item
+            val name = firstJsonString(temel, "unvan", "businessName", "firmaUnvani")
+                ?: return@mapNotNull null
+
+            val rawCity = firstJsonString(temel, "il", "city")
+            val city = rawCity
+                ?.takeUnless(::looksLikeNumericCode)
+                ?: defaultCity?.trim()?.takeIf(String::isNotEmpty)
+            val rawDistrict = firstJsonString(temel, "ilce", "district")
+            val district = rawDistrict?.takeUnless(::looksLikeNumericCode)
+
+            val phone = firstPhoneFromJson(item)
+            val naceCode = firstJsonString(
+                temel,
+                "anaFaaliyetKodu",
+                "naceKod",
+                "naceKodu",
+            ) ?: firstNaceFromJson(item)
+
+            OfficialRegistryRecord(
+                source = source,
+                registrationNumber = firstJsonString(
+                    temel,
+                    "uyeOdaSicilNo",
+                    "ticaretSicilNo",
+                    "mersisNo",
+                    "esnafSicilNo",
+                    "registrationNumber",
+                ),
+                businessName = name,
+                status = firstJsonString(
+                    temel,
+                    "uyelikDurum",
+                    "durum",
+                    "status",
+                ),
+                city = city,
+                district = district,
+                neighborhood = firstJsonString(temel, "mahalle", "neighborhood"),
+                address = firstJsonString(
+                    temel,
+                    "adres",
+                    "butunlesikAdres",
+                    "address",
+                ),
+                phone = phone,
+                website = firstJsonString(temel, "webAdresi", "website"),
+                importedAtEpochMs = importedAtEpochMs,
+                naceCode = naceCode,
+                signboardName = firstJsonString(
+                    temel,
+                    "tabelaUnvani",
+                    "tabelaAdi",
+                    "signboardName",
+                ),
+                taxOrNationalId = firstJsonString(
+                    temel,
+                    "vergiNo",
+                    "vergiNumarasi",
+                    "taxNumber",
+                    "taxOrNationalId",
+                ),
+            )
+        }
+    }
+
+    private fun extractMemberObjects(root: JSONObject): List<JSONObject> {
+        root.optJSONArray("records")?.let(::jsonObjects)?.takeIf(List<JSONObject>::isNotEmpty)
+            ?.let { return it }
+
+        val directValue = root.opt("donusDegeri")
+        decodeJsonMemberValue(directValue).takeIf(List<JSONObject>::isNotEmpty)
+            ?.let { return it }
+
+        listOf("obResult", "servisIstegiResponse", "response", "result").forEach { key ->
+            val child = root.optJSONObject(key) ?: return@forEach
+            extractMemberObjects(child).takeIf(List<JSONObject>::isNotEmpty)
+                ?.let { return it }
+        }
+
+        val temel = root.optJSONObject("uyelikTemelBilgileri")
+        if (temel != null || root.has("unvan")) return listOf(root)
+        return emptyList()
+    }
+
+    private fun decodeJsonMemberValue(value: Any?): List<JSONObject> = when (value) {
+        is JSONArray -> jsonObjects(value)
+        is JSONObject -> extractMemberObjects(value)
+        is String -> {
+            val nested = value.trim()
+            when {
+                nested.startsWith("[") -> jsonObjects(JSONArray(nested))
+                nested.startsWith("{") -> extractMemberObjects(JSONObject(nested))
+                else -> emptyList()
+            }
+        }
+        else -> emptyList()
+    }
+
+    private fun jsonObjects(array: JSONArray): List<JSONObject> =
+        buildList {
+            for (index in 0 until array.length()) {
+                array.optJSONObject(index)?.let(::add)
+            }
+        }
+
+    private fun firstJsonString(item: JSONObject, vararg keys: String): String? =
+        keys.firstNotNullOfOrNull { key ->
+            item.optString(key).trim().takeIf { it.isNotBlank() && it != "null" }
+        }
+
+    private fun firstPhoneFromJson(item: JSONObject): String? {
+        val phones = item.optJSONArray("telefonList") ?: return firstJsonString(item, "telefon", "phone")
+        for (index in 0 until phones.length()) {
+            val phone = phones.optJSONObject(index) ?: continue
+            val number = firstJsonString(phone, "telefonNo", "phone")
+            if (!number.isNullOrBlank()) return number
+        }
+        return null
+    }
+
+    private fun firstNaceFromJson(item: JSONObject): String? {
+        val activities = item.optJSONArray("faaliyetList") ?: return null
+        for (index in 0 until activities.length()) {
+            val activity = activities.optJSONObject(index) ?: continue
+            firstJsonString(activity, "naceKod", "naceKodu", "faaliyetKodu")
+                ?.let { return it }
+        }
+        return null
+    }
+
+    private fun looksLikeNumericCode(value: String): Boolean =
+        value.trim().matches(Regex("^[0-9]{1,4}$"))
 
     internal fun parseDelimited(text: String): List<List<String>> {
         val clean = text.removePrefix("\uFEFF")
