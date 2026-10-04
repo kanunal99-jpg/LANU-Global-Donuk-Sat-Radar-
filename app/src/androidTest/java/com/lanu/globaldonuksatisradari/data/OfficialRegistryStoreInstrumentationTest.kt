@@ -62,4 +62,38 @@ class OfficialRegistryStoreInstrumentationTest {
         assertEquals(1, bursaAfterRefresh.size)
         assertTrue(bursaAfterRefresh.single().businessName == "Audit Bursa")
     }
+
+    @Test
+    fun multiFileChamberBatchKeepsAllSelectedFilesInSameCityPartition() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val store = OfficialRegistryStore(context)
+
+        val summary = store.importDocuments(
+            source = OfficialRegistrySource.CHAMBER,
+            documents = listOf(
+                OfficialRegistryImportDocument(
+                    fileName = "audit-batch-food.csv",
+                    bytes = csv("AUDIT-BATCH-1", "Audit Batch Food").toByteArray(),
+                ),
+                OfficialRegistryImportDocument(
+                    fileName = "audit-batch-service.csv",
+                    bytes = csv("AUDIT-BATCH-2", "Audit Batch Service").toByteArray(),
+                ),
+            ),
+            importedAtEpochMs = 13_000L,
+            defaultCity = "Audit Batch City",
+        )
+
+        val records = store.recordsFor("Audit Batch City", null)
+            .filter { it.registrationNumber?.startsWith("AUDIT-BATCH-") == true }
+
+        assertEquals(2, summary.fileCount)
+        assertEquals(2, summary.importedCount)
+        assertEquals(2, records.size)
+        assertEquals(
+            setOf("AUDIT-BATCH-1", "AUDIT-BATCH-2"),
+            records.mapNotNull { it.registrationNumber }.toSet(),
+        )
+    }
+
 }
