@@ -4,6 +4,7 @@ import android.content.Context
 import org.json.JSONObject
 import org.w3c.dom.Element
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.util.Locale
@@ -119,6 +120,11 @@ data class OfficialRegistryRecord(
     val naceCode: String? = null,
 )
 
+data class OfficialRegistryImportDocument(
+    val fileName: String,
+    val bytes: ByteArray,
+)
+
 data class OfficialRegistryImportSummary(
     val source: OfficialRegistrySource,
     val importedCount: Int,
@@ -126,6 +132,7 @@ data class OfficialRegistryImportSummary(
     val inactiveCount: Int,
     val unknownStatusCount: Int,
     val fileName: String,
+    val fileCount: Int = 1,
     val verifiedIdentityCount: Int = 0,
     val phoneCount: Int = 0,
     val addressCount: Int = 0,
@@ -183,22 +190,58 @@ class OfficialRegistryStore(
         bytes: ByteArray,
         importedAtEpochMs: Long = System.currentTimeMillis(),
         defaultCity: String? = null,
-    ): OfficialRegistryImportSummary {
-        require(source.contract.validate().isSuccess) { "Resmî kaynak sözleşmesi doğrulanamadı." }
-        require(bytes.isNotEmpty()) { "İçe aktarılacak dosya boş." }
-        require(bytes.size <= MAX_IMPORT_BYTES) { "Resmî sicil dosyası 25 MB sınırını aşıyor." }
-        require(importedAtEpochMs > 0L) { "İçe aktarma zamanı geçersiz." }
-
-        val parsed = OfficialRegistryImportParser.parse(
-            bytes = bytes,
-            fileName = fileName,
+    ): OfficialRegistryImportSummary =
+        importDocuments(
             source = source,
+            documents = listOf(OfficialRegistryImportDocument(fileName, bytes)),
             importedAtEpochMs = importedAtEpochMs,
             defaultCity = defaultCity,
-        ).distinctBy(::recordIdentityKey)
+        )
+
+    /**
+     * Imports a complete logical export atomically. This is important for local
+     * chambers that split one city into many meslek-grubu files: every selected
+     * document is parsed first, then the combined partition is written once.
+     */
+    @Synchronized
+    fun importDocuments(
+        source: OfficialRegistrySource,
+        documents: List<OfficialRegistryImportDocument>,
+        importedAtEpochMs: Long = System.currentTimeMillis(),
+        defaultCity: String? = null,
+    ): OfficialRegistryImportSummary {
+        require(source.contract.validate().isSuccess) { "Resmî kaynak sözleşmesi doğrulanamadı." }
+        require(documents.isNotEmpty()) { "İçe aktarılacak dosya seçilmedi." }
+        require(documents.size <= MAX_DOCUMENTS_PER_BATCH) {
+            "Tek seferde en fazla $MAX_DOCUMENTS_PER_BATCH resmî sicil dosyası içe aktarılabilir."
+        }
+        require(importedAtEpochMs > 0L) { "İçe aktarma zamanı geçersiz." }
+
+        var compressedBytes = 0L
+        documents.forEach { document ->
+            require(document.fileName.isNotBlank()) { "Dosya adı boş olamaz." }
+            require(document.bytes.isNotEmpty()) { "${document.fileName}: dosya boş." }
+            require(document.bytes.size <= MAX_IMPORT_BYTES) {
+                "${document.fileName}: resmî sicil dosyası 25 MB sınırını aşıyor."
+            }
+            compressedBytes += document.bytes.size
+            require(compressedBytes <= MAX_BATCH_IMPORT_BYTES) {
+                "Seçilen resmî sicil dosyalarının toplamı 100 MB sınırını aşıyor."
+            }
+        }
+
+        val parsed = documents.flatMap { document ->
+            OfficialRegistryImportParser.parse(
+                bytes = document.bytes,
+                fileName = document.fileName,
+                source = source,
+                importedAtEpochMs = importedAtEpochMs,
+                defaultCity = defaultCity,
+            )
+        }.distinctBy(::recordIdentityKey)
 
         require(parsed.isNotEmpty()) {
-            "Dosyada işletme adı içeren kullanılabilir resmî kayıt bulunamadı."
+            "Dosyalarda işletme adı içeren kullanılabilir resmî kayıt bulunamadı."
         }
 
         migrateLegacyFile(source)
@@ -219,7 +262,8 @@ class OfficialRegistryStore(
                     (!OfficialRegistryStatus.isActive(status) &&
                         !OfficialRegistryStatus.isInactive(status))
             },
-            fileName = fileName,
+            fileName = documents.singleOrNull()?.fileName ?: "${documents.size} dosya",
+            fileCount = documents.size,
             verifiedIdentityCount = parsed.count(OfficialRegistryTrust::isIdentityVerified),
             phoneCount = parsed.count { !it.phone.isNullOrBlank() },
             addressCount = parsed.count { !it.address.isNullOrBlank() },
@@ -454,6 +498,8 @@ class OfficialRegistryStore(
     private companion object {
         const val DIRECTORY_NAME = "official_registry"
         const val MAX_IMPORT_BYTES = 25 * 1024 * 1024
+        const val MAX_DOCUMENTS_PER_BATCH = 100
+        const val MAX_BATCH_IMPORT_BYTES = 100L * 1024L * 1024L
         const val MAX_RECORDS_PER_PARTITION = 250_000
         const val UNKNOWN_PARTITION = "unknown"
         const val PARTITION_SUFFIX = ".jsonl"
@@ -769,6 +815,15 @@ object OfficialRegistryImportParser {
         importedAtEpochMs: Long,
         defaultCity: String? = null,
     ): List<OfficialRegistryRecord> {
+        if (fileName.endsWith(".zip", ignoreCase = true)) {
+            return parseZipArchive(
+                bytes = bytes,
+                source = source,
+                importedAtEpochMs = importedAtEpochMs,
+                defaultCity = defaultCity,
+            )
+        }
+
         val rows = when {
             fileName.endsWith(".xlsx", ignoreCase = true) -> parseXlsx(bytes)
             fileName.endsWith(".csv", ignoreCase = true) ||
@@ -779,11 +834,92 @@ object OfficialRegistryImportParser {
                 if (asText.contains('\n') && (asText.contains(';') || asText.contains(',') || asText.contains('\t'))) {
                     parseDelimited(asText)
                 } else {
-                    throw IllegalArgumentException("Yalnızca CSV, TSV, TXT veya XLSX resmî sicil çıktıları destekleniyor.")
+                    throw IllegalArgumentException(
+                        "Yalnızca CSV, TSV, TXT, XLSX veya bunları içeren ZIP resmî sicil çıktıları destekleniyor.",
+                    )
                 }
             }
         }
         return rowsToRecords(rows, source, importedAtEpochMs, defaultCity)
+    }
+
+    private fun parseZipArchive(
+        bytes: ByteArray,
+        source: OfficialRegistrySource,
+        importedAtEpochMs: Long,
+        defaultCity: String?,
+    ): List<OfficialRegistryRecord> {
+        var supportedEntries = 0
+        var totalExpandedBytes = 0L
+        val records = mutableListOf<OfficialRegistryRecord>()
+
+        ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                if (entry.isDirectory) {
+                    zip.closeEntry()
+                    continue
+                }
+
+                val fileName = entry.name
+                    .replace('\\', '/')
+                    .substringAfterLast('/')
+                    .trim()
+                val lower = fileName.lowercase(Locale.ROOT)
+                val supported = lower.endsWith(".csv") ||
+                    lower.endsWith(".tsv") ||
+                    lower.endsWith(".txt") ||
+                    lower.endsWith(".xlsx")
+                if (!supported || fileName.isBlank()) {
+                    zip.closeEntry()
+                    continue
+                }
+
+                supportedEntries++
+                require(supportedEntries <= MAX_ARCHIVE_ENTRIES) {
+                    "ZIP paketi $MAX_ARCHIVE_ENTRIES desteklenen dosya sınırını aşıyor."
+                }
+
+                val entryBytes = readZipEntryBounded(zip, MAX_ARCHIVE_ENTRY_BYTES)
+                totalExpandedBytes += entryBytes.size
+                require(totalExpandedBytes <= MAX_ARCHIVE_EXPANDED_BYTES) {
+                    "ZIP paketi açıldığında 100 MB güvenli sınırını aşıyor."
+                }
+
+                records += parse(
+                    bytes = entryBytes,
+                    fileName = fileName,
+                    source = source,
+                    importedAtEpochMs = importedAtEpochMs,
+                    defaultCity = defaultCity,
+                )
+                zip.closeEntry()
+            }
+        }
+
+        require(supportedEntries > 0) {
+            "ZIP paketinde CSV, TSV, TXT veya XLSX resmî sicil dosyası bulunamadı."
+        }
+        return records
+    }
+
+    private fun readZipEntryBounded(
+        input: ZipInputStream,
+        maxBytes: Int,
+    ): ByteArray {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(16 * 1024)
+        var total = 0
+        while (true) {
+            val read = input.read(buffer)
+            if (read <= 0) break
+            total += read
+            require(total <= maxBytes) {
+                "ZIP içindeki tek bir dosya 25 MB güvenli sınırını aşıyor."
+            }
+            output.write(buffer, 0, read)
+        }
+        return output.toByteArray()
     }
 
     internal fun parseDelimited(text: String): List<List<String>> {
@@ -1058,6 +1194,8 @@ object OfficialRegistryImportParser {
         "merkez adresi",
         "firma adresi",
         "tescilli adresi",
+        "tescil adresi",
+        "tescil adres",
         "isyeri adres",
         "is yeri adres",
         "buro adresi",
@@ -1104,5 +1242,9 @@ object OfficialRegistryImportParser {
         "website",
         "web sitesi",
         "internet sitesi",
-    )
+    )    private const val MAX_ARCHIVE_ENTRIES = 200
+    private const val MAX_ARCHIVE_ENTRY_BYTES = 25 * 1024 * 1024
+    private const val MAX_ARCHIVE_EXPANDED_BYTES = 100L * 1024L * 1024L
+
+
 }
