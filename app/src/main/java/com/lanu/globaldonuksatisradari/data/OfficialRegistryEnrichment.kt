@@ -66,7 +66,8 @@ enum class OfficialRegistrySource {
             descriptor = descriptor,
             accessMethod = when (this) {
                 ITO, CHAMBER -> SourceAccessMethod.OFFICIAL_BULK_REQUEST
-                TOBB, MERSIS, ESBIS -> SourceAccessMethod.AUTHENTICATED_EXPORT
+                TOBB -> SourceAccessMethod.API
+                MERSIS, ESBIS -> SourceAccessMethod.AUTHENTICATED_EXPORT
             },
             scope = "Kullanıcının resmî kanaldan temin ettiği firma/esnaf çıktısındaki işletme adı, sicil durumu, adres, telefon ve web alanları",
             permittedUseVerified = true,
@@ -96,6 +97,10 @@ data class OfficialRegistryEvidence(
     val status: String?,
     val importedAtEpochMs: Long,
     val fieldsUsed: Set<String>,
+    val mersisNumber: String? = null,
+    val signboardName: String? = null,
+    val businessType: String? = null,
+    val taxNumber: String? = null,
 ) {
     val explicitlyActive: Boolean
         get() = status?.let(OfficialRegistryStatus::isActive) == true
@@ -123,6 +128,7 @@ data class OfficialRegistryRecord(
     val email: String? = null,
     val chamberCode: String? = null,
     val sourceRecordId: String? = null,
+    val taxNumber: String? = null,
 )
 
 data class OfficialRegistryImportSummary(
@@ -443,6 +449,7 @@ class OfficialRegistryStore(
             put("email", record.email ?: JSONObject.NULL)
             put("chamberCode", record.chamberCode ?: JSONObject.NULL)
             put("sourceRecordId", record.sourceRecordId ?: JSONObject.NULL)
+            put("taxNumber", record.taxNumber ?: JSONObject.NULL)
             put("importedAtEpochMs", record.importedAtEpochMs)
         }
 
@@ -466,6 +473,7 @@ class OfficialRegistryStore(
             email = optionalString(item, "email"),
             chamberCode = optionalString(item, "chamberCode"),
             sourceRecordId = optionalString(item, "sourceRecordId"),
+            taxNumber = optionalString(item, "taxNumber"),
         )
 
     private fun optionalString(item: JSONObject, key: String): String? =
@@ -542,6 +550,10 @@ object OfficialRegistryEnricher {
                     status = match.status,
                     importedAtEpochMs = match.importedAtEpochMs,
                     fieldsUsed = fieldsUsed,
+                    mersisNumber = match.mersisNumber,
+                    signboardName = match.signboardName,
+                    businessType = match.businessType,
+                    taxNumber = match.taxNumber,
                 ),
             )
         }
@@ -615,6 +627,10 @@ object OfficialRegistryDiscovery {
         if (!record.district.isNullOrBlank()) fieldsUsed += "district"
         if (!record.neighborhood.isNullOrBlank()) fieldsUsed += "neighborhood"
         if (!record.naceCode.isNullOrBlank()) fieldsUsed += "nace_code"
+        if (!record.mersisNumber.isNullOrBlank()) fieldsUsed += "mersis_number"
+        if (!record.signboardName.isNullOrBlank()) fieldsUsed += "signboard_name"
+        if (!record.businessType.isNullOrBlank()) fieldsUsed += "business_type"
+        if (!record.taxNumber.isNullOrBlank()) fieldsUsed += "tax_number"
 
         return VerifiedBusiness(
             id = record.source.name.lowercase(Locale.ROOT) + ":" + registrationNumber,
@@ -901,6 +917,7 @@ object OfficialRegistryImportParser {
                 email = value(row, EMAIL_HEADERS)?.let(::sanitizeEmail),
                 chamberCode = value(row, CHAMBER_CODE_HEADERS),
                 sourceRecordId = value(row, SOURCE_RECORD_ID_HEADERS),
+                taxNumber = value(row, TAX_NUMBER_HEADERS),
             )
         }
     }
@@ -955,6 +972,7 @@ object OfficialRegistryImportParser {
                         email = jsonValue(item, JSON_EMAIL_KEYS)?.let(::sanitizeEmail),
                         chamberCode = jsonValue(item, JSON_CHAMBER_CODE_KEYS),
                         sourceRecordId = jsonValue(item, JSON_SOURCE_RECORD_ID_KEYS),
+                        taxNumber = jsonValue(item, JSON_TAX_NUMBER_KEYS),
                     ),
                 )
             }
@@ -1308,6 +1326,10 @@ object OfficialRegistryImportParser {
     private val SOURCE_RECORD_ID_HEADERS = setOf(
         "uye oid", "uyeoid", "firma oid", "firmaoid", "kayit oid", "kayitoid",
     )
+    private val TAX_NUMBER_HEADERS = setOf(
+        "vergi no", "vergi numarasi", "vergi kimlik no", "vergi kimlik numarasi",
+        "vergino", "vergikimlikno",
+    )
 
     private val JSON_NAME_KEYS = NAME_HEADERS + setOf("unvan", "Unvan")
     private val JSON_REGISTRATION_KEYS = REGISTRATION_HEADERS
@@ -1325,4 +1347,5 @@ object OfficialRegistryImportParser {
     private val JSON_EMAIL_KEYS = EMAIL_HEADERS
     private val JSON_CHAMBER_CODE_KEYS = CHAMBER_CODE_HEADERS
     private val JSON_SOURCE_RECORD_ID_KEYS = SOURCE_RECORD_ID_HEADERS
+    private val JSON_TAX_NUMBER_KEYS = TAX_NUMBER_HEADERS
 }
