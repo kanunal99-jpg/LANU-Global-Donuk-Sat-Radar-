@@ -469,4 +469,78 @@ class OfficialRegistryEnrichmentTest {
         assertNull(standalone)
     }
 
+
+    @Test
+    fun authorizedTobbJsonImportReadsBulkMemberIdentityFields() {
+        val json = """
+            {
+              "obResult": {
+                "hatali": false,
+                "donusDegeri": "[{\\\"uyeOid\\\":\\\"OID-77\\\",\\\"unvan\\\":\\\"Örnek Makina Sanayi AŞ\\\",\\\"tabelaUnvani\\\":\\\"Örnek Makina\\\",\\\"mersisNo\\\":\\\"0123456789012345\\\",\\\"ticaretSicilNo\\\":\\\"556677\\\",\\\"uyeOdaSicilNo\\\":\\\"9988\\\",\\\"odaBorsaNo\\\":\\\"34\\\",\\\"durum\\\":\\\"FAAL\\\",\\\"adres\\\":\\\"Organize Sanayi Bölgesi No:5\\\",\\\"il\\\":\\\"İstanbul\\\",\\\"ilce\\\":\\\"Tuzla\\\",\\\"mahalle\\\":\\\"Aydınlı\\\",\\\"anaFaaliyetKodu\\\":\\\"28.29.90\\\",\\\"anaFaaliyetAciklamasi\\\":\\\"Diğer genel amaçlı makinelerin imalatı\\\",\\\"webAdresi\\\":\\\"ornekmakina.example\\\",\\\"epostaAdres\\\":\\\"INFO@ORNEKMAKINA.EXAMPLE\\\"}]"
+              }
+            }
+        """.trimIndent()
+
+        val record = OfficialRegistryImportParser.parse(
+            bytes = json.toByteArray(),
+            fileName = "tobb-authorized.json",
+            source = OfficialRegistrySource.TOBB,
+            importedAtEpochMs = 1_790_000_000_000L,
+        ).single()
+
+        assertEquals("Örnek Makina Sanayi AŞ", record.businessName)
+        assertEquals("Örnek Makina", record.signboardName)
+        assertEquals("0123456789012345", record.mersisNumber)
+        assertEquals("556677", record.registrationNumber)
+        assertEquals("34", record.chamberCode)
+        assertEquals("OID-77", record.sourceRecordId)
+        assertEquals("28.29.90", record.naceCode)
+        assertEquals("Diğer genel amaçlı makinelerin imalatı", record.businessType)
+        assertEquals("https://ornekmakina.example", record.website)
+        assertEquals("info@ornekmakina.example", record.email)
+        assertTrue(OfficialRegistryTrust.isIdentityVerified(record))
+    }
+
+    @Test
+    fun tobbCamelCaseCsvHeadersAreNormalizedWithoutLosingIdentity() {
+        val csv = """
+            uyeOid;unvan;tabelaUnvani;mersisNo;uyeOdaSicilNo;odaBorsaNo;uyelikDurum;il;ilce;mahalle;adres;telefonNo;webAdresi;naceKod;anaFaaliyetAciklamasi
+            OID-1;Deneme Lojistik Ltd.;Deneme Lojistik;0123456789012345;445566;16;FAAL;Bursa;Nilüfer;Üçevler;Sanayi Cad. 10;0224 111 22 33;denemelojistik.example;49.41.90;Karayolu ile yük taşımacılığı
+        """.trimIndent()
+
+        val record = OfficialRegistryImportParser.parse(
+            bytes = csv.toByteArray(),
+            fileName = "tobb.csv",
+            source = OfficialRegistrySource.TOBB,
+            importedAtEpochMs = 1_790_000_000_001L,
+        ).single()
+
+        assertEquals("445566", record.registrationNumber)
+        assertEquals("0123456789012345", record.mersisNumber)
+        assertEquals("Deneme Lojistik", record.signboardName)
+        assertEquals("Karayolu ile yük taşımacılığı", record.businessType)
+        assertEquals("0224 111 22 33", record.phone)
+        assertEquals("16", record.chamberCode)
+        assertEquals("OID-1", record.sourceRecordId)
+        assertEquals("Bursa", record.city)
+        assertEquals("Nilüfer", record.district)
+    }
+
+    @Test
+    fun authorizedJsonWithoutRegistryIdentityIsNotPromotedToOfficialIdentity() {
+        val json = """
+            [{"unvan":"Kimliksiz Firma","durum":"FAAL","il":"Bursa","ilce":"Osmangazi"}]
+        """.trimIndent()
+
+        val record = OfficialRegistryImportParser.parse(
+            bytes = json.toByteArray(),
+            fileName = "tobb.json",
+            source = OfficialRegistrySource.TOBB,
+            importedAtEpochMs = 1_790_000_000_002L,
+        ).single()
+
+        assertNull(record.registrationNumber)
+        assertFalse(OfficialRegistryTrust.isIdentityVerified(record))
+    }
+
 }
