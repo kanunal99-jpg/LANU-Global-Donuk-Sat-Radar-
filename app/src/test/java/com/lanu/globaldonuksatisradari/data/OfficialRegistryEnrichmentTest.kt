@@ -599,4 +599,42 @@ class OfficialRegistryEnrichmentTest {
         assertEquals("9876543210", record.taxNumber)
     }
 
+
+    @Test
+    fun tobbNumericProvinceCodeResolvesToProvinceAndKeepsDistrictCodeWithoutInventingName() {
+        val json = """
+            [{
+              "uyeOid":"OID-CODE-1",
+              "unvan":"Kodlu Bursa Firması",
+              "ticaretSicilNo":"CODE-1",
+              "odaBorsaNo":"16",
+              "durum":"faal",
+              "il":"16",
+              "ilce":"2059",
+              "adres":"Sanayi Bölgesi"
+            }]
+        """.trimIndent()
+
+        val record = OfficialRegistryImportParser.parse(
+            bytes = json.toByteArray(),
+            fileName = "tobb-code.json",
+            source = OfficialRegistrySource.TOBB,
+            importedAtEpochMs = 1_790_000_000_004L,
+        ).single()
+
+        assertEquals("Bursa", record.city)
+        assertEquals("16", record.provinceCode)
+        assertNull(record.district)
+        assertEquals("2059", record.districtCode)
+    }
+
+    @Test
+    fun turkeyProvinceCodeResolverCoversPlateRange() {
+        assertEquals("Adana", TurkeyProvinceCodes.nameFor("1"))
+        assertEquals("Bursa", TurkeyProvinceCodes.nameFor("16"))
+        assertEquals("İstanbul", TurkeyProvinceCodes.nameFor("34"))
+        assertEquals("Düzce", TurkeyProvinceCodes.nameFor("81"))
+        assertNull(TurkeyProvinceCodes.nameFor("82"))
+    }
+
 }
