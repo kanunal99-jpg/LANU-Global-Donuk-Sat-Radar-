@@ -1,6 +1,7 @@
 package com.lanu.globaldonuksatisradari.data
 
 import android.content.Context
+import org.json.JSONArray
 import org.json.JSONObject
 import org.w3c.dom.Element
 import java.io.ByteArrayInputStream
@@ -769,6 +770,17 @@ object OfficialRegistryImportParser {
         importedAtEpochMs: Long,
         defaultCity: String? = null,
     ): List<OfficialRegistryRecord> {
+        if (fileName.endsWith(".json", ignoreCase = true)) {
+            require(source == OfficialRegistrySource.TOBB) {
+                "JSON içe aktarma şu anda TOBB Oda/Borsa yetkili web servis çıktısı için destekleniyor."
+            }
+            return parseTobbAuthorizedJson(
+                text = bytes.toString(Charsets.UTF_8),
+                importedAtEpochMs = importedAtEpochMs,
+                defaultCity = defaultCity,
+            )
+        }
+
         val rows = when {
             fileName.endsWith(".xlsx", ignoreCase = true) -> parseXlsx(bytes)
             fileName.endsWith(".csv", ignoreCase = true) ||
@@ -779,12 +791,107 @@ object OfficialRegistryImportParser {
                 if (asText.contains('\n') && (asText.contains(';') || asText.contains(',') || asText.contains('\t'))) {
                     parseDelimited(asText)
                 } else {
-                    throw IllegalArgumentException("Yalnızca CSV, TSV, TXT veya XLSX resmî sicil çıktıları destekleniyor.")
+                    throw IllegalArgumentException("CSV, TSV, TXT, XLSX veya yetkili TOBB JSON çıktısı bekleniyor.")
                 }
             }
         }
         return rowsToRecords(rows, source, importedAtEpochMs, defaultCity)
     }
+
+    internal fun parseTobbAuthorizedJson(
+        text: String,
+        importedAtEpochMs: Long,
+        defaultCity: String? = null,
+    ): List<OfficialRegistryRecord> {
+        require(importedAtEpochMs > 0L) { "İçe aktarma zamanı geçersiz." }
+        val clean = text.removePrefix("\uFEFF").trim()
+        require(clean.isNotEmpty()) { "TOBB JSON çıktısı boş." }
+
+        val array = when {
+            clean.startsWith("[") -> JSONArray(clean)
+            clean.startsWith("{") -> {
+                val root = JSONObject(clean)
+                val obResult = root.opt("obResult")
+                val resultContainer = when (obResult) {
+                    is JSONObject -> obResult
+                    is String -> runCatching { JSONObject(obResult) }.getOrNull()
+                    else -> null
+                }
+                val raw = resultContainer?.opt("donusDegeri") ?: root.opt("donusDegeri")
+                    ?: throw IllegalArgumentException(
+                        "TOBB JSON çıktısında obResult.donusDegeri alanı bulunamadı.",
+                    )
+                when (raw) {
+                    is JSONArray -> raw
+                    is String -> {
+                        val value = raw.trim()
+                        require(value.startsWith("[")) {
+                            "TOBB donusDegeri JSON dizi biçiminde değil."
+                        }
+                        JSONArray(value)
+                    }
+                    else -> throw IllegalArgumentException(
+                        "TOBB donusDegeri JSON dizi biçiminde değil.",
+                    )
+                }
+            }
+            else -> throw IllegalArgumentException("TOBB JSON çıktısı geçerli JSON değil.")
+        }
+
+        return buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val name = jsonString(item, "unvan", "Unvan", "firmaUnvani")
+                    ?: continue
+                val registration = jsonString(
+                    item,
+                    "mersisNo",
+                    "ticaretSicilNo",
+                    "uyeOdaSicilNo",
+                    "kurumNo",
+                )
+                val rawCity = jsonString(item, "il", "ilAdi", "sehir")
+                val city = rawCity
+                    ?.takeUnless(::looksLikeNumericCode)
+                    ?: defaultCity?.trim()?.takeIf(String::isNotEmpty)
+                val rawDistrict = jsonString(item, "ilce", "ilceAdi")
+                val district = rawDistrict?.takeUnless(::looksLikeNumericCode)
+
+                add(
+                    OfficialRegistryRecord(
+                        source = OfficialRegistrySource.TOBB,
+                        registrationNumber = registration,
+                        businessName = sanitizeCell(name),
+                        status = jsonString(item, "durum", "uyelikDurum", "uyelikDurumu"),
+                        city = city?.let(::sanitizeCell),
+                        district = district?.let(::sanitizeCell),
+                        neighborhood = jsonString(item, "mahalle")?.let(::sanitizeCell),
+                        address = jsonString(item, "adres", "eskiAdres")?.let(::sanitizeCell),
+                        phone = jsonString(item, "telefon", "telefonNo", "isyeriTel")
+                            ?.let(::sanitizePhone),
+                        website = jsonString(item, "webAdresi", "website")
+                            ?.let(::sanitizeWebsite),
+                        importedAtEpochMs = importedAtEpochMs,
+                        naceCode = jsonString(item, "naceKod", "anaFaaliyetKodu"),
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun jsonString(item: JSONObject, vararg keys: String): String? =
+        keys.asSequence()
+            .mapNotNull { key ->
+                item.opt(key)
+                    ?.takeUnless { it == JSONObject.NULL }
+                    ?.toString()
+                    ?.trim()
+                    ?.takeIf(String::isNotEmpty)
+            }
+            .firstOrNull()
+
+    private fun looksLikeNumericCode(value: String): Boolean =
+        value.trim().matches(Regex("^[0-9]{1,6}$"))
 
     internal fun parseDelimited(text: String): List<List<String>> {
         val clean = text.removePrefix("\uFEFF")
