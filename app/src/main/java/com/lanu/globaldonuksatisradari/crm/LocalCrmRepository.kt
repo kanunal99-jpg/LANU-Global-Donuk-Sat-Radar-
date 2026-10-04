@@ -171,7 +171,17 @@ class LocalCrmRepository(
             if (inactive) inactiveMatches++
 
             val candidate = existing.copy(
-                signboardName = existing.signboardName ?: existing.businessName,
+                signboardName = if (inactive) {
+                    existing.signboardName ?: existing.businessName
+                } else {
+                    match.signboardName?.trim()?.takeIf(String::isNotEmpty)
+                        ?: existing.signboardName
+                        ?: existing.businessName
+                },
+                businessType = existing.businessType
+                    ?: match.naceCode?.trim()?.takeIf(String::isNotEmpty)?.let { "NACE " + it },
+                taxOrNationalId = match.taxOrNationalId?.trim()?.takeIf(String::isNotEmpty)
+                    ?: existing.taxOrNationalId,
                 city = if (inactive) existing.city else {
                     match.city?.trim()?.takeIf(String::isNotEmpty) ?: existing.city
                 },
