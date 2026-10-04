@@ -140,6 +140,8 @@ data class OfficialRegistryRecord(
     val chamberCode: String? = null,
     val sourceRecordId: String? = null,
     val taxNumber: String? = null,
+    val provinceCode: String? = null,
+    val districtCode: String? = null,
 )
 
 data class OfficialRegistryImportSummary(
