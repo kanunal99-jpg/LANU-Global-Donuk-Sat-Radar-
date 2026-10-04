@@ -401,12 +401,18 @@ class OfficialRegistryEnrichmentTest {
     fun officialSourceContractsRequireAuthorizedImportInsteadOfAnonymousScraping() {
         assertEquals(SourceAccessMethod.OFFICIAL_BULK_REQUEST, OfficialRegistrySource.ITO.contract.accessMethod)
         assertEquals(SourceAccessMethod.OFFICIAL_BULK_REQUEST, OfficialRegistrySource.CHAMBER.contract.accessMethod)
-        assertEquals(SourceAccessMethod.AUTHENTICATED_EXPORT, OfficialRegistrySource.TOBB.contract.accessMethod)
-        assertEquals(SourceAccessMethod.AUTHENTICATED_EXPORT, OfficialRegistrySource.MERSIS.contract.accessMethod)
-        assertEquals(SourceAccessMethod.AUTHENTICATED_EXPORT, OfficialRegistrySource.ESBIS.contract.accessMethod)
+        assertEquals(SourceAccessMethod.MANUAL_IMPORT, OfficialRegistrySource.TOBB.contract.accessMethod)
+        assertEquals(SourceAccessMethod.MANUAL_IMPORT, OfficialRegistrySource.MERSIS.contract.accessMethod)
+        assertEquals(SourceAccessMethod.MANUAL_IMPORT, OfficialRegistrySource.ESBIS.contract.accessMethod)
         assertTrue(OfficialRegistrySource.entries.all { it.contract.permittedUseVerified })
-        assertTrue(OfficialRegistrySource.entries.all { it.contract.supportsBulk })
+        assertTrue(OfficialRegistrySource.ITO.contract.supportsBulk)
+        assertTrue(OfficialRegistrySource.CHAMBER.contract.supportsBulk)
+        assertFalse(OfficialRegistrySource.TOBB.contract.supportsBulk)
+        assertFalse(OfficialRegistrySource.MERSIS.contract.supportsBulk)
+        assertFalse(OfficialRegistrySource.ESBIS.contract.supportsBulk)
         assertFalse(OfficialRegistrySource.entries.any { it.contract.accessMethod == SourceAccessMethod.PUBLIC_SEARCH })
+        assertTrue(OfficialRegistrySource.MERSIS.acquisitionGuidance.contains("Firma Sorgu"))
+        assertTrue(OfficialRegistrySource.ESBIS.acquisitionGuidance.contains("yetkili", ignoreCase = true))
     }
 
     @Test
@@ -467,6 +473,72 @@ class OfficialRegistryEnrichmentTest {
         )
 
         assertNull(standalone)
+    }
+
+
+    @Test
+    fun authorizedMersisExportPreservesExplicitVknWithoutInferringIt() {
+        val csv = """
+            MERSİS No;Firma Ünvanı;Vergi Kimlik No;Durum;İl;İlçe
+            0123456789012345;Örnek MERSİS Firma;1234567890;Faal;Bursa;Nilüfer
+            9999999999999999;Geçersiz Kimlikli Firma;ABC123;Faal;Bursa;Nilüfer
+        """.trimIndent()
+
+        val records = OfficialRegistryImportParser.parse(
+            bytes = csv.toByteArray(Charsets.UTF_8),
+            fileName = "yetkili-mersis.csv",
+            source = OfficialRegistrySource.MERSIS,
+            importedAtEpochMs = 900L,
+        )
+
+        assertEquals("1234567890", records[0].taxOrNationalId)
+        assertNull(records[1].taxOrNationalId)
+        assertTrue(OfficialRegistryTrust.isIdentityVerified(records[0]))
+    }
+
+
+    @Test
+    fun xlsxImportReadsEveryWorksheetWithoutDroppingLaterBatches() {
+        fun sheet(name: String, registration: String): String =
+            """<?xml version="1.0" encoding="UTF-8"?>
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <sheetData>
+                    <row r="1">
+                      <c r="A1" t="inlineStr"><is><t>Sicil No</t></is></c>
+                      <c r="B1" t="inlineStr"><is><t>Firma Ünvanı</t></is></c>
+                      <c r="C1" t="inlineStr"><is><t>İl</t></is></c>
+                    </row>
+                    <row r="2">
+                      <c r="A2" t="inlineStr"><is><t>$registration</t></is></c>
+                      <c r="B2" t="inlineStr"><is><t>$name</t></is></c>
+                      <c r="C2" t="inlineStr"><is><t>Bursa</t></is></c>
+                    </row>
+                  </sheetData>
+                </worksheet>
+            """.trimIndent()
+
+        val bytes = ByteArrayOutputStream().also { output ->
+            ZipOutputStream(output).use { zip ->
+                zip.putNextEntry(ZipEntry("xl/worksheets/sheet1.xml"))
+                zip.write(sheet("Birinci Sayfa Firma", "MS-1").toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+                zip.putNextEntry(ZipEntry("xl/worksheets/sheet2.xml"))
+                zip.write(sheet("İkinci Sayfa Firma", "MS-2").toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+            }
+        }.toByteArray()
+
+        val records = OfficialRegistryImportParser.parse(
+            bytes = bytes,
+            fileName = "cok-sayfali.xlsx",
+            source = OfficialRegistrySource.CHAMBER,
+            importedAtEpochMs = 1_000L,
+            defaultCity = "Bursa",
+        )
+
+        assertEquals(2, records.size)
+        assertEquals(setOf("MS-1", "MS-2"), records.mapNotNull { it.registrationNumber }.toSet())
+        assertEquals(setOf("Birinci Sayfa Firma", "İkinci Sayfa Firma"), records.map { it.businessName }.toSet())
     }
 
 }

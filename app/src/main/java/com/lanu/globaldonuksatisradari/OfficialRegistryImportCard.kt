@@ -115,6 +115,8 @@ fun OfficialRegistryImportCard(
                     append(summary.verifiedIdentityCount)
                     append(" • telefon bulunan ")
                     append(summary.phoneCount)
+                    append(" • VKN/TCKN bulunan ")
+                    append(summary.taxOrNationalIdCount)
                     append(". ")
                     if (summary.verifiedIdentityCount > 0) {
                         append("Sicil kimliği doğrulanan eşleşmeler CRM'i güvenli şekilde zenginleştirebilir.")
@@ -140,7 +142,7 @@ fun OfficialRegistryImportCard(
             Text("Resmî sicil doğrulaması", style = MaterialTheme.typography.titleMedium)
             Text(
                 "İTO, diğer Ticaret/Ticaret ve Sanayi Odaları, TOBB, MERSİS veya ESBİS üzerinden resmî olarak " +
-                    "temin ettiğiniz CSV/XLSX çıktısını içe aktarın. Telefon 1/2, GSM, Cep ve Mobil alanları da okunur.",
+                    "yetkili kanaldan temin ettiğiniz CSV/XLSX çıktısını içe aktarın. Aynı kaynak/il için birden fazla parça dosya güvenli biçimde birleştirilir; Telefon/GSM ile VKN/TCKN alanları kaynakta varsa korunur.",
                 style = MaterialTheme.typography.bodySmall,
             )
 
@@ -167,6 +169,11 @@ fun OfficialRegistryImportCard(
                     }
                 }
             }
+
+            Text(
+                selectedSource.acquisitionGuidance,
+                style = MaterialTheme.typography.bodySmall,
+            )
 
             Text(
                 "Kayıtlar: " + OfficialRegistrySource.entries.joinToString(" • ") { source ->
@@ -240,6 +247,7 @@ fun OfficialRegistryImportCard(
                             record.district.orEmpty(),
                             record.neighborhood.orEmpty(),
                             record.naceCode.orEmpty(),
+                            record.taxOrNationalId.orEmpty(),
                         ).any { it.lowercase().contains(normalizedQuery) }
                     }
                 }
@@ -257,7 +265,7 @@ fun OfficialRegistryImportCard(
                     value = recordQuery,
                     onValueChange = { recordQuery = it },
                     modifier = Modifier.fillMaxWidth().testTag("official_registry_search"),
-                    label = { Text("Kayıtlarda ad, adres, telefon, sicil veya NACE ara") },
+                    label = { Text("Kayıtlarda ad, adres, telefon, sicil, VKN/TCKN veya NACE ara") },
                     singleLine = true,
                 )
                 Text(
@@ -325,6 +333,9 @@ fun OfficialRegistryImportCard(
                             record.registrationNumber?.takeIf(String::isNotBlank)?.let {
                                 Text("Sicil: $it", style = MaterialTheme.typography.labelSmall)
                             }
+                            record.taxOrNationalId?.takeIf(String::isNotBlank)?.let {
+                                Text("TC/Vergi No: $it", style = MaterialTheme.typography.labelSmall)
+                            }
                             record.naceCode?.takeIf(String::isNotBlank)?.let {
                                 Text("NACE: $it", style = MaterialTheme.typography.labelSmall)
                             }
@@ -351,7 +362,7 @@ fun OfficialRegistryImportCard(
             Text(
                 buildString {
                     append("Not: ODA/TOBB dahil kaynak seçimi dosyanın nereden alındığını beyan eder; resmî kimlik için sicil/kayıt numarası aranır. ")
-                    append("Giriş gerektiren oda/TOBB sistemleri otomatik kazınmaz; yetkili çıktı içe aktarılır.")
+                    append("Giriş/CAPTCHA/yetki gerektiren TOBB, MERSİS, ESBİS ve oda sistemleri otomatik kazınmaz; yalnız kullanıcının yetkili/resmî çıktısı içe aktarılır. Büyük çıktılar güvenli şekilde parçalara bölünerek art arda içe aktarılabilir.")
                     if (!defaultCity.isNullOrBlank()) {
                         append(" ODA dosyasında İl sütunu yoksa seçili şehir ($defaultCity) kullanılır.")
                     }

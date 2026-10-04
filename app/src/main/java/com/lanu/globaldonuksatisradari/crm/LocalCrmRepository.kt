@@ -191,6 +191,8 @@ class LocalCrmRepository(
                     match.website?.trim()?.takeIf(String::isNotEmpty) ?: existing.website
                 },
                 dataQuality = DataQuality.OBSERVED.name,
+                taxOrNationalId = existing.taxOrNationalId
+                    ?: match.taxOrNationalId?.trim()?.takeIf(String::isNotEmpty),
                 registryStatus = registryStatusFor(match.status).name,
                 registrySource = match.source.descriptor.name,
                 registryNumber = match.registrationNumber?.trim()?.takeIf(String::isNotEmpty),
@@ -254,6 +256,8 @@ class LocalCrmRepository(
                 ?: existing.phone,
             website = business.website?.trim()?.takeIf { it.isNotEmpty() }
                 ?: existing.website,
+            taxOrNationalId = existing.taxOrNationalId
+                ?: evidence?.taxOrNationalId?.trim()?.takeIf { it.isNotEmpty() },
             registryStatus = evidence?.let {
                 registryStatusFor(it.status).name
             } ?: existing.registryStatus,
@@ -308,6 +312,7 @@ class LocalCrmRepository(
             stage = CrmStage.PROSPECT,
             ownerUserId = ownerUserId,
             businessType = BusinessCategoryLabels.displayName(business.category),
+            taxOrNationalId = evidence?.taxOrNationalId?.trim()?.takeIf { it.isNotEmpty() },
             phone = business.phone?.trim()?.takeIf { it.isNotEmpty() },
             website = business.website?.trim()?.takeIf { it.isNotEmpty() },
             registryStatus = evidence?.let { registryStatusFor(it.status) }
@@ -390,7 +395,7 @@ class LocalCrmRepository(
             ownerUserId = ownerUserId,
             contactName = contactName?.trim()?.takeIf { it.isNotEmpty() },
             businessType = businessType?.trim()?.takeIf { it.isNotEmpty() },
-            taxOrNationalId = taxOrNationalId?.trim()?.takeIf { it.isNotEmpty() },
+            taxOrNationalId = normalizeTaxOrNationalId(taxOrNationalId),
             phone = phone?.trim()?.takeIf { it.isNotEmpty() },
             createdAtEpochMs = timestamp,
             updatedAtEpochMs = timestamp,
@@ -967,6 +972,16 @@ private object CrmMappings {
     )
 }
 
+private fun normalizeTaxOrNationalId(value: String?): String? {
+    val raw = value?.trim().orEmpty()
+    if (raw.isEmpty()) return null
+    val digits = raw.filter(Char::isDigit)
+    require(digits.length == 10 || digits.length == 11) {
+        "TC/Vergi No yalnızca 10 haneli VKN veya 11 haneli TCKN olabilir."
+    }
+    return digits
+}
+
 private fun CrmNextActionType.toActivityType(): CrmActivityType = when (this) {
     CrmNextActionType.CALL -> CrmActivityType.CALL
     CrmNextActionType.VISIT -> CrmActivityType.VISIT
@@ -995,6 +1010,7 @@ private object CrmPayloads {
         put("notes", customer.notes)
         put("contactName", customer.contactName)
         put("businessType", customer.businessType)
+        put("taxOrNationalId", customer.taxOrNationalId)
         put("phone", customer.phone)
         put("website", customer.website)
         put("registryStatus", customer.registryStatus.name)

@@ -61,16 +61,25 @@ enum class OfficialRegistrySource {
             )
         }
 
+    val acquisitionGuidance: String
+        get() = when (this) {
+            ITO -> "İTO açık üye rehberi sunar; kapsamlı/toplu üye listeleri ayrıca resmî Toplu Bilgi Talebi kanalıyla istenir. Ücret ve teslim koşulları İTO tarafından belirlenir."
+            CHAMBER -> "TOBB Oda/Borsa dizininden ilgili odaya ulaşın. Üye rehberi, toplu liste, ücret ve teslim biçimi her oda/borsa tarafından ayrı belirlenebilir."
+            TOBB -> "TOBB Üye Firma sistemi kullanıcı girişi gerektirir. Herkese açık ulusal firma-listesi API'si varsayılmaz; yalnız yetkili hesabınızdan veya kurumdan resmen aldığınız dosyayı içe aktarın."
+            MERSIS -> "MERSİS'e giriş yapan kullanıcılar Sorgular > Firma Sorgu ile temel firma bilgisine erişebilir. Herkese açık ulusal toplu API varsayılmaz; yalnız yetkili çıktı veya resmî entegrasyon verisini içe aktarın."
+            ESBIS -> "ESBİS Türkiye/il/ilçe bazında detaylı raporlama sağlar ancak sistem yetkili kullanıcılar içindir. Herkese açık toplu API varsayılmaz; yalnız yetkili rapor/çıktıyı içe aktarın."
+        }
+
     val contract: BusinessSourceContract
         get() = BusinessSourceContract(
             descriptor = descriptor,
             accessMethod = when (this) {
                 ITO, CHAMBER -> SourceAccessMethod.OFFICIAL_BULK_REQUEST
-                TOBB, MERSIS, ESBIS -> SourceAccessMethod.AUTHENTICATED_EXPORT
+                TOBB, MERSIS, ESBIS -> SourceAccessMethod.MANUAL_IMPORT
             },
             scope = "Kullanıcının resmî kanaldan temin ettiği firma/esnaf çıktısındaki işletme adı, sicil durumu, adres, telefon ve web alanları",
             permittedUseVerified = true,
-            supportsBulk = true,
+            supportsBulk = this == ITO || this == CHAMBER,
             fieldNames = setOf(
                 "registration_number",
                 "business_name",
@@ -82,11 +91,12 @@ enum class OfficialRegistrySource {
                 "phone",
                 "website",
                 "nace_code",
+                "tax_or_national_id",
             ),
         )
 
     companion object {
-        private const val SOURCE_POLICY_REVIEWED_AT = 1790802000000L
+        private const val SOURCE_POLICY_REVIEWED_AT = 1791143160000L
     }
 }
 
@@ -96,6 +106,7 @@ data class OfficialRegistryEvidence(
     val status: String?,
     val importedAtEpochMs: Long,
     val fieldsUsed: Set<String>,
+    val taxOrNationalId: String? = null,
 ) {
     val explicitlyActive: Boolean
         get() = status?.let(OfficialRegistryStatus::isActive) == true
@@ -117,6 +128,7 @@ data class OfficialRegistryRecord(
     val website: String?,
     val importedAtEpochMs: Long,
     val naceCode: String? = null,
+    val taxOrNationalId: String? = null,
 )
 
 data class OfficialRegistryImportSummary(
@@ -129,6 +141,7 @@ data class OfficialRegistryImportSummary(
     val verifiedIdentityCount: Int = 0,
     val phoneCount: Int = 0,
     val addressCount: Int = 0,
+    val taxOrNationalIdCount: Int = 0,
 )
 
 object OfficialRegistryTrust {
@@ -205,7 +218,16 @@ class OfficialRegistryStore(
 
         parsed.groupBy { partitionToken(it.city ?: defaultCity) }
             .forEach { (partition, records) ->
-                writeRecordsAtomically(partitionFile(source, partition), records)
+                val target = partitionFile(source, partition)
+                val combined = if (target.exists()) {
+                    deduplicateNewest(readFile(target) + records)
+                } else {
+                    deduplicateNewest(records)
+                }
+                require(combined.size <= MAX_RECORDS_PER_PARTITION) {
+                    "Aynı kaynak/il bölümü $MAX_RECORDS_PER_PARTITION kayıt sınırını aşıyor; veri kaybını önlemek için içe aktarma durduruldu."
+                }
+                writeRecordsAtomically(target, combined)
             }
 
         return OfficialRegistryImportSummary(
@@ -223,6 +245,7 @@ class OfficialRegistryStore(
             verifiedIdentityCount = parsed.count(OfficialRegistryTrust::isIdentityVerified),
             phoneCount = parsed.count { !it.phone.isNullOrBlank() },
             addressCount = parsed.count { !it.address.isNullOrBlank() },
+            taxOrNationalIdCount = parsed.count { !it.taxOrNationalId.isNullOrBlank() },
         )
     }
 
@@ -245,11 +268,11 @@ class OfficialRegistryStore(
             ?.let(OfficialRegistryNormalizer::text)
 
         return readSource(source, city).filter { record ->
-            val cityMatches = record.city.isNullOrBlank() ||
+            val cityMatches = !record.city.isNullOrBlank() &&
                 OfficialRegistryNormalizer.text(record.city) == normalizedCity
             val districtMatches = normalizedDistrict == null ||
-                record.district.isNullOrBlank() ||
-                OfficialRegistryNormalizer.text(record.district) == normalizedDistrict
+                (!record.district.isNullOrBlank() &&
+                    OfficialRegistryNormalizer.text(record.district) == normalizedDistrict)
             cityMatches && districtMatches
         }
     }
@@ -328,9 +351,12 @@ class OfficialRegistryStore(
                 val combined = if (target.exists()) {
                     deduplicateNewest(readFile(target) + records)
                 } else {
-                    records
+                    deduplicateNewest(records)
                 }
-                writeRecordsAtomically(target, combined.take(MAX_RECORDS_PER_PARTITION))
+                require(combined.size <= MAX_RECORDS_PER_PARTITION) {
+                    "Eski resmî sicil bölümü güvenli kayıt sınırını aşıyor."
+                }
+                writeRecordsAtomically(target, combined)
             }
 
         if (!legacy.delete()) {
@@ -376,15 +402,23 @@ class OfficialRegistryStore(
         return byIdentity.values.toList()
     }
 
-    private fun recordIdentityKey(record: OfficialRegistryRecord): String =
-        listOf(
+    private fun recordIdentityKey(record: OfficialRegistryRecord): String {
+        val registration = record.registrationNumber
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?.let(OfficialRegistryNormalizer::text)
+        if (registration != null) {
+            return listOf(record.source.name, "registry", registration).joinToString("|")
+        }
+        return listOf(
             record.source.name,
-            record.registrationNumber.orEmpty(),
+            "fallback",
             OfficialRegistryNormalizer.text(record.businessName),
             OfficialRegistryNormalizer.text(record.city.orEmpty()),
             OfficialRegistryNormalizer.text(record.district.orEmpty()),
             OfficialRegistryNormalizer.phones(record.phone).sorted().joinToString(","),
         ).joinToString("|")
+    }
 
     private fun partitionToken(city: String?): String {
         val normalized = city
@@ -429,6 +463,7 @@ class OfficialRegistryStore(
             put("phone", record.phone ?: JSONObject.NULL)
             put("website", record.website ?: JSONObject.NULL)
             put("naceCode", record.naceCode ?: JSONObject.NULL)
+            put("taxOrNationalId", record.taxOrNationalId ?: JSONObject.NULL)
             put("importedAtEpochMs", record.importedAtEpochMs)
         }
 
@@ -446,6 +481,7 @@ class OfficialRegistryStore(
             website = optionalString(item, "website"),
             importedAtEpochMs = item.getLong("importedAtEpochMs"),
             naceCode = optionalString(item, "naceCode"),
+            taxOrNationalId = optionalString(item, "taxOrNationalId"),
         )
 
     private fun optionalString(item: JSONObject, key: String): String? =
@@ -454,7 +490,7 @@ class OfficialRegistryStore(
     private companion object {
         const val DIRECTORY_NAME = "official_registry"
         const val MAX_IMPORT_BYTES = 25 * 1024 * 1024
-        const val MAX_RECORDS_PER_PARTITION = 250_000
+        const val MAX_RECORDS_PER_PARTITION = 2_000_000
         const val UNKNOWN_PARTITION = "unknown"
         const val PARTITION_SUFFIX = ".jsonl"
     }
@@ -504,6 +540,7 @@ object OfficialRegistryEnricher {
 
             if (!match.status.isNullOrBlank()) fieldsUsed += "status"
             if (!match.registrationNumber.isNullOrBlank()) fieldsUsed += "registration_number"
+            if (!match.taxOrNationalId.isNullOrBlank()) fieldsUsed += "tax_or_national_id"
             if (officialAddress != null) fieldsUsed += "address"
             if (officialPhone != null) fieldsUsed += "phone"
             if (officialWebsite != null) fieldsUsed += "website"
@@ -522,6 +559,7 @@ object OfficialRegistryEnricher {
                     status = match.status,
                     importedAtEpochMs = match.importedAtEpochMs,
                     fieldsUsed = fieldsUsed,
+                    taxOrNationalId = match.taxOrNationalId,
                 ),
             )
         }
@@ -588,6 +626,7 @@ object OfficialRegistryDiscovery {
             ?: "Bilinmiyor"
 
         val fieldsUsed = linkedSetOf("registration_number")
+        if (!record.taxOrNationalId.isNullOrBlank()) fieldsUsed += "tax_or_national_id"
         if (!record.status.isNullOrBlank()) fieldsUsed += "status"
         if (!record.address.isNullOrBlank()) fieldsUsed += "address"
         if (!record.phone.isNullOrBlank()) fieldsUsed += "phone"
@@ -618,6 +657,7 @@ object OfficialRegistryDiscovery {
                 status = record.status,
                 importedAtEpochMs = record.importedAtEpochMs,
                 fieldsUsed = fieldsUsed,
+                taxOrNationalId = record.taxOrNationalId,
             ),
         )
     }
@@ -769,8 +809,13 @@ object OfficialRegistryImportParser {
         importedAtEpochMs: Long,
         defaultCity: String? = null,
     ): List<OfficialRegistryRecord> {
+        if (fileName.endsWith(".xlsx", ignoreCase = true)) {
+            return parseXlsxSheets(bytes).flatMap { rows ->
+                rowsToRecords(rows, source, importedAtEpochMs, defaultCity)
+            }
+        }
+
         val rows = when {
-            fileName.endsWith(".xlsx", ignoreCase = true) -> parseXlsx(bytes)
             fileName.endsWith(".csv", ignoreCase = true) ||
                 fileName.endsWith(".txt", ignoreCase = true) ||
                 fileName.endsWith(".tsv", ignoreCase = true) -> parseDelimited(bytes.toString(Charsets.UTF_8))
@@ -857,27 +902,39 @@ object OfficialRegistryImportParser {
                 website = value(row, WEBSITE_HEADERS)?.let(::sanitizeWebsite),
                 importedAtEpochMs = importedAtEpochMs,
                 naceCode = value(row, NACE_HEADERS),
+                taxOrNationalId = value(row, TAX_ID_HEADERS)?.let(::sanitizeTaxOrNationalId),
             )
         }
     }
 
-    internal fun parseXlsx(bytes: ByteArray): List<List<String>> {
+    internal fun parseXlsx(bytes: ByteArray): List<List<String>> =
+        parseXlsxSheets(bytes).firstOrNull().orEmpty()
+
+    internal fun parseXlsxSheets(bytes: ByteArray): List<List<List<String>>> {
         var sharedStringsXml: ByteArray? = null
-        var sheetXml: ByteArray? = null
+        val sheetXmls = mutableListOf<Pair<String, ByteArray>>()
         ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
             while (true) {
                 val entry = zip.nextEntry ?: break
                 when {
                     entry.name == "xl/sharedStrings.xml" -> sharedStringsXml = zip.readBytes()
-                    sheetXml == null &&
-                        entry.name.startsWith("xl/worksheets/") &&
-                        entry.name.endsWith(".xml") -> sheetXml = zip.readBytes()
+                    entry.name.startsWith("xl/worksheets/") &&
+                        entry.name.endsWith(".xml") -> sheetXmls += entry.name to zip.readBytes()
                 }
                 zip.closeEntry()
             }
         }
-        val sheet = sheetXml ?: throw IllegalArgumentException("XLSX içinde çalışma sayfası bulunamadı.")
+        require(sheetXmls.isNotEmpty()) { "XLSX içinde çalışma sayfası bulunamadı." }
         val sharedStrings = sharedStringsXml?.let(::parseSharedStrings).orEmpty()
+        return sheetXmls
+            .sortedBy { it.first }
+            .map { (_, sheet) -> parseSheetRows(sheet, sharedStrings) }
+    }
+
+    private fun parseSheetRows(
+        sheet: ByteArray,
+        sharedStrings: List<String>,
+    ): List<List<String>> {
         val document = secureFactory().newDocumentBuilder().parse(ByteArrayInputStream(sheet))
         val rowNodes = document.getElementsByTagNameNS("*", "row")
         val rows = mutableListOf<List<String>>()
@@ -1000,6 +1057,11 @@ object OfficialRegistryImportParser {
         return trimmed.take(64)
     }
 
+    private fun sanitizeTaxOrNationalId(value: String): String? {
+        val digits = sanitizeCell(value).filter(Char::isDigit)
+        return digits.takeIf { it.length == 10 || it.length == 11 }
+    }
+
     private fun sanitizeWebsite(value: String): String? {
         val trimmed = sanitizeCell(value)
         if (trimmed.isBlank()) return null
@@ -1012,6 +1074,18 @@ object OfficialRegistryImportParser {
         return normalized.take(512)
     }
 
+    private val TAX_ID_HEADERS = setOf(
+        "tc vergi no",
+        "tc vergi numarasi",
+        "vergi no",
+        "vergi numarasi",
+        "vergi kimlik no",
+        "vergi kimlik numarasi",
+        "vkn",
+        "tckn",
+        "tc kimlik no",
+        "tc kimlik numarasi",
+    )
     private val NAME_HEADERS = setOf(
         "firma unvani",
         "ticaret unvani",
@@ -1020,6 +1094,8 @@ object OfficialRegistryImportParser {
         "isletme adi",
         "isyeri unvani",
         "nokta adi",
+        "ticari unvan",
+        "ticari unvani",
     )
     private val REGISTRATION_HEADERS = setOf(
         "sicil no",
@@ -1039,16 +1115,24 @@ object OfficialRegistryImportParser {
     )
     private val STATUS_HEADERS = setOf(
         "durum",
+        "kayit durumu",
         "uyelik durumu",
         "uyelik durum",
         "tescil durumu",
         "faaliyet durumu",
         "sicil durumu",
     )
-    private val CITY_HEADERS = setOf("il", "sehir", "city")
-    private val DISTRICT_HEADERS = setOf("ilce", "district")
+    private val CITY_HEADERS = setOf("il", "il adi", "sehir", "city")
+    private val DISTRICT_HEADERS = setOf("ilce", "ilce adi", "district")
     private val SEMT_HEADERS = setOf("semt", "bolge")
-    private val NACE_HEADERS = setOf("nace", "nace kodu", "nace kod", "nace code")
+    private val NACE_HEADERS = setOf(
+        "nace",
+        "nace kodu",
+        "nace kod",
+        "nace code",
+        "faaliyet kodu",
+        "meslek kodu",
+    )
     private val NEIGHBORHOOD_HEADERS = setOf("mahalle", "mah", "neighborhood")
     private val ADDRESS_HEADERS = setOf(
         "adres",

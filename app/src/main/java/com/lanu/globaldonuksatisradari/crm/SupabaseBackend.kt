@@ -337,7 +337,9 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                                     ?: local?.contactName,
                                 businessType = p.optString("business_type").takeIf(String::isNotBlank)
                                     ?: local?.businessType,
-                                taxOrNationalId = local?.taxOrNationalId,
+                                taxOrNationalId = p.optString("tax_or_national_id")
+                                    .takeIf(String::isNotBlank)
+                                    ?: local?.taxOrNationalId,
                                 phone = p.optString("phone").takeIf(String::isNotBlank) ?: local?.phone,
                                 website = p.optString("website").takeIf(String::isNotBlank) ?: local?.website,
                                 registryStatus = p.optString(
@@ -499,6 +501,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
         put("notes", p.optString("notes").takeIf(String::isNotBlank) ?: JSONObject.NULL)
         put("contact_name", p.optString("contactName").takeIf(String::isNotBlank) ?: JSONObject.NULL)
         put("business_type", p.optString("businessType").takeIf(String::isNotBlank) ?: JSONObject.NULL)
+        put("tax_or_national_id", p.optString("taxOrNationalId").takeIf(String::isNotBlank) ?: JSONObject.NULL)
         put("phone", p.optString("phone").takeIf(String::isNotBlank) ?: JSONObject.NULL)
         put("website", p.optString("website").takeIf(String::isNotBlank) ?: JSONObject.NULL)
         put("registry_status", p.optString("registryStatus").ifBlank { CrmRegistryStatus.UNVERIFIED.name })
