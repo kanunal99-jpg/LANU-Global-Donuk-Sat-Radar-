@@ -56,7 +56,8 @@ class CrmRoomInstrumentationTest {
                     registrationNumber = "SICIL-123",
                     status = "Faal",
                     importedAtEpochMs = 900L,
-                    fieldsUsed = setOf("status", "phone", "website"),
+                    fieldsUsed = setOf("status", "phone", "website", "tax_or_national_id"),
+                    taxOrNationalId = "1234567890",
                 ),
             )
             assertTrue(VerifiedBusinessValidator.validate(business).isSuccess)
@@ -108,6 +109,7 @@ class CrmRoomInstrumentationTest {
             assertEquals(CrmRegistryStatus.ACTIVE, observed.single().registryStatus)
             assertEquals("İTO Resmî Üye/Firma Kaydı", observed.single().registrySource)
             assertEquals("SICIL-123", observed.single().registryNumber)
+            assertEquals("1234567890", observed.single().taxOrNationalId)
             assertEquals(DataQuality.OBSERVED, observed.single().dataQuality)
             assertEquals(SyncState.PENDING_UPLOAD, observed.single().syncState)
             assertEquals(customer.id, pending.single().entityId)
@@ -124,6 +126,7 @@ class CrmRoomInstrumentationTest {
             assertEquals("ACTIVE", pendingPayload.getString("registryStatus"))
             assertEquals("İTO Resmî Üye/Firma Kaydı", pendingPayload.getString("registrySource"))
             assertEquals("SICIL-123", pendingPayload.getString("registryNumber"))
+            assertEquals("1234567890", pendingPayload.getString("taxOrNationalId"))
             assertEquals("https://smoke.example", observed.single().website)
             assertEquals(1, transitions.size)
             assertEquals(CrmStage.PROSPECT.name, transitions.single().toStage)
@@ -207,6 +210,7 @@ class CrmRoomInstrumentationTest {
                         phone = "02160000000",
                         website = "https://eski.example",
                         importedAtEpochMs = 2_000L,
+                        taxOrNationalId = "1111111111",
                     ),
                 ),
                 ownerUserId = "owner-a",
@@ -222,6 +226,7 @@ class CrmRoomInstrumentationTest {
             assertEquals(CrmRegistryStatus.INACTIVE.name, updatedA.registryStatus)
             assertEquals("PASIF-99", updatedA.registryNumber)
             assertEquals("İTO Resmî Üye/Firma Kaydı", updatedA.registrySource)
+            assertEquals("1111111111", updatedA.taxOrNationalId)
             assertEquals("Güncel Operasyon Adresi", updatedA.address)
             assertEquals("05551112233", updatedA.phone)
             assertEquals(CrmRegistryStatus.UNVERIFIED.name, untouchedB.registryStatus)
