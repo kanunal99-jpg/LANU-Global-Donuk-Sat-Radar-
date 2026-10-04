@@ -268,11 +268,11 @@ class OfficialRegistryStore(
             ?.let(OfficialRegistryNormalizer::text)
 
         return readSource(source, city).filter { record ->
-            val cityMatches = record.city.isNullOrBlank() ||
+            val cityMatches = !record.city.isNullOrBlank() &&
                 OfficialRegistryNormalizer.text(record.city) == normalizedCity
             val districtMatches = normalizedDistrict == null ||
-                record.district.isNullOrBlank() ||
-                OfficialRegistryNormalizer.text(record.district) == normalizedDistrict
+                (!record.district.isNullOrBlank() &&
+                    OfficialRegistryNormalizer.text(record.district) == normalizedDistrict)
             cityMatches && districtMatches
         }
     }
