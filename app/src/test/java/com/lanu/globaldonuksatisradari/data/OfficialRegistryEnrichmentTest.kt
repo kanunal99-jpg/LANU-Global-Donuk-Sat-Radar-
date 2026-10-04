@@ -496,4 +496,49 @@ class OfficialRegistryEnrichmentTest {
         assertTrue(OfficialRegistryTrust.isIdentityVerified(records[0]))
     }
 
+
+    @Test
+    fun xlsxImportReadsEveryWorksheetWithoutDroppingLaterBatches() {
+        fun sheet(name: String, registration: String): String =
+            """<?xml version="1.0" encoding="UTF-8"?>
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <sheetData>
+                    <row r="1">
+                      <c r="A1" t="inlineStr"><is><t>Sicil No</t></is></c>
+                      <c r="B1" t="inlineStr"><is><t>Firma Ünvanı</t></is></c>
+                      <c r="C1" t="inlineStr"><is><t>İl</t></is></c>
+                    </row>
+                    <row r="2">
+                      <c r="A2" t="inlineStr"><is><t>$registration</t></is></c>
+                      <c r="B2" t="inlineStr"><is><t>$name</t></is></c>
+                      <c r="C2" t="inlineStr"><is><t>Bursa</t></is></c>
+                    </row>
+                  </sheetData>
+                </worksheet>
+            """.trimIndent()
+
+        val bytes = ByteArrayOutputStream().also { output ->
+            ZipOutputStream(output).use { zip ->
+                zip.putNextEntry(ZipEntry("xl/worksheets/sheet1.xml"))
+                zip.write(sheet("Birinci Sayfa Firma", "MS-1").toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+                zip.putNextEntry(ZipEntry("xl/worksheets/sheet2.xml"))
+                zip.write(sheet("İkinci Sayfa Firma", "MS-2").toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+            }
+        }.toByteArray()
+
+        val records = OfficialRegistryImportParser.parse(
+            bytes = bytes,
+            fileName = "cok-sayfali.xlsx",
+            source = OfficialRegistrySource.CHAMBER,
+            importedAtEpochMs = 1_000L,
+            defaultCity = "Bursa",
+        )
+
+        assertEquals(2, records.size)
+        assertEquals(setOf("MS-1", "MS-2"), records.mapNotNull { it.registrationNumber }.toSet())
+        assertEquals(setOf("Birinci Sayfa Firma", "İkinci Sayfa Firma"), records.map { it.businessName }.toSet())
+    }
+
 }
