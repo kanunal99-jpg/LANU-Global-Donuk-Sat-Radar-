@@ -469,4 +469,65 @@ class OfficialRegistryEnrichmentTest {
         assertNull(standalone)
     }
 
+
+    @Test
+    fun zipImportCombinesMultipleAuthorizedRegistryFiles() {
+        val zipBytes = ByteArrayOutputStream().also { output ->
+            ZipOutputStream(output).use { zip ->
+                listOf(
+                    "gida.csv" to """
+                        Oda Sicil No;Ünvan;Tescil Adresi;İlçe;Durum
+                        1001;Birinci Oda Üyesi;Merkez Mah. No:1;İnegöl;Faal
+                    """.trimIndent(),
+                    "hizmet.csv" to """
+                        Oda Sicil No;Ünvan;Tescil Adresi;İlçe;Durum
+                        1002;İkinci Oda Üyesi;Sanayi Cad. No:2;İnegöl;Faal
+                    """.trimIndent(),
+                ).forEach { (name, payload) ->
+                    zip.putNextEntry(ZipEntry(name))
+                    zip.write(payload.toByteArray(Charsets.UTF_8))
+                    zip.closeEntry()
+                }
+                zip.putNextEntry(ZipEntry("README.md"))
+                zip.write("ignored".toByteArray())
+                zip.closeEntry()
+            }
+        }.toByteArray()
+
+        val records = OfficialRegistryImportParser.parse(
+            bytes = zipBytes,
+            fileName = "inegol-yetkili-export.zip",
+            source = OfficialRegistrySource.CHAMBER,
+            importedAtEpochMs = 900L,
+            defaultCity = "Bursa",
+        )
+
+        assertEquals(2, records.size)
+        assertEquals(setOf("1001", "1002"), records.mapNotNull { it.registrationNumber }.toSet())
+        assertTrue(records.all { it.city == "Bursa" })
+        assertTrue(records.all { it.district == "İnegöl" })
+    }
+
+    @Test
+    fun tescilAdresiHeaderFromPublicChamberListIsRecognizedWithoutFakeRegistryIdentity() {
+        val csv = """
+            Unvan;Tescil Adresi
+            Örnek Açık Oda Üyesi;Cuma Mah. Atatürk Bul. No:10 İnegöl / Bursa
+        """.trimIndent()
+
+        val record = OfficialRegistryImportParser.parse(
+            bytes = csv.toByteArray(Charsets.UTF_8),
+            fileName = "public-chamber-list.csv",
+            source = OfficialRegistrySource.CHAMBER,
+            importedAtEpochMs = 901L,
+            defaultCity = "Bursa",
+        ).single()
+
+        assertEquals("Örnek Açık Oda Üyesi", record.businessName)
+        assertEquals("Cuma Mah. Atatürk Bul. No:10 İnegöl / Bursa", record.address)
+        assertEquals("Bursa", record.city)
+        assertNull(record.registrationNumber)
+        assertFalse(OfficialRegistryTrust.isIdentityVerified(record))
+    }
+
 }
