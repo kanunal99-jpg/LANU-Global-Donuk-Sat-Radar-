@@ -401,7 +401,7 @@ class OfficialRegistryEnrichmentTest {
     fun officialSourceContractsRequireAuthorizedImportInsteadOfAnonymousScraping() {
         assertEquals(SourceAccessMethod.OFFICIAL_BULK_REQUEST, OfficialRegistrySource.ITO.contract.accessMethod)
         assertEquals(SourceAccessMethod.OFFICIAL_BULK_REQUEST, OfficialRegistrySource.CHAMBER.contract.accessMethod)
-        assertEquals(SourceAccessMethod.AUTHENTICATED_EXPORT, OfficialRegistrySource.TOBB.contract.accessMethod)
+        assertEquals(SourceAccessMethod.API, OfficialRegistrySource.TOBB.contract.accessMethod)
         assertEquals(SourceAccessMethod.AUTHENTICATED_EXPORT, OfficialRegistrySource.MERSIS.contract.accessMethod)
         assertEquals(SourceAccessMethod.AUTHENTICATED_EXPORT, OfficialRegistrySource.ESBIS.contract.accessMethod)
         assertTrue(OfficialRegistrySource.entries.all { it.contract.permittedUseVerified })
@@ -493,6 +493,7 @@ class OfficialRegistryEnrichmentTest {
         assertEquals("0123456789012345", record.mersisNumber)
         assertEquals("556677", record.registrationNumber)
         assertEquals("34", record.chamberCode)
+        assertEquals("1234567890", record.taxNumber)
         assertEquals("OID-77", record.sourceRecordId)
         assertEquals("28.29.90", record.naceCode)
         assertEquals("Diğer genel amaçlı makinelerin imalatı", record.businessType)
@@ -541,6 +542,25 @@ class OfficialRegistryEnrichmentTest {
 
         assertNull(record.registrationNumber)
         assertFalse(OfficialRegistryTrust.isIdentityVerified(record))
+    }
+
+
+    @Test
+    fun mersisNumberAloneIsAcceptedAsOfficialBusinessIdentity() {
+        val record = record(
+            registrationNumber = null,
+            name = "MERSİS Kimlikli Firma",
+        ).copy(mersisNumber = "0123456789012345")
+
+        assertTrue(OfficialRegistryTrust.isIdentityVerified(record))
+
+        val business = OfficialRegistryDiscovery.toVerifiedBusiness(
+            record = record,
+            selectedCity = "İstanbul",
+            selectedDistrict = "Tuzla",
+        )
+        requireNotNull(business)
+        assertEquals("0123456789012345", business.officialRegistryEvidence?.registrationNumber)
     }
 
 }
