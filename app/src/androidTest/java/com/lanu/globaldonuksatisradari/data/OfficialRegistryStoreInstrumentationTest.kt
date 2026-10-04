@@ -11,55 +11,52 @@ import org.junit.runner.RunWith
 class OfficialRegistryStoreInstrumentationTest {
 
     @Test
-    fun chamberImportsArePartitionedByCityAndDoNotOverwriteOtherCities() {
+    fun authorizedChunksMergeAndSameRegistryRefreshReplacesOlderRow() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val store = OfficialRegistryStore(context)
+        val token = System.nanoTime().toString()
+        val city = "Audit Merge " + token
 
-        fun csv(registration: String, businessName: String): ByteArray =
+        fun csv(registration: String, businessName: String, phone: String): ByteArray =
             """
-                Sicil No;Firma Ünvanı;Durum
-                $registration;$businessName;Faal
+                Sicil No;Firma Ünvanı;Durum;Telefon
+                $registration;$businessName;Faal;$phone
             """.trimIndent().toByteArray(Charsets.UTF_8)
 
         store.importDocument(
             source = OfficialRegistrySource.CHAMBER,
-            fileName = "audit-ankara.csv",
-            bytes = csv("AUDIT-A-1", "Audit Ankara İlk"),
+            fileName = "chunk-1.csv",
+            bytes = csv("AUDIT-$token-A", "Audit İlk", "03121111111"),
             importedAtEpochMs = 10_000L,
-            defaultCity = "Audit Ankara",
+            defaultCity = city,
         )
         store.importDocument(
             source = OfficialRegistrySource.CHAMBER,
-            fileName = "audit-bursa.csv",
-            bytes = csv("AUDIT-B-1", "Audit Bursa"),
+            fileName = "chunk-2.csv",
+            bytes = csv("AUDIT-$token-B", "Audit İkinci", "03122222222"),
             importedAtEpochMs = 11_000L,
-            defaultCity = "Audit Bursa",
+            defaultCity = city,
         )
 
-        val ankaraBeforeRefresh = store.recordsFor("Audit Ankara", null)
-            .filter { it.registrationNumber == "AUDIT-A-1" }
-        val bursaBeforeRefresh = store.recordsFor("Audit Bursa", null)
-            .filter { it.registrationNumber == "AUDIT-B-1" }
-
-        assertEquals(1, ankaraBeforeRefresh.size)
-        assertEquals(1, bursaBeforeRefresh.size)
+        val afterChunks = store.recordsFor(OfficialRegistrySource.CHAMBER, city, null)
+            .filter { it.registrationNumber?.startsWith("AUDIT-$token-") == true }
+        assertEquals(2, afterChunks.size)
 
         store.importDocument(
             source = OfficialRegistrySource.CHAMBER,
-            fileName = "audit-ankara-refresh.csv",
-            bytes = csv("AUDIT-A-2", "Audit Ankara Güncel"),
+            fileName = "chunk-1-refresh.csv",
+            bytes = csv("AUDIT-$token-A", "Audit İlk Güncel", "03123333333"),
             importedAtEpochMs = 12_000L,
-            defaultCity = "Audit Ankara",
+            defaultCity = city,
         )
 
-        val ankaraAfterRefresh = store.recordsFor("Audit Ankara", null)
-            .filter { it.businessName.startsWith("Audit Ankara") }
-        val bursaAfterRefresh = store.recordsFor("Audit Bursa", null)
-            .filter { it.registrationNumber == "AUDIT-B-1" }
-
-        assertEquals(1, ankaraAfterRefresh.size)
-        assertEquals("AUDIT-A-2", ankaraAfterRefresh.single().registrationNumber)
-        assertEquals(1, bursaAfterRefresh.size)
-        assertTrue(bursaAfterRefresh.single().businessName == "Audit Bursa")
+        val refreshed = store.recordsFor(OfficialRegistrySource.CHAMBER, city, null)
+            .filter { it.registrationNumber?.startsWith("AUDIT-$token-") == true }
+        assertEquals(2, refreshed.size)
+        val first = refreshed.single { it.registrationNumber == "AUDIT-$token-A" }
+        assertEquals("Audit İlk Güncel", first.businessName)
+        assertEquals("03123333333", first.phone)
+        assertTrue(refreshed.any { it.registrationNumber == "AUDIT-$token-B" })
     }
+
 }
