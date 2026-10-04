@@ -171,7 +171,13 @@ class LocalCrmRepository(
             if (inactive) inactiveMatches++
 
             val candidate = existing.copy(
-                signboardName = existing.signboardName ?: existing.businessName,
+                signboardName = if (inactive) {
+                    existing.signboardName
+                } else {
+                    match.signboardName?.trim()?.takeIf(String::isNotEmpty)
+                        ?: existing.signboardName
+                        ?: existing.businessName
+                },
                 city = if (inactive) existing.city else {
                     match.city?.trim()?.takeIf(String::isNotEmpty) ?: existing.city
                 },
@@ -189,6 +195,14 @@ class LocalCrmRepository(
                 },
                 website = if (inactive) existing.website else {
                     match.website?.trim()?.takeIf(String::isNotEmpty) ?: existing.website
+                },
+                businessType = if (inactive) existing.businessType else {
+                    match.businessType?.trim()?.takeIf(String::isNotEmpty)
+                        ?: match.naceCode?.trim()?.takeIf(String::isNotEmpty)?.let { "NACE " + it }
+                        ?: existing.businessType
+                },
+                taxOrNationalId = if (inactive) existing.taxOrNationalId else {
+                    match.taxNumber?.trim()?.takeIf(String::isNotEmpty) ?: existing.taxOrNationalId
                 },
                 dataQuality = DataQuality.OBSERVED.name,
                 registryStatus = registryStatusFor(match.status).name,
@@ -237,7 +251,9 @@ class LocalCrmRepository(
         val evidence = business.officialRegistryEvidence
         val enrichedCandidate = existing.copy(
             businessName = business.name.trim().takeIf { it.isNotEmpty() } ?: existing.businessName,
-            signboardName = business.name.trim().takeIf { it.isNotEmpty() } ?: existing.signboardName,
+            signboardName = evidence?.signboardName?.trim()?.takeIf { it.isNotEmpty() }
+                ?: business.name.trim().takeIf { it.isNotEmpty() }
+                ?: existing.signboardName,
             city = business.city.trim().takeIf { it.isNotEmpty() } ?: existing.city,
             district = business.district.trim()
                 .takeIf { it.isNotEmpty() && !it.equals("Bilinmiyor", ignoreCase = true) }
@@ -248,8 +264,11 @@ class LocalCrmRepository(
                 ?: existing.address,
             latitude = business.latitude ?: existing.latitude,
             longitude = business.longitude ?: existing.longitude,
-            businessType = BusinessCategoryLabels.displayName(business.category)
-                ?: BusinessCategoryLabels.displayName(existing.businessType),
+            businessType = evidence?.businessType?.trim()?.takeIf { it.isNotEmpty() }
+                ?: BusinessCategoryLabels.displayName(business.category)
+                ?: existing.businessType,
+            taxOrNationalId = evidence?.taxNumber?.trim()?.takeIf { it.isNotEmpty() }
+                ?: existing.taxOrNationalId,
             phone = business.phone?.trim()?.takeIf { it.isNotEmpty() }
                 ?: existing.phone,
             website = business.website?.trim()?.takeIf { it.isNotEmpty() }
@@ -297,7 +316,8 @@ class LocalCrmRepository(
             id = idGenerator(),
             businessSourceId = business.id,
             businessName = business.name,
-            signboardName = business.name.trim().takeIf { it.isNotEmpty() },
+            signboardName = evidence?.signboardName?.trim()?.takeIf { it.isNotEmpty() }
+                ?: business.name.trim().takeIf { it.isNotEmpty() },
             city = business.city,
             district = business.district,
             neighborhood = business.neighborhood,
@@ -307,7 +327,10 @@ class LocalCrmRepository(
             dataQuality = DataQuality.OBSERVED,
             stage = CrmStage.PROSPECT,
             ownerUserId = ownerUserId,
-            businessType = BusinessCategoryLabels.displayName(business.category),
+            businessType = evidence?.businessType?.trim()?.takeIf { it.isNotEmpty() }
+                ?: BusinessCategoryLabels.displayName(business.category)
+                ?: business.category?.trim()?.takeIf { it.isNotEmpty() },
+            taxOrNationalId = evidence?.taxNumber?.trim()?.takeIf { it.isNotEmpty() },
             phone = business.phone?.trim()?.takeIf { it.isNotEmpty() },
             website = business.website?.trim()?.takeIf { it.isNotEmpty() },
             registryStatus = evidence?.let { registryStatusFor(it.status) }
