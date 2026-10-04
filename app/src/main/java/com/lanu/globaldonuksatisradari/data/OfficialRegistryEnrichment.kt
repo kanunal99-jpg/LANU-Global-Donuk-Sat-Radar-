@@ -1242,7 +1242,9 @@ object OfficialRegistryImportParser {
         "website",
         "web sitesi",
         "internet sitesi",
-    )    private const val MAX_ARCHIVE_ENTRIES = 200
+    )
+
+    private const val MAX_ARCHIVE_ENTRIES = 200
     private const val MAX_ARCHIVE_ENTRY_BYTES = 25 * 1024 * 1024
     private const val MAX_ARCHIVE_EXPANDED_BYTES = 100L * 1024L * 1024L
 
