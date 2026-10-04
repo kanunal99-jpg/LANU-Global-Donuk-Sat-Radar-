@@ -82,7 +82,10 @@ fun OfficialRegistryImportCard(
                         source = source,
                         fileName = fileName,
                         bytes = bytes,
-                        defaultCity = if (source == OfficialRegistrySource.CHAMBER) defaultCity else null,
+                        defaultCity = if (
+                            source == OfficialRegistrySource.CHAMBER ||
+                            source == OfficialRegistrySource.TOBB
+                        ) defaultCity else null,
                     )
                 }
             }.onSuccess { summary ->
@@ -126,7 +129,7 @@ fun OfficialRegistryImportCard(
                 onImported(summary, records)
             }.onFailure { error ->
                 status = "Resmî sicil dosyası içe aktarılamadı: " +
-                    (error.message ?: "CSV/TSV/TXT veya XLSX sütunlarını kontrol edin.")
+                    (error.message ?: "CSV/TSV/TXT/XLSX veya yetkili TOBB JSON çıktısını kontrol edin.")
             }
             importing = false
         }
@@ -140,7 +143,8 @@ fun OfficialRegistryImportCard(
             Text("Resmî sicil doğrulaması", style = MaterialTheme.typography.titleMedium)
             Text(
                 "İTO, diğer Ticaret/Ticaret ve Sanayi Odaları, TOBB, MERSİS veya ESBİS üzerinden resmî olarak " +
-                    "temin ettiğiniz CSV/XLSX çıktısını içe aktarın. Telefon 1/2, GSM, Cep ve Mobil alanları da okunur.",
+                    "temin ettiğiniz CSV/XLSX çıktısını içe aktarın. TOBB için ayrıca yetkili Oda/Borsa Web Servisi " +
+                    "odayaAitUyeleriSorgula JSON çıktısı desteklenir. Telefon 1/2, GSM, Cep ve Mobil alanları da okunur.",
                 style = MaterialTheme.typography.bodySmall,
             )
 
@@ -184,6 +188,7 @@ fun OfficialRegistryImportCard(
                             "text/tab-separated-values",
                             "text/plain",
                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            "application/json",
                             "application/octet-stream",
                         ),
                     )
@@ -351,7 +356,8 @@ fun OfficialRegistryImportCard(
             Text(
                 buildString {
                     append("Not: ODA/TOBB dahil kaynak seçimi dosyanın nereden alındığını beyan eder; resmî kimlik için sicil/kayıt numarası aranır. ")
-                    append("Giriş gerektiren oda/TOBB sistemleri otomatik kazınmaz; yetkili çıktı içe aktarılır.")
+                    append("Giriş gerektiren oda/TOBB/MERSİS/ESBİS sistemleri otomatik kazınmaz; yetkili çıktı içe aktarılır. ")
+                    append("TOBB Oda/Borsa servis JSON'unda T.C. kimlik numarası alanı mevcut olsa bile uygulama bunu otomatik içe almaz; veri minimizasyonu uygulanır.")
                     if (!defaultCity.isNullOrBlank()) {
                         append(" ODA dosyasında İl sütunu yoksa seçili şehir ($defaultCity) kullanılır.")
                     }
