@@ -563,4 +563,40 @@ class OfficialRegistryEnrichmentTest {
         assertEquals("0123456789012345", business.officialRegistryEvidence?.registrationNumber)
     }
 
+
+    @Test
+    fun authorizedTobbMemberCardReadsNestedBusinessAddressAndPhones() {
+        val json = """
+            {
+              "obResult": {
+                "hatali": false,
+                "donusDegeri": "{\"uyelikTemelBilgileri\":{\"unvan\":\"Kartlı Firma AŞ\",\"tabelaUnvani\":\"Kartlı\",\"mersisNo\":\"0123000000000001\",\"uyeOdaSicilNo\":\"778899\",\"vergiNo\":\"9876543210\",\"odaBorsaNo\":\"16\",\"uyelikDurum\":\"faal\",\"webAdresi\":\"kartli.example\",\"epostaAdres\":\"iletisim@kartli.example\",\"anaFaaliyetKodu\":\"46.69.90\",\"anaFaaliyetAciklamasi\":\"Diğer makine toptan ticareti\"},\"adresList\":[{\"bitisTarihi\":\"\",\"yazismaAdresi\":\"1\",\"İl\":\"Bursa\",\"İlce\":\"Nilüfer\",\"Mahalle\":\"Üçevler\",\"butunlesikAdres\":\"Üçevler Mah. Sanayi Cad. No:5 Nilüfer/Bursa\"}],\"telefonList\":[{\"ulkeTelKodu\":\"90\",\"telefonNo\":\"2241112233\"},{\"ulkeTelKodu\":\"90\",\"telefonNo\":\"5324445566\"}]}"
+              }
+            }
+        """.trimIndent()
+
+        val record = OfficialRegistryImportParser.parse(
+            bytes = json.toByteArray(),
+            fileName = "tobb-member-card.json",
+            source = OfficialRegistrySource.TOBB,
+            importedAtEpochMs = 1_790_000_000_003L,
+        ).single()
+
+        assertEquals("Kartlı Firma AŞ", record.businessName)
+        assertEquals("Kartlı", record.signboardName)
+        assertEquals("778899", record.registrationNumber)
+        assertEquals("0123000000000001", record.mersisNumber)
+        assertEquals("Bursa", record.city)
+        assertEquals("Nilüfer", record.district)
+        assertEquals("Üçevler", record.neighborhood)
+        assertEquals("Üçevler Mah. Sanayi Cad. No:5 Nilüfer/Bursa", record.address)
+        assertEquals("2241112233 / 5324445566", record.phone)
+        assertEquals("faal", record.status)
+        assertEquals("https://kartli.example", record.website)
+        assertEquals("iletisim@kartli.example", record.email)
+        assertEquals("46.69.90", record.naceCode)
+        assertEquals("Diğer makine toptan ticareti", record.businessType)
+        assertEquals("9876543210", record.taxNumber)
+    }
+
 }
