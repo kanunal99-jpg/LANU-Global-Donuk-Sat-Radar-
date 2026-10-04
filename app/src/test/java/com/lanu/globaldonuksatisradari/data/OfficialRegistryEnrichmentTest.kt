@@ -530,4 +530,26 @@ class OfficialRegistryEnrichmentTest {
         assertFalse(OfficialRegistryTrust.isIdentityVerified(record))
     }
 
+
+    @Test
+    fun authorizedExportPreservesSignboardTaxIdAndNace() {
+        val csv = """
+            Oda Sicil No;Ünvan;Tabela Ünvanı;Vergi Numarası;NACE Kodu;Durum;İl;İlçe
+            778899;ÖRNEK TİCARET LİMİTED ŞİRKETİ;Örnek Market;1234567890;47.11.01;Faal;Bursa;İnegöl
+        """.trimIndent()
+
+        val record = OfficialRegistryImportParser.parse(
+            bytes = csv.toByteArray(Charsets.UTF_8),
+            fileName = "yetkili-oda-export.csv",
+            source = OfficialRegistrySource.CHAMBER,
+            importedAtEpochMs = 902L,
+        ).single()
+
+        assertEquals("778899", record.registrationNumber)
+        assertEquals("Örnek Market", record.signboardName)
+        assertEquals("1234567890", record.taxOrNationalId)
+        assertEquals("47.11.01", record.naceCode)
+        assertTrue(OfficialRegistryTrust.isIdentityVerified(record))
+    }
+
 }
