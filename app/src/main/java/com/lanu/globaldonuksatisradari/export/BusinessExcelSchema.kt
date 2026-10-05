@@ -29,6 +29,8 @@ data class BusinessExcelOfficialSnapshot(
     val naceCode: String? = null,
     val taxOrNationalId: String? = null,
     val reportedAddress: String? = null,
+    val reportedPhone: String? = null,
+    val reportedWebsite: String? = null,
 )
 
 class BusinessExcelOfficialIndex private constructor(
@@ -278,6 +280,8 @@ object BusinessExcelSchema {
         "Mahalle",
         "Açık Adres",
         "Sicil/İlan Adresi",
+        "Sicil Telefonu",
+        "Sicil Web Sitesi",
         "X",
         "Y",
         "Konum Bilgileri",
@@ -331,6 +335,8 @@ object BusinessExcelSchema {
             customer.neighborhood.orEmpty(),
             customer.address.orEmpty(),
             official.reportedAddress.orEmpty(),
+            official.reportedPhone.orEmpty(),
+            official.reportedWebsite.orEmpty(),
             customer.longitude?.toString().orEmpty(),
             customer.latitude?.toString().orEmpty(),
             mapLink,
@@ -391,12 +397,16 @@ object BusinessExcelSchema {
         if (values[commonHeaders.indexOf("TC/Vergi No")].isBlank()) {
             set("TC/Vergi No", record.taxOrNationalId)
         }
-        if (values[commonHeaders.indexOf("Telefon No")].isBlank()) {
-            set("Telefon No", record.phone)
+        if (record.source != OfficialRegistrySource.TTSG) {
+            if (values[commonHeaders.indexOf("Telefon No")].isBlank()) {
+                set("Telefon No", record.phone)
+            }
+            if (values[commonHeaders.indexOf("Web Sitesi")].isBlank()) {
+                set("Web Sitesi", record.website)
+            }
         }
-        if (values[commonHeaders.indexOf("Web Sitesi")].isBlank()) {
-            set("Web Sitesi", record.website)
-        }
+        set("Sicil Telefonu", record.phone)
+        set("Sicil Web Sitesi", record.website)
         if (values[commonHeaders.indexOf("İl")].isBlank()) set("İl", record.city)
         if (values[commonHeaders.indexOf("İlçe")].isBlank()) set("İlçe", record.district)
         if (values[commonHeaders.indexOf("Mahalle")].isBlank()) set("Mahalle", record.neighborhood)
@@ -617,6 +627,8 @@ object BusinessExcelOfficialResolver {
                 ?: matched.firstNotNullOfOrNull { it.taxOrNationalId?.takeIf(String::isNotBlank) },
             reportedAddress = ttsg?.address
                 ?: matched.firstNotNullOfOrNull { it.address?.takeIf(String::isNotBlank) },
+            reportedPhone = matched.firstNotNullOfOrNull { it.phone?.takeIf(String::isNotBlank) },
+            reportedWebsite = matched.firstNotNullOfOrNull { it.website?.takeIf(String::isNotBlank) },
         )
     }
 
