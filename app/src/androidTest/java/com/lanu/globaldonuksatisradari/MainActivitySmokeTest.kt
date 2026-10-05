@@ -119,6 +119,25 @@ class MainActivitySmokeTest {
     }
 
     @Test(timeout = 60_000)
+    fun launch_schedulesCrmReminderFallback() {
+        val context = composeRule.activity
+        composeRule.waitUntil(30_000) {
+            runCatching {
+                WorkManager.getInstance(context)
+                    .getWorkInfosForUniqueWork("lanu_crm_reminder_scan")
+                    .get()
+                    .isNotEmpty()
+            }.getOrDefault(false)
+        }
+        assertFalse(
+            WorkManager.getInstance(context)
+                .getWorkInfosForUniqueWork("lanu_crm_reminder_scan")
+                .get()
+                .isEmpty(),
+        )
+    }
+
+    @Test(timeout = 60_000)
     fun launch_createsStableActivity() {
         assertNotNull(composeRule.activity)
     }
