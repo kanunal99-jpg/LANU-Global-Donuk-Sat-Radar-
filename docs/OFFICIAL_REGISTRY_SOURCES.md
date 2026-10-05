@@ -1,6 +1,6 @@
 # Türkiye Resmî İşletme Kaynakları — Erişim ve Güven Politikası
 
-Son araştırma: 2026-10-04
+Son araştırma: 2026-10-05
 
 Amaç, Türkiye'deki işletme keşfini sektör kısıtı olmadan geniş tutarken **resmî sicil kanıtı** ile açık harita/POI keşif verisini birbirine karıştırmamaktır.
 
