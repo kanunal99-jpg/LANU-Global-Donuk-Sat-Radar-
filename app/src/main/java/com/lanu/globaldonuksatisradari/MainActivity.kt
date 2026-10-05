@@ -108,8 +108,19 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     }
     val initialCity = remember {
         val savedCity = uiPreferences.getString("selected_city", null)
+        val savedDistrict = uiPreferences.getString("selected_district", "Tümü").orEmpty()
         cities.firstOrNull { it.name.equals(savedCity, ignoreCase = true) }
-            ?: cities.firstOrNull { it.name == "İstanbul" }
+            ?: if (savedCity.equals("İstanbul", ignoreCase = true)) {
+                val legacyRegion = if (savedDistrict in IstanbulDistricts.EUROPEAN) {
+                    "İstanbul Avrupa"
+                } else {
+                    "İstanbul Anadolu"
+                }
+                cities.firstOrNull { it.name == legacyRegion }
+            } else {
+                null
+            }
+            ?: cities.firstOrNull { it.name == "İstanbul Anadolu" }
             ?: cities.first()
     }
     var selectedCity by remember { mutableStateOf(initialCity) }
