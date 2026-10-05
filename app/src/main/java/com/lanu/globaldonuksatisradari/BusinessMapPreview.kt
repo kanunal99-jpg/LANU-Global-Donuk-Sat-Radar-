@@ -22,7 +22,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -110,7 +109,7 @@ fun BusinessMapPreview(
                     settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                     settings.cacheMode = WebSettings.LOAD_DEFAULT
                     settings.userAgentString = APP_USER_AGENT
-                    setBackgroundColor(Color.Transparent.value.toInt())
+                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
                     addJavascriptInterface(bridge, "AndroidMapBridge")
                     tag = htmlKey
                     loadDataWithBaseURL(
