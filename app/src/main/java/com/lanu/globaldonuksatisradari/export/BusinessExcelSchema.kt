@@ -332,14 +332,20 @@ object BusinessExcelSchema {
             MutableList(commonHeaders.size) { "" }
         }
 
-        fun set(header: String, value: String?) {
+        fun set(
+            header: String,
+            value: String?,
+            allowBlank: Boolean = false,
+        ) {
             val index = commonHeaders.indexOf(header)
-            if (index >= 0 && !value.isNullOrBlank()) values[index] = value
+            if (index >= 0 && (allowBlank || !value.isNullOrBlank())) {
+                values[index] = value.orEmpty()
+            }
         }
 
         if (customer == null && business != null) {
-            set("Ad Soyad", "")
-            set("CRM Aşaması", "")
+            set("Ad Soyad", "", allowBlank = true)
+            set("CRM Aşaması", "", allowBlank = true)
             set("Tabela Adı", business.name)
             set("Veri Kalitesi", "Radar / açık kaynak")
         }
