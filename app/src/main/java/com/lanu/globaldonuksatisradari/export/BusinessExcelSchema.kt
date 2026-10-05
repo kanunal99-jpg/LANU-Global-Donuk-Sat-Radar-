@@ -124,27 +124,39 @@ class BusinessExcelContextIndex private constructor(
     private val customers: List<CrmCustomer>,
     private val businesses: List<VerifiedBusiness>,
 ) {
-    private val customersByIdentity = buildMap<String, MutableList<CrmCustomer>> {
+    private val customersByRegistry = buildMap<String, MutableList<CrmCustomer>> {
         customers.forEach { customer ->
-            listOf(customer.registryNumber, customer.taxOrNationalId)
-                .mapNotNull { it?.trim()?.takeIf(String::isNotBlank) }
-                .map(::identityKey)
-                .distinct()
-                .forEach { key -> getOrPut(key) { mutableListOf() }.add(customer) }
+            customer.registryNumber
+                ?.trim()
+                ?.takeIf(String::isNotBlank)
+                ?.let(::identityKey)
+                ?.let { key -> getOrPut(key) { mutableListOf() }.add(customer) }
         }
     }
-    private val businessesByIdentity = buildMap<String, MutableList<VerifiedBusiness>> {
+    private val customersByTax = buildMap<String, MutableList<CrmCustomer>> {
+        customers.forEach { customer ->
+            customer.taxOrNationalId
+                ?.filter(Char::isDigit)
+                ?.takeIf(String::isNotBlank)
+                ?.let { key -> getOrPut(key) { mutableListOf() }.add(customer) }
+        }
+    }
+    private val businessesByRegistry = buildMap<String, MutableList<VerifiedBusiness>> {
         businesses.forEach { business ->
             val evidence = business.officialRegistryEvidence
-            listOf(
-                evidence?.registrationNumber,
-                evidence?.mersisNumber,
-                evidence?.taxOrNationalId,
-            )
+            listOf(evidence?.registrationNumber, evidence?.mersisNumber)
                 .mapNotNull { it?.trim()?.takeIf(String::isNotBlank) }
                 .map(::identityKey)
                 .distinct()
                 .forEach { key -> getOrPut(key) { mutableListOf() }.add(business) }
+        }
+    }
+    private val businessesByTax = buildMap<String, MutableList<VerifiedBusiness>> {
+        businesses.forEach { business ->
+            business.officialRegistryEvidence?.taxOrNationalId
+                ?.filter(Char::isDigit)
+                ?.takeIf(String::isNotBlank)
+                ?.let { key -> getOrPut(key) { mutableListOf() }.add(business) }
         }
     }
     private val customersByRegion = customers.groupBy {
@@ -155,8 +167,11 @@ class BusinessExcelContextIndex private constructor(
     }
 
     fun customerFor(record: OfficialRegistryRecord): CrmCustomer? {
-        recordIdentityKeys(record).forEach { key ->
-            customersByIdentity[key]?.firstOrNull()?.let { return it }
+        registryKeys(record).forEach { key ->
+            customersByRegistry[key]?.firstOrNull()?.let { return it }
+        }
+        taxKey(record)?.let { key ->
+            customersByTax[key]?.firstOrNull()?.let { return it }
         }
         val regional = customersByRegion[locationKey(record.city) to locationKey(record.district)].orEmpty()
         return regional.firstOrNull { customer ->
@@ -172,8 +187,11 @@ class BusinessExcelContextIndex private constructor(
     }
 
     fun businessFor(record: OfficialRegistryRecord): VerifiedBusiness? {
-        recordIdentityKeys(record).forEach { key ->
-            businessesByIdentity[key]?.firstOrNull()?.let { return it }
+        registryKeys(record).forEach { key ->
+            businessesByRegistry[key]?.firstOrNull()?.let { return it }
+        }
+        taxKey(record)?.let { key ->
+            businessesByTax[key]?.firstOrNull()?.let { return it }
         }
         val regional = businessesByRegion[locationKey(record.city) to locationKey(record.district)].orEmpty()
         return regional.firstOrNull { business ->
@@ -201,15 +219,16 @@ class BusinessExcelContextIndex private constructor(
                 BusinessExcelContextIndex(customers, businesses)
             }
 
-        private fun recordIdentityKeys(record: OfficialRegistryRecord): List<String> =
-            listOf(
-                record.registrationNumber,
-                record.mersisNumber,
-                record.taxOrNationalId,
-            )
+        private fun registryKeys(record: OfficialRegistryRecord): List<String> =
+            listOf(record.registrationNumber, record.mersisNumber)
                 .mapNotNull { it?.trim()?.takeIf(String::isNotBlank) }
                 .map(::identityKey)
                 .distinct()
+
+        private fun taxKey(record: OfficialRegistryRecord): String? =
+            record.taxOrNationalId
+                ?.filter(Char::isDigit)
+                ?.takeIf(String::isNotBlank)
 
         private fun identityKey(value: String): String =
             value.filter(Char::isLetterOrDigit).uppercase(Locale.ROOT)
