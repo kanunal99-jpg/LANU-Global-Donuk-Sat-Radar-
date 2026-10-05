@@ -242,6 +242,11 @@ class MainActivitySmokeTest {
         var customerId = ""
         runBlocking {
             val context = composeRule.activity
+            context.getSharedPreferences("lanu_ui_state", android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putString("selected_city", "İstanbul")
+                .putString("selected_district", "Tümü")
+                .commit()
             val repository = LocalCrmRepository(LanuCrmDatabase.getInstance(context))
             customerId = repository.addManualCustomerPoint(
                 businessName = "Harita Smoke Nokta",
