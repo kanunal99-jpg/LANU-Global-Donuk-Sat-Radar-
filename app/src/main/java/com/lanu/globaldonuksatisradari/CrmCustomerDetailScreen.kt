@@ -61,6 +61,7 @@ fun CrmCustomerDetailScreen(
     onTransitionOpportunity: (String, CrmOpportunityStatus) -> Unit,
     onSaveNotes: (String?) -> Unit,
     onWorkspaceMessage: (String) -> Unit = {},
+    commercialContent: @Composable () -> Unit = {},
     message: String? = null,
 ) {
     var stageMenu by remember(customer.id, customer.stage) { mutableStateOf(false) }
@@ -177,6 +178,8 @@ fun CrmCustomerDetailScreen(
             customer = customer,
             onMessage = onWorkspaceMessage,
         )
+
+        commercialContent()
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
