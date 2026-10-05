@@ -160,6 +160,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var categoryFilter by remember { mutableStateOf("Tümü") }
     var phoneFilter by remember { mutableStateOf("Tümü") }
     var websiteFilter by remember { mutableStateOf("Tümü") }
+    var addressFilter by remember { mutableStateOf("Tümü") }
+    var coordinateFilter by remember { mutableStateOf("Tümü") }
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<VerifiedBusiness>>(emptyList()) }
     var selectedBusiness by remember { mutableStateOf<VerifiedBusiness?>(null) }
@@ -326,7 +328,16 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val categoryOptions = remember {
         listOf("Tümü") + BusinessCategoryLabels.searchLabels
     }
-    val visibleResults = remember(results, selectedDistrict, selectedNeighborhood, categoryFilter, phoneFilter, websiteFilter) {
+    val visibleResults = remember(
+        results,
+        selectedDistrict,
+        selectedNeighborhood,
+        categoryFilter,
+        phoneFilter,
+        websiteFilter,
+        addressFilter,
+        coordinateFilter,
+    ) {
         results.filter { business ->
             (selectedDistrict == "Tümü" || business.district.equals(selectedDistrict, true)) &&
                 (
@@ -335,7 +346,13 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             normalizeNeighborhoodLabel(selectedNeighborhood)
                 ) &&
                 matchesInventoryPresence(business.phone, phoneFilter) &&
-                matchesInventoryPresence(business.website, websiteFilter)
+                matchesInventoryPresence(business.website, websiteFilter) &&
+                matchesInventoryPresence(business.address, addressFilter) &&
+                when (coordinateFilter) {
+                    "Var" -> business.latitude != null && business.longitude != null
+                    "Yok" -> business.latitude == null || business.longitude == null
+                    else -> true
+                }
         }
     }
     val qualitySummary = remember(visibleResults) {
@@ -371,6 +388,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         categoryFilter = "Tümü"
         phoneFilter = "Tümü"
         websiteFilter = "Tümü"
+        addressFilter = "Tümü"
+        coordinateFilter = "Tümü"
         query = ""
     }
 
@@ -565,6 +584,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     )
                                     InventoryFilterMenu("Telefon", phoneFilter, presenceOptions, { phoneFilter = it })
                                     InventoryFilterMenu("Web sitesi", websiteFilter, presenceOptions, { websiteFilter = it })
+                                    InventoryFilterMenu("Adres", addressFilter, presenceOptions, { addressFilter = it })
+                                    InventoryFilterMenu("Koordinat", coordinateFilter, presenceOptions, { coordinateFilter = it })
                                     Text("${visibleResults.size} sonuç", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                                 }
                             }
