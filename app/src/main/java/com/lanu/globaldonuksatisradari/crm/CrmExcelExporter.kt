@@ -1,6 +1,7 @@
 package com.lanu.globaldonuksatisradari.crm
 
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryRecord
+import com.lanu.globaldonuksatisradari.export.BusinessExcelOfficialIndex
 import com.lanu.globaldonuksatisradari.export.BusinessExcelSchema
 import java.io.ByteArrayOutputStream
 import java.util.zip.ZipEntry
@@ -32,6 +33,7 @@ object CrmExcelExporter {
         customers: List<CrmCustomer>,
         officialRecords: List<OfficialRegistryRecord>,
     ): String {
+        val officialIndex = BusinessExcelOfficialIndex.from(officialRecords)
         val rows = buildString {
             append(rowXml(1, headers.mapIndexed { index, value ->
                 textCell(columnName(index + 1) + "1", value, style = 1)
@@ -41,7 +43,7 @@ object CrmExcelExporter {
                 val rowNumber = index + 2
                 val values = BusinessExcelSchema.customerValues(
                     customer = customer,
-                    officialRecords = officialRecords,
+                    officialIndex = officialIndex,
                 )
                 append(rowXml(rowNumber, values.mapIndexed { cellIndex, value ->
                     val ref = columnName(cellIndex + 1) + rowNumber
