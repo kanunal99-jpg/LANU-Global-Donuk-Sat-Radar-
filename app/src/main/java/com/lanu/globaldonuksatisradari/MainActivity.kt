@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.lanu.globaldonuksatisradari.crm.CommercialCrmRepository
 import com.lanu.globaldonuksatisradari.crm.CrmActivityType
 import com.lanu.globaldonuksatisradari.crm.CrmDashboardMetrics
 import com.lanu.globaldonuksatisradari.crm.CrmNextActionType
@@ -230,6 +231,13 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
 
     val cloudSessionState = auth?.session?.collectAsState()
     val activeOwnerUserId = cloudSessionState?.value?.userId
+    val commercialCrmRepository = remember(context, activeOwnerUserId) {
+        CommercialCrmRepository(
+            database = LanuCrmDatabase.getInstance(context),
+            ownerUserId = activeOwnerUserId,
+        )
+    }
+    val catalogProducts by productCatalogRepository.products.collectAsState()
     val allCrmCustomers by localCrmRepository.observeCustomers(null).collectAsState(initial = emptyList())
     val crmCustomers = remember(allCrmCustomers, activeOwnerUserId) {
         val ownerScoped = if (activeOwnerUserId == null) {
@@ -833,6 +841,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         nextActions = selectedCustomerNextActions,
                         transitions = selectedCustomerTransitions,
                         opportunities = selectedCustomerOpportunities,
+                        commercialRepository = commercialCrmRepository,
+                        catalogProducts = catalogProducts,
                         onBack = { selectedCustomerId = null },
                         onStageChange = { target, note -> scope.launch { runCatching { localCrmRepository.transitionStage(customer.id, target, activeOwnerUserId, note) }.onSuccess { crmMessage = "Aşama güncellendi." }.onFailure { crmMessage = "Aşama değiştirilemedi: ${it.message.orEmpty()}" } } },
                         onRecordActivity = { type, note -> scope.launch { runCatching { localCrmRepository.recordActivity(customer.id, type, note = note, createdByUserId = activeOwnerUserId) }.onSuccess { crmMessage = "Aktivite kaydedildi." }.onFailure { crmMessage = "Aktivite kaydedilemedi: ${it.message.orEmpty()}" } } },
