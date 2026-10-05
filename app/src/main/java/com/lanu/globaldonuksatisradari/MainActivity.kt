@@ -198,7 +198,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         }
         districtLoading = false
     }
-    LaunchedEffect(selectedCity.name, selectedDistrict) {
+    LaunchedEffect(selectedCity.name, selectedCity.queryName, selectedDistrict) {
         selectedNeighborhood = "Tümü"
         neighborhoodMenu = false
         availableNeighborhoods = emptyList()
@@ -208,7 +208,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         }
         neighborhoodLoading = true
         availableNeighborhoods = runCatching {
-            neighborhoodRepository.getNeighborhoods(selectedCity.name, selectedDistrict)
+            neighborhoodRepository.getNeighborhoods(selectedCity.queryName, selectedDistrict)
         }.getOrElse { throwable ->
             if (throwable is CancellationException) throw throwable
             Log.w("LanuRadar", "Mahalle kataloğu yenilenemedi: ${selectedCity.name}/$selectedDistrict", throwable)
@@ -272,8 +272,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
             Log.w("LanuRegistry", "Başlangıç resmî sicil zenginleştirmesi tamamlanamadı.", error)
         }
     }
-    val filteredCrmCustomers = remember(crmCustomers, selectedCity.name, selectedDistrict) {
-        scopeCrmCustomers(crmCustomers, selectedCity.name, selectedDistrict)
+    val filteredCrmCustomers = remember(crmCustomers, selectedCity.queryName, selectedDistrict) {
+        scopeCrmCustomers(crmCustomers, selectedCity.queryName, selectedDistrict)
     }
     val selectedCrmCustomer = selectedCustomerId?.let { id -> crmCustomers.firstOrNull { it.id == id } }
     val selectedCustomerKey = selectedCustomerId.orEmpty()
@@ -282,19 +282,19 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val selectedCustomerTransitions by remember(selectedCustomerKey) { localCrmRepository.observeStageTransitions(selectedCustomerKey) }.collectAsState(initial = emptyList())
     val selectedCustomerOpportunities by remember(selectedCustomerKey) { localCrmRepository.observeOpportunities(selectedCustomerKey) }.collectAsState(initial = emptyList())
 
-    val regionKey = "${selectedCity.name}|$selectedDistrict"
+    val regionKey = "${selectedCity.queryName}|$selectedDistrict"
     val regionDistrict = selectedDistrict.takeUnless { it == "Tümü" }
     val allRegionActivities by remember(regionKey) {
-        localCrmRepository.observeActivitiesForRegion(selectedCity.name, regionDistrict)
+        localCrmRepository.observeActivitiesForRegion(selectedCity.queryName, regionDistrict)
     }.collectAsState(initial = emptyList())
     val allRegionNextActions by remember(regionKey) {
-        localCrmRepository.observeOpenNextActionsForRegion(selectedCity.name, regionDistrict)
+        localCrmRepository.observeOpenNextActionsForRegion(selectedCity.queryName, regionDistrict)
     }.collectAsState(initial = emptyList())
     val allRegionOpportunities by remember(regionKey) {
-        localCrmRepository.observeOpportunitiesForRegion(selectedCity.name, regionDistrict)
+        localCrmRepository.observeOpportunitiesForRegion(selectedCity.queryName, regionDistrict)
     }.collectAsState(initial = emptyList())
-    val regionCustomerIds = remember(crmCustomers, selectedCity.name, selectedDistrict) {
-        scopeCrmCustomers(crmCustomers, selectedCity.name, selectedDistrict)
+    val regionCustomerIds = remember(crmCustomers, selectedCity.queryName, selectedDistrict) {
+        scopeCrmCustomers(crmCustomers, selectedCity.queryName, selectedDistrict)
             .mapTo(mutableSetOf()) { it.id }
     }
     val regionActivities = remember(allRegionActivities, regionCustomerIds) {
@@ -559,7 +559,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 onClick = {
                                     error = null; selectedBusiness = null; crmMessage = null; loading = true
                                     val requestId = ++searchRequestId
-                                    val requestCity = selectedCity.name
+                                    val requestCity = selectedCity.queryName
                                     val requestDistrict = selectedDistrict.takeUnless { it == "Tümü" }
                                     val requestNeighborhood = selectedNeighborhood.takeUnless {
                                         it == "Tümü" || requestDistrict == null
@@ -728,7 +728,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                     AppSection.MAP -> CrmMapScreen(
                         customers = crmCustomers,
                         radarBusinesses = visibleResults,
-                        selectedCity = selectedCity.name,
+                        selectedCity = selectedCity.queryName,
                         selectedDistrict = selectedDistrict,
                         onOpenCustomer = { selectedCustomerId = it },
                     )
@@ -755,7 +755,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             }
                         },
                     )
-                    AppSection.ROUTINE -> RoutineScreen(crmCustomers, selectedCity.name, selectedDistrict)
+                    AppSection.ROUTINE -> RoutineScreen(crmCustomers, selectedCity.queryName, selectedDistrict)
                     AppSection.MORE -> LazyColumn(
                         modifier = Modifier
                             .testTag("more_screen")
@@ -772,7 +772,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         }
                         item {
                             OfficialRegistryImportCard(
-                                defaultCity = selectedCity.name,
+                                defaultCity = selectedCity.queryName,
                                 contextCustomers = crmCustomers,
                                 contextBusinesses = results,
                             ) { summary, records ->
@@ -820,7 +820,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                     AppSection.PRODUCT_CATALOG -> ProductCatalogScreen(productCatalogRepository)
                     AppSection.MANUAL_POINT -> ManualPointScreen(
                         repository = localCrmRepository,
-                        defaultCity = selectedCity.name,
+                        defaultCity = selectedCity.queryName,
                         ownerUserId = activeOwnerUserId,
                     ) { navigateTo(AppSection.ROUTINE) }
                     AppSection.AI_ASSISTANT -> SalesAiScreen(salesAiContext)
