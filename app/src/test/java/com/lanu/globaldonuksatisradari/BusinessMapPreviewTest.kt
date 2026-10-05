@@ -37,6 +37,9 @@ class BusinessMapPreviewTest {
         assertTrue(html.contains("Gerçek İşletme"))
         assertTrue(html.contains("40.987"))
         assertTrue(html.contains("29.028"))
+        assertTrue(html.contains("markerClusterGroup"))
+        assertTrue(html.contains("chunkedLoading"))
+        assertTrue(html.contains("cdn.jsdelivr.net"))
     }
 
     @Test
