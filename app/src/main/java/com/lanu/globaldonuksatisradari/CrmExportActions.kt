@@ -24,6 +24,7 @@ import androidx.core.content.FileProvider
 import com.lanu.globaldonuksatisradari.crm.CrmCustomer
 import com.lanu.globaldonuksatisradari.crm.CrmExcelExporter
 import com.lanu.globaldonuksatisradari.crm.CrmLocationEnrichmentService
+import com.lanu.globaldonuksatisradari.data.OfficialRegistryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -39,6 +40,7 @@ fun CrmExportActions(customers: List<CrmCustomer>) {
     var status by remember { mutableStateOf<String?>(null) }
     var exporting by remember { mutableStateOf(false) }
     val locationEnrichment = remember(context) { CrmLocationEnrichmentService(context) }
+    val officialRegistryStore = remember(context) { OfficialRegistryStore(context) }
 
     val fileName = remember(customers.size) {
         "LANU-CRM-Noktalari-" +
@@ -75,10 +77,19 @@ fun CrmExportActions(customers: List<CrmCustomer>) {
                 onClick = {
                     scope.launch {
                         exporting = true
-                        status = "Konum bilgileri doğrulanıyor ve Excel hazırlanıyor…"
+                        status = "Konum ve resmî sicil bilgileri zenginleştiriliyor; Excel hazırlanıyor…"
                         runCatching {
                             val enriched = locationEnrichment.enrich(customers)
-                            withContext(Dispatchers.Default) { CrmExcelExporter.build(enriched) }
+                            val officialRecords = withContext(Dispatchers.IO) {
+                                enriched
+                                    .map { it.city.trim() }
+                                    .filter(String::isNotBlank)
+                                    .distinct()
+                                    .flatMap { city -> officialRegistryStore.recordsFor(city, null) }
+                            }
+                            withContext(Dispatchers.Default) {
+                                CrmExcelExporter.build(enriched, officialRecords)
+                            }
                         }.onSuccess { bytes ->
                             pendingWorkbook = bytes
                             status = "Excel hazır. Kaydedilecek konumu seçin."
@@ -97,10 +108,19 @@ fun CrmExportActions(customers: List<CrmCustomer>) {
                 onClick = {
                     scope.launch {
                         exporting = true
-                        status = "Konum bilgileri doğrulanıyor ve paylaşım dosyası hazırlanıyor…"
+                        status = "Konum ve resmî sicil bilgileri zenginleştiriliyor; paylaşım dosyası hazırlanıyor…"
                         runCatching {
                             val enriched = locationEnrichment.enrich(customers)
-                            val bytes = withContext(Dispatchers.Default) { CrmExcelExporter.build(enriched) }
+                            val officialRecords = withContext(Dispatchers.IO) {
+                                enriched
+                                    .map { it.city.trim() }
+                                    .filter(String::isNotBlank)
+                                    .distinct()
+                                    .flatMap { city -> officialRegistryStore.recordsFor(city, null) }
+                            }
+                            val bytes = withContext(Dispatchers.Default) {
+                                CrmExcelExporter.build(enriched, officialRecords)
+                            }
                             val file = withContext(Dispatchers.IO) {
                                 val exportDir = File(context.cacheDir, "crm_exports").apply { mkdirs() }
                                 File(exportDir, fileName).apply { writeBytes(bytes) }
