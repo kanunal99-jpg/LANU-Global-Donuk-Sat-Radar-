@@ -183,10 +183,12 @@ object RoutineExcelExporter {
     <col min="21" max="21" width="32" customWidth="1"/>
     <col min="22" max="24" width="18" customWidth="1"/>
     <col min="25" max="26" width="44" customWidth="1"/>
-    <col min="27" max="28" width="16" customWidth="1"/>
-    <col min="29" max="29" width="48" customWidth="1"/>
-    <col min="30" max="31" width="24" customWidth="1"/>
-    <col min="32" max="37" width="20" customWidth="1"/>
+    <col min="27" max="27" width="20" customWidth="1"/>
+    <col min="28" max="28" width="32" customWidth="1"/>
+    <col min="29" max="30" width="16" customWidth="1"/>
+    <col min="31" max="31" width="48" customWidth="1"/>
+    <col min="32" max="33" width="24" customWidth="1"/>
+    <col min="34" max="39" width="20" customWidth="1"/>
   </cols>
   <sheetData>$rows</sheetData>
   $merges
@@ -196,8 +198,8 @@ object RoutineExcelExporter {
 </worksheet>"""
     }
 
-    private const val X_COLUMN_INDEX = 26
-    private const val Y_COLUMN_INDEX = 27
+    private const val X_COLUMN_INDEX = 28
+    private const val Y_COLUMN_INDEX = 29
 
     private fun rowXml(
         rowNumber: Int,
