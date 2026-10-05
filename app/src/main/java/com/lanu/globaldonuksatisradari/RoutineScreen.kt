@@ -1,5 +1,9 @@
 package com.lanu.globaldonuksatisradari
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +17,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.lanu.globaldonuksatisradari.crm.CrmCustomer
@@ -27,6 +32,8 @@ fun RoutineScreen(
     customers: List<CrmCustomer>,
     selectedCity: String,
     selectedDistrict: String,
+    onOpenCustomer: (String) -> Unit = {},
+    onRecordVisit: (String) -> Unit = {},
 ) {
     var startId by remember(customers) { mutableStateOf<String?>(null) }
     var manualIntervalInput by remember { mutableStateOf("") }
@@ -188,7 +195,12 @@ fun RoutineScreen(
         }
 
         items(route, key = { it.customer.id }) { stop ->
-            RouteStopCard(stop = stop, onChooseStart = { startId = stop.customer.id })
+            RouteStopCard(
+                stop = stop,
+                onChooseStart = { startId = stop.customer.id },
+                onOpenCustomer = { onOpenCustomer(stop.customer.id) },
+                onRecordVisit = { onRecordVisit(stop.customer.id) },
+            )
         }
 
         if (route.isNotEmpty()) {
@@ -243,7 +255,10 @@ private fun RoutinePlanSummaryCard(
 private fun RouteStopCard(
     stop: RouteStop,
     onChooseStart: () -> Unit,
+    onOpenCustomer: () -> Unit,
+    onRecordVisit: () -> Unit,
 ) {
+    val context = LocalContext.current
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(14.dp),
@@ -270,6 +285,35 @@ private fun RouteStopCard(
                 "X " + "%.6f".format(stop.customer.longitude) +
                     " • Y " + "%.6f".format(stop.customer.latitude),
             )
+            OutlinedButton(
+                onClick = {
+                    openRoadNavigation(
+                        context = context,
+                        latitude = stop.customer.latitude,
+                        longitude = stop.customer.longitude,
+                    )
+                },
+                modifier = Modifier.fillMaxWidth().testTag("routine_navigate_${stop.customer.id}"),
+            ) {
+                Text("Navigasyonu aç")
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = onOpenCustomer,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("CRM'i aç")
+                }
+                Button(
+                    onClick = onRecordVisit,
+                    modifier = Modifier.weight(1f).testTag("routine_record_visit_${stop.customer.id}"),
+                ) {
+                    Text("Ziyareti kaydet")
+                }
+            }
             OutlinedButton(
                 onClick = onChooseStart,
                 modifier = Modifier.fillMaxWidth(),
@@ -322,5 +366,38 @@ private fun formatMinutes(totalMinutes: Int): String {
         hours.toString() + " sa"
     } else {
         hours.toString() + " sa " + minutes + " dk"
+    }
+}
+
+
+internal fun openRoadNavigation(
+    context: Context,
+    latitude: Double?,
+    longitude: Double?,
+): Boolean {
+    if (latitude == null || longitude == null ||
+        latitude !in -90.0..90.0 || longitude !in -180.0..180.0
+    ) return false
+
+    val googleNavigation = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse("google.navigation:q=$latitude,$longitude&mode=d"),
+    ).apply {
+        setPackage("com.google.android.apps.maps")
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    return try {
+        context.startActivity(googleNavigation)
+        true
+    } catch (_: ActivityNotFoundException) {
+        val fallback = Intent(
+            Intent.ACTION_VIEW,
+            Uri.parse(
+                "https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude&travelmode=driving",
+            ),
+        ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+        runCatching { context.startActivity(fallback) }.isSuccess
+    } catch (_: SecurityException) {
+        false
     }
 }
