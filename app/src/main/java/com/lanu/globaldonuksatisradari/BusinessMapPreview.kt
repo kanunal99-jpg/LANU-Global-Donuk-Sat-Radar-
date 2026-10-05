@@ -85,6 +85,8 @@ internal fun buildMapHtml(businesses: List<VerifiedBusiness>): String {
         <head>
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+          <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+          <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
           <style>
             html, body, #map { height: 100%; margin: 0; }
             body { font-family: sans-serif; }
@@ -92,7 +94,14 @@ internal fun buildMapHtml(businesses: List<VerifiedBusiness>): String {
         </head>
         <body>
           <div id="map"></div>
-          <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+          <script
+            src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js'">
+          </script>
+          <script
+            src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"
+            onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js'">
+          </script>
           <script>
             const businesses = [$points];
             const map = L.map('map', { zoomControl: true });
@@ -103,8 +112,17 @@ internal fun buildMapHtml(businesses: List<VerifiedBusiness>): String {
             }).addTo(map);
 
             const markers = [];
+            const markerLayer = typeof L.markerClusterGroup === 'function'
+              ? L.markerClusterGroup({
+                  chunkedLoading: true,
+                  chunkInterval: 80,
+                  chunkDelay: 20,
+                  removeOutsideVisibleBounds: true,
+                  maxClusterRadius: 55
+                })
+              : L.layerGroup();
             businesses.forEach((business) => {
-              const marker = L.marker([business.lat, business.lon]).addTo(map);
+              const marker = L.marker([business.lat, business.lon]);
               const popup = document.createElement('div');
               const title = document.createElement('strong');
               title.textContent = business.name;
@@ -116,8 +134,10 @@ internal fun buildMapHtml(businesses: List<VerifiedBusiness>): String {
                 popup.appendChild(document.createTextNode('Kategori: ' + business.category));
               }
               marker.bindPopup(popup);
+              markerLayer.addLayer(marker);
               markers.push(marker);
             });
+            markerLayer.addTo(map);
 
             if (businesses.length === 1) {
               map.setView([businesses[0].lat, businesses[0].lon], 15);
