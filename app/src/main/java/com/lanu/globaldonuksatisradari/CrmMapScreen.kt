@@ -179,9 +179,7 @@ fun CrmMapScreen(
             } else {
                 BusinessMapPreview(
                     businesses = mapBusinesses.take(MAX_MAP_POINTS),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("crm_map_preview"),
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 if (mapBusinesses.size > MAX_MAP_POINTS) {
                     Text(
