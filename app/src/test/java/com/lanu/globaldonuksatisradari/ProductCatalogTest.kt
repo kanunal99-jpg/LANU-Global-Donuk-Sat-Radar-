@@ -43,6 +43,29 @@ class ProductCatalogTest {
     }
 
     @Test
+    fun productSupportsPersistentGalleryOrCameraImageMetadata() {
+        val product = CatalogProduct(
+            id = "local-image",
+            name = "Yerel görselli ürün",
+            category = "Donuk",
+            unit = "Koli",
+            priceMinor = 2500L,
+            currency = "TRY",
+            note = null,
+            description = null,
+            imageUrl = null,
+            sourceUrl = null,
+            sourceVerifiedAtEpochMs = null,
+            updatedAtEpochMs = 10L,
+            localImagePath = "/data/user/0/app/files/product_images/demo.jpg",
+            imageSource = ProductImageSource.CAMERA,
+        )
+
+        assertEquals(ProductImageSource.CAMERA, product.imageSource)
+        assertEquals("/data/user/0/app/files/product_images/demo.jpg", product.localImagePath)
+    }
+
+    @Test
     fun rejectsNonHttpsProductImageUrl() {
         assertThrows(IllegalArgumentException::class.java) {
             ProductMediaValidation.requireHttpsUrl("http://example.com/image.jpg", "Ürün fotoğrafı URL")
