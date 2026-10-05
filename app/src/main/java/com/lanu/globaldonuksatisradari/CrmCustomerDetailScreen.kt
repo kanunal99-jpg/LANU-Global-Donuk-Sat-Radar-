@@ -301,6 +301,13 @@ fun CrmCustomerDetailScreen(
             }
         }
 
+        CrmCommercialWorkspace(
+            customerId = customer.id,
+            repository = commercialRepository,
+            catalogProducts = catalogProducts,
+            onMessage = onWorkspaceMessage,
+        )
+
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Aktivite kaydet", style = MaterialTheme.typography.titleMedium)
