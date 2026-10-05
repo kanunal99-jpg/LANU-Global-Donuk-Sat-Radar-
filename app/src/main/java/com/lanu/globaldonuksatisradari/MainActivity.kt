@@ -1,10 +1,15 @@
 package com.lanu.globaldonuksatisradari
 
 import android.content.Context
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.clickable
@@ -16,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.lanu.globaldonuksatisradari.crm.CrmActivityType
@@ -24,6 +30,7 @@ import com.lanu.globaldonuksatisradari.crm.CrmNextActionType
 import com.lanu.globaldonuksatisradari.crm.CrmOpportunityStatus
 import com.lanu.globaldonuksatisradari.crm.CrmStage
 import com.lanu.globaldonuksatisradari.crm.CrmSyncScheduler
+import com.lanu.globaldonuksatisradari.crm.CrmNextActionReminderScheduler
 import com.lanu.globaldonuksatisradari.crm.SupabaseAuthClient
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
@@ -104,6 +111,19 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val context = LocalContext.current
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { }
+    fun ensureNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
     val uiPreferences = remember(context) {
         context.getSharedPreferences("lanu_ui_state", Context.MODE_PRIVATE)
     }
@@ -736,6 +756,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         completedByUserId = activeOwnerUserId,
                                     )
                                 }.onSuccess {
+                                    CrmNextActionReminderScheduler.cancel(context, actionId)
                                     crmMessage = "Takip tamamlandı."
                                 }.onFailure {
                                     crmMessage = "Takip tamamlanamadı: ${it.message.orEmpty()}"
@@ -824,8 +845,40 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         onBack = { selectedCustomerId = null },
                         onStageChange = { target, note -> scope.launch { runCatching { localCrmRepository.transitionStage(customer.id, target, activeOwnerUserId, note) }.onSuccess { crmMessage = "Aşama güncellendi." }.onFailure { crmMessage = "Aşama değiştirilemedi: ${it.message.orEmpty()}" } } },
                         onRecordActivity = { type, note -> scope.launch { runCatching { localCrmRepository.recordActivity(customer.id, type, note = note, createdByUserId = activeOwnerUserId) }.onSuccess { crmMessage = "Aktivite kaydedildi." }.onFailure { crmMessage = "Aktivite kaydedilemedi: ${it.message.orEmpty()}" } } },
-                        onCreateNextAction = { type, dueAt, note -> scope.launch { runCatching { localCrmRepository.createNextAction(customer.id, type, dueAt, note, createdByUserId = activeOwnerUserId) }.onSuccess { crmMessage = "Takip planlandı." }.onFailure { crmMessage = "Takip planlanamadı: ${it.message.orEmpty()}" } } },
-                        onCompleteNextAction = { actionId -> scope.launch { runCatching { localCrmRepository.completeNextAction(actionId, completedByUserId = activeOwnerUserId) }.onSuccess { crmMessage = "Takip tamamlandı." }.onFailure { crmMessage = "Takip tamamlanamadı: ${it.message.orEmpty()}" } } },
+                        onCreateNextAction = { type, dueAt, note ->
+                            ensureNotificationPermission()
+                            scope.launch {
+                                runCatching {
+                                    localCrmRepository.createNextAction(
+                                        customer.id,
+                                        type,
+                                        dueAt,
+                                        note,
+                                        createdByUserId = activeOwnerUserId,
+                                    )
+                                }.onSuccess { action ->
+                                    CrmNextActionReminderScheduler.schedule(context, action, customer.businessName)
+                                    crmMessage = "Takip planlandı ve hatırlatma oluşturuldu."
+                                }.onFailure { error ->
+                                    crmMessage = "Takip planlanamadı: " + error.message.orEmpty()
+                                }
+                            }
+                        },
+                        onCompleteNextAction = { actionId ->
+                            scope.launch {
+                                runCatching {
+                                    localCrmRepository.completeNextAction(
+                                        actionId,
+                                        completedByUserId = activeOwnerUserId,
+                                    )
+                                }.onSuccess {
+                                    CrmNextActionReminderScheduler.cancel(context, actionId)
+                                    crmMessage = "Takip tamamlandı."
+                                }.onFailure { error ->
+                                    crmMessage = "Takip tamamlanamadı: " + error.message.orEmpty()
+                                }
+                            }
+                        },
                         onCreateOpportunity = { title, notes, estimatedValueMinor, currency -> scope.launch { runCatching { localCrmRepository.createOpportunity(
                                         customer.id,
                                         title,
