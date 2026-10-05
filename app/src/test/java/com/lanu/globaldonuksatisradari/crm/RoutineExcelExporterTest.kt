@@ -1,5 +1,7 @@
 package com.lanu.globaldonuksatisradari.crm
 
+import com.lanu.globaldonuksatisradari.data.OfficialRegistryRecord
+import com.lanu.globaldonuksatisradari.data.OfficialRegistrySource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -59,7 +61,26 @@ class RoutineExcelExporterTest {
             startCustomerId = "p0",
         )
 
-        val sheet = unzip(RoutineExcelExporter.build(plan))
+        val officialRecords = listOf(
+            OfficialRegistryRecord(
+                source = OfficialRegistrySource.MERSIS,
+                registrationNumber = "M-100",
+                businessName = "Nokta 0",
+                status = "Faal",
+                city = "İstanbul",
+                district = "Kadıköy",
+                neighborhood = "Caferağa",
+                address = "Test Sokak No:0",
+                phone = "05550000000",
+                website = null,
+                importedAtEpochMs = 2L,
+                naceCode = "47.11.01",
+                taxOrNationalId = "1234567890",
+                mersisNumber = "0123456789012345",
+            ),
+        )
+
+        val sheet = unzip(RoutineExcelExporter.build(plan, officialRecords))
             .getValue("xl/worksheets/sheet1.xml")
 
         assertTrue(sheet.contains("Nokta 0"))
@@ -70,6 +91,10 @@ class RoutineExcelExporterTest {
         assertTrue(sheet.contains("Test Sokak No:0"))
         assertTrue(sheet.contains("29.02"))
         assertTrue(sheet.contains("40.98"))
+        assertTrue(sheet.contains("MERSİS No"))
+        assertTrue(sheet.contains("0123456789012345"))
+        assertTrue(sheet.contains("47.11.01"))
+        assertTrue(sheet.contains("1234567890"))
         assertTrue(sheet.contains("Ziyaret Aralığı (Gün)"))
         assertTrue(sheet.contains("Frekans Kaynağı"))
         assertTrue(sheet.contains("Önceki Uzaklık"))
