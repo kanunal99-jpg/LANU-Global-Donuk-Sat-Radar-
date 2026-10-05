@@ -1,6 +1,7 @@
 package com.lanu.globaldonuksatisradari.crm
 
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryRecord
+import com.lanu.globaldonuksatisradari.export.BusinessExcelOfficialIndex
 import com.lanu.globaldonuksatisradari.export.BusinessExcelSchema
 import java.io.ByteArrayOutputStream
 import java.util.zip.ZipEntry
@@ -47,6 +48,7 @@ object RoutineExcelExporter {
         plan: MonthlyRoutinePlan,
         officialRecords: List<OfficialRegistryRecord>,
     ): String {
+        val officialIndex = BusinessExcelOfficialIndex.from(officialRecords)
         val mergeRefs = mutableListOf<String>()
         var rowNumber = 1
         val rows = buildString {
@@ -104,7 +106,7 @@ object RoutineExcelExporter {
                         val customer = stop.customer
                         val commonValues = BusinessExcelSchema.customerValues(
                             customer = customer,
-                            officialRecords = officialRecords,
+                            officialIndex = officialIndex,
                         )
                         val cells = mutableListOf<String>()
                         commonValues.forEachIndexed { index, value ->
