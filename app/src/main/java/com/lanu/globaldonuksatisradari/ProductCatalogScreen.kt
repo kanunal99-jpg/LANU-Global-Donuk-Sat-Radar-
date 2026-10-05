@@ -294,7 +294,91 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                     }
                     OutlinedTextField(value = price, onValueChange = { price = it }, modifier = Modifier.fillMaxWidth().testTag("product_price_input"), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), label = { Text("Birim fiyat *") }, placeholder = { Text("Örn. 1250,50") })
                     OutlinedTextField(value = description, onValueChange = { description = it }, modifier = Modifier.fillMaxWidth(), minLines = 3, label = { Text("Ürün açıklaması") })
-                    OutlinedTextField(value = imageUrl, onValueChange = { imageUrl = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Ürün fotoğrafı URL") })
+                    val previewModel: Any? = localImagePath?.let(::File)
+                        ?: imageUrl.takeIf(String::isNotBlank)
+                    if (previewModel != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp)
+                                .testTag("product_image_preview"),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            AsyncImage(
+                                model = previewModel,
+                                contentDescription = "Ürün görseli önizleme",
+                                modifier = Modifier.fillMaxWidth().height(180.dp),
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
+                    }
+                    Text(
+                        "Görsel kaynağı: " + when (imageSource) {
+                            ProductImageSource.NONE -> "Yok"
+                            ProductImageSource.URL -> "URL"
+                            ProductImageSource.GALLERY -> "Galeri"
+                            ProductImageSource.CAMERA -> "Kamera"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    OutlinedTextField(
+                        value = imageUrl,
+                        onValueChange = { value ->
+                            clearDraftLocalImageIfNeeded()
+                            localImagePath = null
+                            imageUrl = value
+                            imageSource = if (value.isBlank()) ProductImageSource.NONE else ProductImageSource.URL
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("product_image_url_input"),
+                        singleLine = true,
+                        label = { Text("Ürün fotoğrafı HTTPS URL") },
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                galleryLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                )
+                            },
+                            modifier = Modifier.weight(1f).testTag("product_image_gallery"),
+                        ) {
+                            Text("Galeriden seç")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                runCatching { imageStorage.createCameraCapture() }
+                                    .onSuccess { capture ->
+                                        cameraTempPath = capture.tempPath
+                                        cameraLauncher.launch(capture.uri)
+                                    }
+                                    .onFailure { error ->
+                                        editorError = error.message ?: "Kamera açılamadı."
+                                    }
+                            },
+                            modifier = Modifier.weight(1f).testTag("product_image_camera"),
+                        ) {
+                            Text("Fotoğraf çek")
+                        }
+                    }
+                    if (imageSource != ProductImageSource.NONE ||
+                        localImagePath != null ||
+                        imageUrl.isNotBlank()
+                    ) {
+                        TextButton(
+                            onClick = {
+                                clearDraftLocalImageIfNeeded()
+                                localImagePath = null
+                                imageUrl = ""
+                                imageSource = ProductImageSource.NONE
+                            },
+                            modifier = Modifier.testTag("product_image_remove"),
+                        ) {
+                            Text("Görseli kaldır")
+                        }
+                    }
                     OutlinedTextField(value = sourceUrl, onValueChange = { sourceUrl = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Kaynak URL (opsiyonel)") })
                     OutlinedTextField(value = note, onValueChange = { note = it }, modifier = Modifier.fillMaxWidth(), minLines = 2, label = { Text("Not") })
                     editorError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
@@ -319,12 +403,23 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
 
 @Composable
 private fun ProductCard(product: CatalogProduct, onEdit: () -> Unit, onDelete: () -> Unit) {
-    var imageFailed by remember(product.imageUrl) { mutableStateOf(false) }
+    val imageModel: Any? = product.localImagePath?.let(::File) ?: product.imageUrl
+    var imageFailed by remember(product.imageUrl, product.localImagePath) { mutableStateOf(false) }
     Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            product.imageUrl?.let { url ->
+            imageModel?.let { model ->
                 Box(modifier = Modifier.fillMaxWidth().height(170.dp), contentAlignment = Alignment.Center) {
-                    if (imageFailed) Text("Ürün görseli yüklenemedi") else AsyncImage(model = url, contentDescription = product.name, modifier = Modifier.fillMaxWidth().height(170.dp), contentScale = ContentScale.Crop, onError = { imageFailed = true })
+                    if (imageFailed) {
+                        Text("Ürün görseli yüklenemedi")
+                    } else {
+                        AsyncImage(
+                            model = model,
+                            contentDescription = product.name,
+                            modifier = Modifier.fillMaxWidth().height(170.dp),
+                            contentScale = ContentScale.Crop,
+                            onError = { imageFailed = true },
+                        )
+                    }
                 }
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
