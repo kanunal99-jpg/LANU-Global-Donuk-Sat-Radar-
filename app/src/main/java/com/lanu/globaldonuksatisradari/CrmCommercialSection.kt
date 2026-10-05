@@ -129,14 +129,21 @@ fun CrmCommercialSection(
                                                 )
                                             },
                                             onClick = {
-                                                selectedProductId = product.id
-                                                productName = product.name
-                                                unit = product.unit
-                                                price = java.math.BigDecimal.valueOf(product.priceMinor, 2)
-                                                    .stripTrailingZeros()
-                                                    .toPlainString()
                                                 productMenuOpen = false
-                                                inputError = null
+                                                if (!product.currency.equals(quote.currency, ignoreCase = true)) {
+                                                    selectedProductId = null
+                                                    inputError =
+                                                        "Ürün ${product.currency}, teklif ${quote.currency}. " +
+                                                            "Para birimleri eşleşmeden katalog fiyatı kullanılamaz."
+                                                } else {
+                                                    selectedProductId = product.id
+                                                    productName = product.name
+                                                    unit = product.unit
+                                                    price = java.math.BigDecimal.valueOf(product.priceMinor, 2)
+                                                        .stripTrailingZeros()
+                                                        .toPlainString()
+                                                    inputError = null
+                                                }
                                             },
                                         )
                                     }
