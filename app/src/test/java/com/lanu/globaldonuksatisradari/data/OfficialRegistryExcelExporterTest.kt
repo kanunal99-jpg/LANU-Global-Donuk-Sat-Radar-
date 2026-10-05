@@ -38,6 +38,27 @@ class OfficialRegistryExcelExporterTest {
                 website = null,
                 importedAtEpochMs = 1L,
             ),
+            OfficialRegistryRecord(
+                source = OfficialRegistrySource.TTSG,
+                registrationNumber = "247338-0",
+                businessName = "BİG MEDYA TEKNOLOJİ ANONİM ŞİRKETİ",
+                status = null,
+                city = "İstanbul",
+                district = "Şişli",
+                neighborhood = null,
+                address = "Tarihsel İlan Adresi",
+                phone = null,
+                website = null,
+                importedAtEpochMs = 1L,
+                mersisNumber = "0123456789012345",
+                registryOffice = "İSTANBUL",
+                registryEvent = "Değişiklik - Unvan / Adres",
+                publicationDate = "10.10.2025",
+                registrationDate = "08.10.2025",
+                gazetteNumber = "11434",
+                gazettePage = "89",
+                sourceReference = "ilan-ref-2",
+            ),
         )
 
         val bytes = OfficialRegistryExcelExporter.build(records)
@@ -60,6 +81,17 @@ class OfficialRegistryExcelExporterTest {
         assertTrue(sheetXml.contains("Örnek Gıda"))
         assertTrue(sheetXml.contains("MERSİS"))
         assertTrue(sheetXml.contains("AKTİF DEĞİL"))
+        assertTrue(sheetXml.contains("TTSG"))
+        assertTrue(sheetXml.contains("247338-0"))
+        assertTrue(sheetXml.contains("0123456789012345"))
+        assertTrue(sheetXml.contains("İSTANBUL"))
+        assertTrue(sheetXml.contains("Değişiklik - Unvan / Adres"))
+        assertTrue(sheetXml.contains("10.10.2025"))
+        assertTrue(sheetXml.contains("08.10.2025"))
+        assertTrue(sheetXml.contains("11434"))
+        assertTrue(sheetXml.contains("89"))
+        assertTrue(sheetXml.contains("ilan-ref-2"))
+        assertTrue(sheetXml.contains("Güncel durum doğrulanmadı"))
     }
 
     @Test

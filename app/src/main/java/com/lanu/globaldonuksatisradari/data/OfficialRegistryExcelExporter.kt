@@ -22,6 +22,14 @@ object OfficialRegistryExcelExporter {
         "Konum Bilgileri",
         "Kaynak",
         "Sicil / Kayıt No",
+        "MERSİS No",
+        "Sicil Müdürlüğü",
+        "Sicil Olayı",
+        "Yayın Tarihi",
+        "Tescil Tarihi",
+        "Gazete Sayı",
+        "Gazete Sayfa",
+        "Kaynak Referansı",
         "NACE",
         "Durum",
         "Resmî Kimlik",
@@ -69,9 +77,17 @@ object OfficialRegistryExcelExporter {
                     "",
                     sourceLabel(record.source),
                     record.registrationNumber.orEmpty(),
+                    record.mersisNumber.orEmpty(),
+                    record.registryOffice.orEmpty(),
+                    record.registryEvent.orEmpty(),
+                    record.publicationDate.orEmpty(),
+                    record.registrationDate.orEmpty(),
+                    record.gazetteNumber.orEmpty(),
+                    record.gazettePage.orEmpty(),
+                    record.sourceReference.orEmpty(),
                     record.naceCode.orEmpty(),
-                    statusLabel(record.status),
-                    if (OfficialRegistryTrust.isIdentityVerified(record)) "Doğrulandı" else "Sicil/Kayıt No Yok",
+                    statusLabel(record),
+                    if (OfficialRegistryTrust.isIdentityVerified(record)) "Doğrulandı" else "Sicil/MERSİS No Yok",
                     record.website.orEmpty(),
                 )
                 append(
@@ -103,11 +119,15 @@ object OfficialRegistryExcelExporter {
     <col min="9" max="9" width="48" customWidth="1"/>
     <col min="10" max="11" width="16" customWidth="1"/>
     <col min="12" max="12" width="48" customWidth="1"/>
-    <col min="13" max="17" width="20" customWidth="1"/>
-    <col min="18" max="18" width="36" customWidth="1"/>
+    <col min="13" max="16" width="20" customWidth="1"/>
+    <col min="17" max="17" width="34" customWidth="1"/>
+    <col min="18" max="21" width="16" customWidth="1"/>
+    <col min="22" max="22" width="44" customWidth="1"/>
+    <col min="23" max="25" width="20" customWidth="1"/>
+    <col min="26" max="26" width="36" customWidth="1"/>
   </cols>
   <sheetData>${rows}</sheetData>
-  <autoFilter ref="A1:R${lastRow}"/>
+  <autoFilter ref="A1:Z${lastRow}"/>
 </worksheet>"""
     }
 
@@ -117,13 +137,16 @@ object OfficialRegistryExcelExporter {
         OfficialRegistrySource.TOBB -> "TOBB"
         OfficialRegistrySource.MERSIS -> "MERSİS"
         OfficialRegistrySource.ESBIS -> "ESBİS"
+        OfficialRegistrySource.TTSG -> "TTSG"
     }
 
-    private fun statusLabel(status: String?): String = when {
-        status.isNullOrBlank() -> "Durum belirtilmemiş"
-        OfficialRegistryStatus.isActive(status) -> "FAAL"
-        OfficialRegistryStatus.isInactive(status) -> "AKTİF DEĞİL"
-        else -> status.trim()
+    private fun statusLabel(record: OfficialRegistryRecord): String = when {
+        record.status.isNullOrBlank() && record.source == OfficialRegistrySource.TTSG ->
+            "Güncel durum doğrulanmadı"
+        record.status.isNullOrBlank() -> "Durum belirtilmemiş"
+        OfficialRegistryStatus.isActive(record.status) -> "FAAL"
+        OfficialRegistryStatus.isInactive(record.status) -> "AKTİF DEĞİL"
+        else -> record.status.trim()
     }
 
     private fun rowXml(rowNumber: Int, cells: List<String>): String =

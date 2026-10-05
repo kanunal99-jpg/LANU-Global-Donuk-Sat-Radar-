@@ -82,7 +82,10 @@ fun OfficialRegistryImportCard(
                         source = source,
                         fileName = fileName,
                         bytes = bytes,
-                        defaultCity = if (source == OfficialRegistrySource.CHAMBER) defaultCity else null,
+                        defaultCity = if (
+                            source == OfficialRegistrySource.CHAMBER ||
+                            source == OfficialRegistrySource.TTSG
+                        ) defaultCity else null,
                     )
                 }
             }.onSuccess { summary ->
@@ -141,8 +144,8 @@ fun OfficialRegistryImportCard(
         ) {
             Text("Resmî sicil doğrulaması", style = MaterialTheme.typography.titleMedium)
             Text(
-                "İTO, diğer Ticaret/Ticaret ve Sanayi Odaları, TOBB, MERSİS veya ESBİS üzerinden resmî olarak " +
-                    "yetkili kanaldan temin ettiğiniz CSV/XLSX çıktısını içe aktarın. Aynı kaynak/il için birden fazla parça dosya güvenli biçimde birleştirilir; Telefon/GSM ile VKN/TCKN alanları kaynakta varsa korunur.",
+                "İTO, diğer Ticaret/Ticaret ve Sanayi Odaları, TOBB, MERSİS, ESBİS veya TTSG üzerinden resmî olarak " +
+                    "yetkili kanaldan temin ettiğiniz CSV/XLSX çıktısını içe aktarın. Aynı kaynak/il için birden fazla parça dosya güvenli biçimde birleştirilir; Telefon/GSM ile VKN/TCKN alanları kaynakta varsa korunur. TTSG kayıtları ilan/olay kanıtıdır; tek ilan güncel aktiflik kanıtı sayılmaz.",
                 style = MaterialTheme.typography.bodySmall,
             )
 
@@ -241,6 +244,11 @@ fun OfficialRegistryImportCard(
                         listOf(
                             record.businessName,
                             record.registrationNumber.orEmpty(),
+                            record.mersisNumber.orEmpty(),
+                            record.registryOffice.orEmpty(),
+                            record.registryEvent.orEmpty(),
+                            record.publicationDate.orEmpty(),
+                            record.registrationDate.orEmpty(),
                             record.address.orEmpty(),
                             record.phone.orEmpty(),
                             record.city.orEmpty(),
@@ -265,7 +273,7 @@ fun OfficialRegistryImportCard(
                     value = recordQuery,
                     onValueChange = { recordQuery = it },
                     modifier = Modifier.fillMaxWidth().testTag("official_registry_search"),
-                    label = { Text("Kayıtlarda ad, adres, telefon, sicil, VKN/TCKN veya NACE ara") },
+                    label = { Text("Kayıtlarda ad, adres, telefon, sicil/MERSİS, olay, VKN/TCKN veya NACE ara") },
                     singleLine = true,
                 )
                 Text(
@@ -333,6 +341,27 @@ fun OfficialRegistryImportCard(
                             record.registrationNumber?.takeIf(String::isNotBlank)?.let {
                                 Text("Sicil: $it", style = MaterialTheme.typography.labelSmall)
                             }
+                            record.mersisNumber?.takeIf(String::isNotBlank)?.let {
+                                Text("MERSİS: $it", style = MaterialTheme.typography.labelSmall)
+                            }
+                            record.registryOffice?.takeIf(String::isNotBlank)?.let {
+                                Text("Sicil müdürlüğü: $it", style = MaterialTheme.typography.labelSmall)
+                            }
+                            record.registryEvent?.takeIf(String::isNotBlank)?.let {
+                                Text("Sicil olayı: $it", style = MaterialTheme.typography.labelSmall)
+                            }
+                            record.publicationDate?.takeIf(String::isNotBlank)?.let {
+                                Text("Yayın tarihi: $it", style = MaterialTheme.typography.labelSmall)
+                            }
+                            record.registrationDate?.takeIf(String::isNotBlank)?.let {
+                                Text("Tescil tarihi: $it", style = MaterialTheme.typography.labelSmall)
+                            }
+                            if (!record.gazetteNumber.isNullOrBlank() || !record.gazettePage.isNullOrBlank()) {
+                                Text(
+                                    "Gazete: ${record.gazetteNumber.orEmpty()} / sayfa ${record.gazettePage.orEmpty()}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
                             record.taxOrNationalId?.takeIf(String::isNotBlank)?.let {
                                 Text("TC/Vergi No: $it", style = MaterialTheme.typography.labelSmall)
                             }
@@ -343,7 +372,7 @@ fun OfficialRegistryImportCard(
                                 if (OfficialRegistryTrust.isIdentityVerified(record)) {
                                     "Resmî kimlik: doğrulandı"
                                 } else {
-                                    "Resmî kimlik: sicil/kayıt no yok"
+                                    "Resmî kimlik: sicil/kayıt veya MERSİS no yok"
                                 },
                                 style = MaterialTheme.typography.labelSmall,
                             )
@@ -361,8 +390,8 @@ fun OfficialRegistryImportCard(
             status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             Text(
                 buildString {
-                    append("Not: ODA/TOBB dahil kaynak seçimi dosyanın nereden alındığını beyan eder; resmî kimlik için sicil/kayıt numarası aranır. ")
-                    append("Giriş/CAPTCHA/yetki gerektiren TOBB, MERSİS, ESBİS ve oda sistemleri otomatik kazınmaz; yalnız kullanıcının yetkili/resmî çıktısı içe aktarılır. Büyük çıktılar güvenli şekilde parçalara bölünerek art arda içe aktarılabilir.")
+                    append("Not: ODA/TOBB/TTSG dahil kaynak seçimi dosyanın nereden alındığını beyan eder; resmî kimlik için sicil/kayıt veya MERSİS numarası aranır. ")
+                    append("Giriş/CAPTCHA/yetki gerektiren TOBB, MERSİS, ESBİS, TTSG ve oda sistemleri otomatik kazınmaz; yalnız kullanıcının yetkili/resmî çıktısı içe aktarılır. TTSG ilanı, olayın kanıtıdır; şirketin bugünkü durumunu tek başına FAAL/PASİF yapmaz. Büyük çıktılar güvenli şekilde parçalara bölünerek art arda içe aktarılabilir.")
                     if (!defaultCity.isNullOrBlank()) {
                         append(" ODA dosyasında İl sütunu yoksa seçili şehir ($defaultCity) kullanılır.")
                     }
@@ -379,6 +408,7 @@ private fun OfficialRegistrySource.shortLabel(): String = when (this) {
     OfficialRegistrySource.TOBB -> "TOBB"
     OfficialRegistrySource.MERSIS -> "MERSİS"
     OfficialRegistrySource.ESBIS -> "ESBİS"
+    OfficialRegistrySource.TTSG -> "TTSG"
 }
 
 private fun OfficialRegistrySource.displayName(): String = when (this) {
@@ -387,6 +417,7 @@ private fun OfficialRegistrySource.displayName(): String = when (this) {
     OfficialRegistrySource.TOBB -> "TOBB"
     OfficialRegistrySource.MERSIS -> "MERSİS"
     OfficialRegistrySource.ESBIS -> "ESBİS"
+    OfficialRegistrySource.TTSG -> "Türkiye Ticaret Sicili Gazetesi"
 }
 
 private fun displayName(

@@ -114,6 +114,82 @@ class OfficialRegistryEnrichmentTest {
     }
 
     @Test
+    fun tasfiyeyeGirisIsAnEventNotAConfirmedInactiveStatus() {
+        assertFalse(OfficialRegistryStatus.isInactive("Tasfiyeye giriş"))
+        assertFalse(OfficialRegistryStatus.isInactive("Tasfiye halinde"))
+        assertTrue(OfficialRegistryStatus.isInactive("Tasfiye sonu ve sicilden terkin"))
+    }
+
+    @Test
+    fun ttsgHistoricalEventIsEvidenceButNeverOverridesCurrentOperationalAddress() {
+        val enriched = OfficialRegistryEnricher.enrich(
+            businesses = listOf(
+                business(
+                    phone = "0555 111 22 33",
+                    address = "Güncel Operasyon Adresi",
+                ),
+            ),
+            records = listOf(
+                record(
+                    source = OfficialRegistrySource.TTSG,
+                    status = null,
+                    phone = "0312 000 00 00",
+                    address = "İlandaki Tarihsel Adres",
+                ).copy(
+                    mersisNumber = "0086004225000018",
+                    registryOffice = "ANKARA",
+                    registryEvent = "Değişiklik - Adres",
+                    publicationDate = "10.10.2025",
+                    registrationDate = "08.10.2025",
+                    gazetteNumber = "11434",
+                    gazettePage = "89",
+                    sourceReference = "ilan-ref-1",
+                ),
+            ),
+        ).single()
+
+        assertEquals("0555 111 22 33", enriched.phone)
+        assertEquals("Güncel Operasyon Adresi", enriched.address)
+        assertEquals("official-ttsg", enriched.officialRegistryEvidence?.source?.id)
+        assertEquals("Değişiklik - Adres", enriched.officialRegistryEvidence?.registryEvent)
+        assertEquals("İlandaki Tarihsel Adres", enriched.officialRegistryEvidence?.reportedAddress)
+        assertEquals("0086004225000018", enriched.officialRegistryEvidence?.mersisNumber)
+        assertFalse(enriched.officialRegistryEvidence?.explicitlyActive == true)
+        assertFalse(enriched.officialRegistryEvidence?.explicitlyInactive == true)
+        assertTrue(enriched.officialRegistryEvidence?.fieldsUsed?.contains("reported_address") == true)
+        assertFalse(enriched.officialRegistryEvidence?.fieldsUsed?.contains("address") == true)
+    }
+
+    @Test
+    fun ttsgCsvKeepsSicilMersisEventAndGazetteEvidenceSeparateFromCurrentStatus() {
+        val csv = """
+            Ticari Unvan;Sicil Müdürlüğü;Sicil No;MERSİS No;Yayın Tarihi;Tescil Tarihi;İlan Türü;Açık Adres;Gazete Sayı;Gazete Sayfa;Kaynak Referansı
+            BİG MEDYA TEKNOLOJİ ANONİM ŞİRKETİ;İSTANBUL;247338-0;0123456789012345;10.10.2025;08.10.2025;Değişiklik - Unvan / Adres;Tarihsel Adres;11434;89;ilan-ref-2
+        """.trimIndent()
+
+        val record = OfficialRegistryImportParser.parse(
+            bytes = csv.toByteArray(Charsets.UTF_8),
+            fileName = "ttsg.csv",
+            source = OfficialRegistrySource.TTSG,
+            importedAtEpochMs = 150L,
+            defaultCity = "İstanbul",
+        ).single()
+
+        assertEquals("247338-0", record.registrationNumber)
+        assertEquals("0123456789012345", record.mersisNumber)
+        assertEquals("İSTANBUL", record.registryOffice)
+        assertEquals("Değişiklik - Unvan / Adres", record.registryEvent)
+        assertEquals("10.10.2025", record.publicationDate)
+        assertEquals("08.10.2025", record.registrationDate)
+        assertEquals("11434", record.gazetteNumber)
+        assertEquals("89", record.gazettePage)
+        assertEquals("ilan-ref-2", record.sourceReference)
+        assertEquals("İstanbul", record.city)
+        assertNull(record.status)
+        assertTrue(OfficialRegistryTrust.isIdentityVerified(record))
+    }
+
+    @Test
     fun ambiguousSameNameRecordsAreNotUsedWithoutEnoughIdentityEvidence() {
         val first = record(
             address = null,
@@ -404,15 +480,19 @@ class OfficialRegistryEnrichmentTest {
         assertEquals(SourceAccessMethod.MANUAL_IMPORT, OfficialRegistrySource.TOBB.contract.accessMethod)
         assertEquals(SourceAccessMethod.MANUAL_IMPORT, OfficialRegistrySource.MERSIS.contract.accessMethod)
         assertEquals(SourceAccessMethod.MANUAL_IMPORT, OfficialRegistrySource.ESBIS.contract.accessMethod)
+        assertEquals(SourceAccessMethod.MANUAL_IMPORT, OfficialRegistrySource.TTSG.contract.accessMethod)
         assertTrue(OfficialRegistrySource.entries.all { it.contract.permittedUseVerified })
         assertTrue(OfficialRegistrySource.ITO.contract.supportsBulk)
         assertTrue(OfficialRegistrySource.CHAMBER.contract.supportsBulk)
         assertFalse(OfficialRegistrySource.TOBB.contract.supportsBulk)
         assertFalse(OfficialRegistrySource.MERSIS.contract.supportsBulk)
         assertFalse(OfficialRegistrySource.ESBIS.contract.supportsBulk)
+        assertFalse(OfficialRegistrySource.TTSG.contract.supportsBulk)
         assertFalse(OfficialRegistrySource.entries.any { it.contract.accessMethod == SourceAccessMethod.PUBLIC_SEARCH })
         assertTrue(OfficialRegistrySource.MERSIS.acquisitionGuidance.contains("Firma Sorgu"))
         assertTrue(OfficialRegistrySource.ESBIS.acquisitionGuidance.contains("yetkili", ignoreCase = true))
+        assertTrue(OfficialRegistrySource.TTSG.acquisitionGuidance.contains("CAPTCHA"))
+        assertTrue(OfficialRegistrySource.TTSG.acquisitionGuidance.contains("toplu Excel/CSV", ignoreCase = true))
     }
 
     @Test

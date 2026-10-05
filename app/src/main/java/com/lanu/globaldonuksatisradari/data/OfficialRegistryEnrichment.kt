@@ -15,7 +15,8 @@ enum class OfficialRegistrySource {
     CHAMBER,
     TOBB,
     MERSIS,
-    ESBIS;
+    ESBIS,
+    TTSG;
 
     val descriptor: DataSourceDescriptor
         get() = when (this) {
@@ -59,6 +60,14 @@ enum class OfficialRegistrySource {
                 sourceUrl = "https://esbis.ticaret.gov.tr/",
                 lastVerifiedAtEpochMs = SOURCE_POLICY_REVIEWED_AT,
             )
+            TTSG -> DataSourceDescriptor(
+                id = "official-ttsg",
+                name = "Türkiye Ticaret Sicili Gazetesi İlan Kaydı",
+                publisher = "Türkiye Odalar ve Borsalar Birliği",
+                licenseOrTerms = "https://www.ticaretsicil.gov.tr/view/hizlierisim/goster.php?Guid=4fb204d4-8b72-11e9-a292-54e058904e0d",
+                sourceUrl = "https://www.ticaretsicil.gov.tr/",
+                lastVerifiedAtEpochMs = SOURCE_POLICY_REVIEWED_AT,
+            )
         }
 
     val acquisitionGuidance: String
@@ -68,6 +77,7 @@ enum class OfficialRegistrySource {
             TOBB -> "TOBB Üye Firma sistemi kullanıcı girişi gerektirir. Herkese açık ulusal firma-listesi API'si varsayılmaz; yalnız yetkili hesabınızdan veya kurumdan resmen aldığınız dosyayı içe aktarın."
             MERSIS -> "MERSİS'e giriş yapan kullanıcılar Sorgular > Firma Sorgu ile temel firma bilgisine erişebilir. Herkese açık ulusal toplu API varsayılmaz; yalnız yetkili çıktı veya resmî entegrasyon verisini içe aktarın."
             ESBIS -> "ESBİS Türkiye/il/ilçe bazında detaylı raporlama sağlar ancak sistem yetkili kullanıcılar içindir. Herkese açık toplu API varsayılmaz; yalnız yetkili rapor/çıktıyı içe aktarın."
+            TTSG -> "Türkiye Ticaret Sicili Gazetesi ücretsiz üyeliği ilan/olay doğrulaması içindir; ücretsiz hesapta Türkiye geneli toplu Excel/CSV indirme doğrulanmadı. CAPTCHA veya kullanım sınırı görüldüğünde otomasyon durur ve aşılmaya çalışılmaz. Yalnız kullanıcının yetkili olarak indirdiği/derlediği çıktı içe aktarılır."
         }
 
     val contract: BusinessSourceContract
@@ -75,9 +85,9 @@ enum class OfficialRegistrySource {
             descriptor = descriptor,
             accessMethod = when (this) {
                 ITO, CHAMBER -> SourceAccessMethod.OFFICIAL_BULK_REQUEST
-                TOBB, MERSIS, ESBIS -> SourceAccessMethod.MANUAL_IMPORT
+                TOBB, MERSIS, ESBIS, TTSG -> SourceAccessMethod.MANUAL_IMPORT
             },
-            scope = "Kullanıcının resmî kanaldan temin ettiği firma/esnaf çıktısındaki işletme adı, sicil durumu, adres, telefon ve web alanları",
+            scope = "Kullanıcının resmî kanaldan temin ettiği firma/esnaf çıktısındaki işletme adı, sicil kimliği, güncel durum varsa durum alanı; TTSG için ayrıca ilan/olay ve tarihsel adres kanıtı",
             permittedUseVerified = true,
             supportsBulk = this == ITO || this == CHAMBER,
             fieldNames = setOf(
@@ -92,6 +102,14 @@ enum class OfficialRegistrySource {
                 "website",
                 "nace_code",
                 "tax_or_national_id",
+                "mersis_number",
+                "registry_office",
+                "registry_event",
+                "publication_date",
+                "registration_date",
+                "gazette_number",
+                "gazette_page",
+                "source_reference",
             ),
         )
 
@@ -107,6 +125,15 @@ data class OfficialRegistryEvidence(
     val importedAtEpochMs: Long,
     val fieldsUsed: Set<String>,
     val taxOrNationalId: String? = null,
+    val mersisNumber: String? = null,
+    val registryOffice: String? = null,
+    val registryEvent: String? = null,
+    val publicationDate: String? = null,
+    val registrationDate: String? = null,
+    val gazetteNumber: String? = null,
+    val gazettePage: String? = null,
+    val sourceReference: String? = null,
+    val reportedAddress: String? = null,
 ) {
     val explicitlyActive: Boolean
         get() = status?.let(OfficialRegistryStatus::isActive) == true
@@ -129,6 +156,14 @@ data class OfficialRegistryRecord(
     val importedAtEpochMs: Long,
     val naceCode: String? = null,
     val taxOrNationalId: String? = null,
+    val mersisNumber: String? = null,
+    val registryOffice: String? = null,
+    val registryEvent: String? = null,
+    val publicationDate: String? = null,
+    val registrationDate: String? = null,
+    val gazetteNumber: String? = null,
+    val gazettePage: String? = null,
+    val sourceReference: String? = null,
 )
 
 data class OfficialRegistryImportSummary(
@@ -151,7 +186,7 @@ object OfficialRegistryTrust {
      * file contains a registry identifier (oda sicil, MERSİS no, ESBİS sicil, etc.).
      */
     fun isIdentityVerified(record: OfficialRegistryRecord): Boolean =
-        !record.registrationNumber.isNullOrBlank()
+        !record.registrationNumber.isNullOrBlank() || !record.mersisNumber.isNullOrBlank()
 
     fun verified(records: List<OfficialRegistryRecord>): List<OfficialRegistryRecord> =
         records.filter(::isIdentityVerified)
@@ -172,11 +207,14 @@ internal object OfficialRegistryStatus {
             "terkin",
             "kapali",
             "kapanmis",
+            "kapanis",
             "pasif",
             "askida",
             "aski",
-            "tasfiye",
             "silinmis",
+            "tasfiye sonu",
+            "tasfiyenin sona ermesi",
+            "tasfiyenin sonu",
         ).any { token -> normalized == token || normalized.contains(token) }
     }
 
@@ -407,8 +445,35 @@ class OfficialRegistryStore(
             ?.trim()
             ?.takeIf(String::isNotEmpty)
             ?.let(OfficialRegistryNormalizer::text)
+        val mersis = record.mersisNumber
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?.let(OfficialRegistryNormalizer::text)
+
+        if (record.source == OfficialRegistrySource.TTSG) {
+            val identity = registration
+                ?: mersis
+                ?: listOf(
+                    OfficialRegistryNormalizer.text(record.businessName),
+                    OfficialRegistryNormalizer.text(record.registryOffice.orEmpty()),
+                ).joinToString(":")
+            return listOf(
+                record.source.name,
+                "event",
+                identity,
+                OfficialRegistryNormalizer.text(record.publicationDate.orEmpty()),
+                OfficialRegistryNormalizer.text(record.gazetteNumber.orEmpty()),
+                OfficialRegistryNormalizer.text(record.gazettePage.orEmpty()),
+                OfficialRegistryNormalizer.text(record.registryEvent.orEmpty()),
+                OfficialRegistryNormalizer.text(record.sourceReference.orEmpty()),
+            ).joinToString("|")
+        }
+
         if (registration != null) {
             return listOf(record.source.name, "registry", registration).joinToString("|")
+        }
+        if (mersis != null) {
+            return listOf(record.source.name, "mersis", mersis).joinToString("|")
         }
         return listOf(
             record.source.name,
@@ -464,6 +529,14 @@ class OfficialRegistryStore(
             put("website", record.website ?: JSONObject.NULL)
             put("naceCode", record.naceCode ?: JSONObject.NULL)
             put("taxOrNationalId", record.taxOrNationalId ?: JSONObject.NULL)
+            put("mersisNumber", record.mersisNumber ?: JSONObject.NULL)
+            put("registryOffice", record.registryOffice ?: JSONObject.NULL)
+            put("registryEvent", record.registryEvent ?: JSONObject.NULL)
+            put("publicationDate", record.publicationDate ?: JSONObject.NULL)
+            put("registrationDate", record.registrationDate ?: JSONObject.NULL)
+            put("gazetteNumber", record.gazetteNumber ?: JSONObject.NULL)
+            put("gazettePage", record.gazettePage ?: JSONObject.NULL)
+            put("sourceReference", record.sourceReference ?: JSONObject.NULL)
             put("importedAtEpochMs", record.importedAtEpochMs)
         }
 
@@ -482,6 +555,14 @@ class OfficialRegistryStore(
             importedAtEpochMs = item.getLong("importedAtEpochMs"),
             naceCode = optionalString(item, "naceCode"),
             taxOrNationalId = optionalString(item, "taxOrNationalId"),
+            mersisNumber = optionalString(item, "mersisNumber"),
+            registryOffice = optionalString(item, "registryOffice"),
+            registryEvent = optionalString(item, "registryEvent"),
+            publicationDate = optionalString(item, "publicationDate"),
+            registrationDate = optionalString(item, "registrationDate"),
+            gazetteNumber = optionalString(item, "gazetteNumber"),
+            gazettePage = optionalString(item, "gazettePage"),
+            sourceReference = optionalString(item, "sourceReference"),
         )
 
     private fun optionalString(item: JSONObject, key: String): String? =
@@ -522,25 +603,35 @@ object OfficialRegistryEnricher {
 
             val fieldsUsed = linkedSetOf<String>()
             val inactive = match.status?.let(OfficialRegistryStatus::isInactive) == true
-            val officialAddress = if (inactive) null else {
+            val canOverrideOperationalFields = !inactive && match.source != OfficialRegistrySource.TTSG
+            val officialAddress = if (!canOverrideOperationalFields) null else {
                 match.address?.trim()?.takeIf(String::isNotEmpty)
             }
-            val officialPhone = if (inactive) null else {
+            val officialPhone = if (!canOverrideOperationalFields) null else {
                 match.phone?.trim()?.takeIf(String::isNotEmpty)
             }
-            val officialWebsite = if (inactive) null else {
+            val officialWebsite = if (!canOverrideOperationalFields) null else {
                 match.website?.trim()?.takeIf(String::isNotEmpty)
             }
-            val officialDistrict = if (inactive) null else {
+            val officialDistrict = if (!canOverrideOperationalFields) null else {
                 match.district?.trim()?.takeIf(String::isNotEmpty)
             }
-            val officialNeighborhood = if (inactive) null else {
+            val officialNeighborhood = if (!canOverrideOperationalFields) null else {
                 match.neighborhood?.trim()?.takeIf(String::isNotEmpty)
             }
 
             if (!match.status.isNullOrBlank()) fieldsUsed += "status"
             if (!match.registrationNumber.isNullOrBlank()) fieldsUsed += "registration_number"
             if (!match.taxOrNationalId.isNullOrBlank()) fieldsUsed += "tax_or_national_id"
+            if (!match.mersisNumber.isNullOrBlank()) fieldsUsed += "mersis_number"
+            if (!match.registryOffice.isNullOrBlank()) fieldsUsed += "registry_office"
+            if (!match.registryEvent.isNullOrBlank()) fieldsUsed += "registry_event"
+            if (!match.publicationDate.isNullOrBlank()) fieldsUsed += "publication_date"
+            if (!match.registrationDate.isNullOrBlank()) fieldsUsed += "registration_date"
+            if (!match.gazetteNumber.isNullOrBlank()) fieldsUsed += "gazette_number"
+            if (!match.gazettePage.isNullOrBlank()) fieldsUsed += "gazette_page"
+            if (!match.sourceReference.isNullOrBlank()) fieldsUsed += "source_reference"
+            if (match.source == OfficialRegistrySource.TTSG && !match.address.isNullOrBlank()) fieldsUsed += "reported_address"
             if (officialAddress != null) fieldsUsed += "address"
             if (officialPhone != null) fieldsUsed += "phone"
             if (officialWebsite != null) fieldsUsed += "website"
@@ -560,6 +651,15 @@ object OfficialRegistryEnricher {
                     importedAtEpochMs = match.importedAtEpochMs,
                     fieldsUsed = fieldsUsed,
                     taxOrNationalId = match.taxOrNationalId,
+                    mersisNumber = match.mersisNumber,
+                    registryOffice = match.registryOffice,
+                    registryEvent = match.registryEvent,
+                    publicationDate = match.publicationDate,
+                    registrationDate = match.registrationDate,
+                    gazetteNumber = match.gazetteNumber,
+                    gazettePage = match.gazettePage,
+                    sourceReference = match.sourceReference,
+                    reportedAddress = match.address,
                 ),
             )
         }
@@ -595,6 +695,7 @@ object OfficialRegistryDiscovery {
 
         val officialOnly = OfficialRegistryTrust.verified(records)
             .asSequence()
+            .filter { record -> record.source != OfficialRegistrySource.TTSG }
             .filterNot { record -> officialIdentityKey(record) in matchedOfficialKeys }
             .mapNotNull { record ->
                 toVerifiedBusiness(
@@ -613,6 +714,7 @@ object OfficialRegistryDiscovery {
         selectedCity: String,
         selectedDistrict: String?,
     ): VerifiedBusiness? {
+        if (record.source == OfficialRegistrySource.TTSG) return null
         if (!OfficialRegistryTrust.isIdentityVerified(record)) return null
         val registrationNumber = record.registrationNumber
             ?.trim()
@@ -627,6 +729,7 @@ object OfficialRegistryDiscovery {
 
         val fieldsUsed = linkedSetOf("registration_number")
         if (!record.taxOrNationalId.isNullOrBlank()) fieldsUsed += "tax_or_national_id"
+        if (!record.mersisNumber.isNullOrBlank()) fieldsUsed += "mersis_number"
         if (!record.status.isNullOrBlank()) fieldsUsed += "status"
         if (!record.address.isNullOrBlank()) fieldsUsed += "address"
         if (!record.phone.isNullOrBlank()) fieldsUsed += "phone"
@@ -658,13 +761,25 @@ object OfficialRegistryDiscovery {
                 importedAtEpochMs = record.importedAtEpochMs,
                 fieldsUsed = fieldsUsed,
                 taxOrNationalId = record.taxOrNationalId,
+                mersisNumber = record.mersisNumber,
+                registryOffice = record.registryOffice,
+                registryEvent = record.registryEvent,
+                publicationDate = record.publicationDate,
+                registrationDate = record.registrationDate,
+                gazetteNumber = record.gazetteNumber,
+                gazettePage = record.gazettePage,
+                sourceReference = record.sourceReference,
+                reportedAddress = record.address,
             ),
         )
     }
 
     private fun officialIdentityKey(record: OfficialRegistryRecord): String {
-        val registrationNumber = record.registrationNumber?.trim().orEmpty()
-        return record.source.descriptor.id + "|" + registrationNumber
+        val identityNumber = record.registrationNumber
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: record.mersisNumber?.trim().orEmpty()
+        return record.source.descriptor.id + "|" + identityNumber
     }
 }
 
@@ -760,7 +875,8 @@ object OfficialRegistryMatcher {
         left: OfficialRegistryRecord,
         right: OfficialRegistryRecord,
     ): Boolean =
-        left.registrationNumber == right.registrationNumber &&
+        (left.registrationNumber ?: left.mersisNumber) ==
+            (right.registrationNumber ?: right.mersisNumber) &&
             OfficialRegistryNormalizer.text(left.businessName) ==
                 OfficialRegistryNormalizer.text(right.businessName) &&
             OfficialRegistryNormalizer.text(left.address.orEmpty()) ==
@@ -886,13 +1002,14 @@ object OfficialRegistryImportParser {
             val name = value(row, NAME_HEADERS) ?: return@mapNotNull null
             OfficialRegistryRecord(
                 source = source,
-                registrationNumber = value(row, REGISTRATION_HEADERS),
+                registrationNumber = value(row, REGISTRATION_HEADERS) ?: value(row, MERSIS_HEADERS),
                 businessName = name,
                 status = value(row, STATUS_HEADERS),
                 city = value(row, CITY_HEADERS)
                     ?: when (source) {
                         OfficialRegistrySource.ITO -> "İstanbul"
-                        OfficialRegistrySource.CHAMBER -> defaultCity?.trim()?.takeIf(String::isNotBlank)
+                        OfficialRegistrySource.CHAMBER, OfficialRegistrySource.TTSG ->
+                            defaultCity?.trim()?.takeIf(String::isNotBlank)
                         else -> null
                     },
                 district = value(row, DISTRICT_HEADERS) ?: value(row, SEMT_HEADERS),
@@ -903,6 +1020,14 @@ object OfficialRegistryImportParser {
                 importedAtEpochMs = importedAtEpochMs,
                 naceCode = value(row, NACE_HEADERS),
                 taxOrNationalId = value(row, TAX_ID_HEADERS)?.let(::sanitizeTaxOrNationalId),
+                mersisNumber = value(row, MERSIS_HEADERS),
+                registryOffice = value(row, REGISTRY_OFFICE_HEADERS),
+                registryEvent = value(row, REGISTRY_EVENT_HEADERS),
+                publicationDate = value(row, PUBLICATION_DATE_HEADERS),
+                registrationDate = value(row, REGISTRATION_DATE_HEADERS),
+                gazetteNumber = value(row, GAZETTE_NUMBER_HEADERS),
+                gazettePage = value(row, GAZETTE_PAGE_HEADERS),
+                sourceReference = value(row, SOURCE_REFERENCE_HEADERS),
             )
         }
     }
@@ -1104,14 +1229,54 @@ object OfficialRegistryImportParser {
         "oda sicil numarasi",
         "ticaret sicil no",
         "ticaret sicil numarasi",
-        "mersis no",
-        "mersis numarasi",
         "esnaf sicil no",
         "esnaf sicil numarasi",
         "sicil kayit no",
         "sicil kayit numarasi",
         "kayit no",
         "kayit numarasi",
+    )
+    private val MERSIS_HEADERS = setOf(
+        "mersis no",
+        "mersis numarasi",
+        "mersis",
+    )
+    private val REGISTRY_OFFICE_HEADERS = setOf(
+        "sicil mudurlugu",
+        "ticaret sicili mudurlugu",
+        "sicil mudurluk",
+        "registry office",
+    )
+    private val REGISTRY_EVENT_HEADERS = setOf(
+        "sicil olayi",
+        "ilan turu",
+        "ilan turu sonuc tablosu",
+        "ilandaki olay durum",
+        "olay",
+    )
+    private val PUBLICATION_DATE_HEADERS = setOf(
+        "yayin tarihi",
+        "ilan tarihi",
+        "gazete tarihi",
+    )
+    private val REGISTRATION_DATE_HEADERS = setOf(
+        "tescil tarihi",
+        "kayit tarihi",
+    )
+    private val GAZETTE_NUMBER_HEADERS = setOf(
+        "gazete sayi",
+        "gazete sayisi",
+        "sayi",
+    )
+    private val GAZETTE_PAGE_HEADERS = setOf(
+        "gazete sayfa",
+        "sayfa",
+    )
+    private val SOURCE_REFERENCE_HEADERS = setOf(
+        "kaynak referansi",
+        "ilan referansi",
+        "kaynak goruntuleme sayfasi",
+        "kaynak goruntuleme baglantisi",
     )
     private val STATUS_HEADERS = setOf(
         "durum",
@@ -1137,6 +1302,7 @@ object OfficialRegistryImportParser {
     private val ADDRESS_HEADERS = setOf(
         "adres",
         "acik adres",
+        "adres ilandaki kaynak yazimi",
         "is yeri adresi",
         "isyeri adresi",
         "merkez adresi",
