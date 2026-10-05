@@ -359,6 +359,9 @@ class MainActivitySmokeTest {
         waitForTag("product_editor_dialog").assertIsDisplayed()
         waitForTag("product_name_input").assertIsDisplayed().performTextInput("Smoke Donuk Ürün")
         waitForTag("product_price_input").assertIsDisplayed().performTextInput("125,50")
+        waitForTag("product_image_url_input").performScrollTo().assertIsDisplayed()
+        waitForTag("product_image_gallery").performScrollTo().assertIsDisplayed().assertHasClickAction()
+        waitForTag("product_image_camera").performScrollTo().assertIsDisplayed().assertHasClickAction()
         waitForTag("product_save_button").assertIsDisplayed().performTouchInput { click() }
 
         waitForText("Smoke Donuk Ürün").assertExists()
