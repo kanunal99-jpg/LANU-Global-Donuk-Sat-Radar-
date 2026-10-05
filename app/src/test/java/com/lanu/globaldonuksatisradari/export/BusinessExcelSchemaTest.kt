@@ -36,6 +36,8 @@ class BusinessExcelSchemaTest {
             "TC/Vergi No",
             "Mahalle",
             "Açık Adres",
+            "Sicil Telefonu",
+            "Sicil Web Sitesi",
             "X",
             "Y",
             "Konum Bilgileri",
