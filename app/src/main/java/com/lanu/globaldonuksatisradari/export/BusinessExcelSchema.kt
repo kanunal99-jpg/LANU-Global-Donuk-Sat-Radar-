@@ -30,6 +30,95 @@ data class BusinessExcelOfficialSnapshot(
     val reportedAddress: String? = null,
 )
 
+class BusinessExcelOfficialIndex private constructor(
+    private val records: List<OfficialRegistryRecord>,
+) {
+    private val bySource = records.groupBy { it.source }
+    private val byIdentity = buildMap<String, MutableList<OfficialRegistryRecord>> {
+        records.forEach { record ->
+            listOf(record.registrationNumber, record.mersisNumber)
+                .mapNotNull { it?.trim()?.takeIf(String::isNotBlank) }
+                .map(::identityKey)
+                .distinct()
+                .forEach { key -> getOrPut(key) { mutableListOf() }.add(record) }
+        }
+    }
+    private val byTax = buildMap<String, MutableList<OfficialRegistryRecord>> {
+        records.forEach { record ->
+            record.taxOrNationalId
+                ?.filter(Char::isDigit)
+                ?.takeIf(String::isNotBlank)
+                ?.let { key -> getOrPut(key) { mutableListOf() }.add(record) }
+        }
+    }
+    private val bySourceCityDistrict = records.groupBy { record ->
+        Triple(
+            record.source,
+            locationKey(record.city),
+            locationKey(record.district),
+        )
+    }
+    private val bySourceCity = records.groupBy { record ->
+        record.source to locationKey(record.city)
+    }
+
+    fun exact(customer: CrmCustomer, source: OfficialRegistrySource): List<OfficialRegistryRecord> {
+        val candidates = linkedSetOf<OfficialRegistryRecord>()
+        customer.registryNumber
+            ?.trim()
+            ?.takeIf(String::isNotBlank)
+            ?.let(::identityKey)
+            ?.let { key -> byIdentity[key].orEmpty().filterTo(candidates) { it.source == source } }
+        customer.taxOrNationalId
+            ?.filter(Char::isDigit)
+            ?.takeIf(String::isNotBlank)
+            ?.let { key -> byTax[key].orEmpty().filterTo(candidates) { it.source == source } }
+        return candidates.toList()
+    }
+
+    fun candidates(customer: CrmCustomer, source: OfficialRegistrySource): List<OfficialRegistryRecord> {
+        val cityKey = locationKey(customer.city)
+        val districtKey = locationKey(customer.district)
+        if (cityKey.isNotBlank()) {
+            if (districtKey.isNotBlank()) {
+                val scoped = (
+                    bySourceCityDistrict[Triple(source, cityKey, districtKey)].orEmpty() +
+                        bySourceCityDistrict[Triple(source, cityKey, "")].orEmpty()
+                    ).distinct()
+                if (scoped.isNotEmpty()) return scoped
+            }
+            val cityScoped = bySourceCity[source to cityKey].orEmpty()
+            if (cityScoped.isNotEmpty()) return cityScoped
+        }
+        return bySource[source].orEmpty()
+    }
+
+    companion object {
+        val EMPTY = BusinessExcelOfficialIndex(emptyList())
+
+        fun from(records: List<OfficialRegistryRecord>): BusinessExcelOfficialIndex =
+            if (records.isEmpty()) EMPTY else BusinessExcelOfficialIndex(records)
+
+        private fun identityKey(value: String): String =
+            value.trim().uppercase(Locale.ROOT)
+
+        private fun locationKey(value: String?): String =
+            value.orEmpty()
+                .trim()
+                .replace('İ', 'I')
+                .lowercase(Locale.ROOT)
+                .replace("\u0307", "")
+                .replace('ı', 'i')
+                .replace('ğ', 'g')
+                .replace('ü', 'u')
+                .replace('ş', 's')
+                .replace('ö', 'o')
+                .replace('ç', 'c')
+                .replace(Regex("[^a-z0-9]+"), " ")
+                .trim()
+    }
+}
+
 object BusinessExcelSchema {
     val commonHeaders: List<String> = listOf(
         "Ad Soyad",
@@ -68,8 +157,16 @@ object BusinessExcelSchema {
     fun customerValues(
         customer: CrmCustomer,
         officialRecords: List<OfficialRegistryRecord> = emptyList(),
+    ): List<String> = customerValues(
+        customer = customer,
+        officialIndex = BusinessExcelOfficialIndex.from(officialRecords),
+    )
+
+    fun customerValues(
+        customer: CrmCustomer,
+        officialIndex: BusinessExcelOfficialIndex,
     ): List<String> {
-        val official = BusinessExcelOfficialResolver.resolve(customer, officialRecords)
+        val official = BusinessExcelOfficialResolver.resolve(customer, officialIndex)
         val mapLink = if (customer.latitude != null && customer.longitude != null) {
             "https://maps.google.com/?q=${customer.latitude},${customer.longitude}"
         } else {
@@ -239,8 +336,14 @@ object BusinessExcelOfficialResolver {
     fun resolve(
         customer: CrmCustomer,
         records: List<OfficialRegistryRecord>,
+    ): BusinessExcelOfficialSnapshot =
+        resolve(customer, BusinessExcelOfficialIndex.from(records))
+
+    fun resolve(
+        customer: CrmCustomer,
+        index: BusinessExcelOfficialIndex,
     ): BusinessExcelOfficialSnapshot {
-        if (records.isEmpty()) {
+        if (index === BusinessExcelOfficialIndex.EMPTY) {
             return BusinessExcelOfficialSnapshot(
                 status = statusFromCustomer(customer),
                 sources = customer.registrySource,
@@ -250,9 +353,10 @@ object BusinessExcelOfficialResolver {
         }
 
         val matched = OfficialRegistrySource.entries.mapNotNull { source ->
-            val sourceRecords = records.filter { it.source == source }
+            val exactRecords = index.exact(customer, source)
+            val sourceRecords = index.candidates(customer, source)
             if (sourceRecords.isEmpty()) return@mapNotNull null
-            exactMatch(customer, sourceRecords)
+            exactMatch(exactRecords, source)
                 ?: OfficialRegistryMatcher.bestMatch(
                     name = customer.businessName,
                     city = customer.city,
@@ -311,24 +415,14 @@ object BusinessExcelOfficialResolver {
     }
 
     private fun exactMatch(
-        customer: CrmCustomer,
-        records: List<OfficialRegistryRecord>,
+        exactRecords: List<OfficialRegistryRecord>,
+        source: OfficialRegistrySource,
     ): OfficialRegistryRecord? {
-        val registryNumber = customer.registryNumber?.trim()?.takeIf(String::isNotBlank)
-        val taxId = customer.taxOrNationalId?.filter(Char::isDigit)?.takeIf(String::isNotBlank)
-
-        val exact = records.filter { record ->
-            (registryNumber != null && (
-                record.registrationNumber?.trim() == registryNumber ||
-                    record.mersisNumber?.trim() == registryNumber
-                )) ||
-                (taxId != null && record.taxOrNationalId?.filter(Char::isDigit) == taxId)
-        }
-        if (exact.isEmpty()) return null
-        return if (records.firstOrNull()?.source == OfficialRegistrySource.TTSG) {
-            exact.maxByOrNull(::publicationSortKey)
+        if (exactRecords.isEmpty()) return null
+        return if (source == OfficialRegistrySource.TTSG) {
+            exactRecords.maxByOrNull(::publicationSortKey)
         } else {
-            exact.maxByOrNull(OfficialRegistryRecord::importedAtEpochMs)
+            exactRecords.maxByOrNull(OfficialRegistryRecord::importedAtEpochMs)
         }
     }
 
