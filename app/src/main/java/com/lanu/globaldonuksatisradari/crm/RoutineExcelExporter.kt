@@ -1,5 +1,7 @@
 package com.lanu.globaldonuksatisradari.crm
 
+import com.lanu.globaldonuksatisradari.data.OfficialRegistryRecord
+import com.lanu.globaldonuksatisradari.export.BusinessExcelSchema
 import java.io.ByteArrayOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -7,15 +9,7 @@ import java.util.zip.ZipOutputStream
 object RoutineExcelExporter {
     const val MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-    val headers: List<String> = listOf(
-        "Nokta Adı",
-        "Ad Soyad",
-        "Telefon No",
-        "İl",
-        "İlçe",
-        "Açık Adres",
-        "X",
-        "Y",
+    val headers: List<String> = BusinessExcelSchema.commonHeaders + listOf(
         "Ziyaret Aralığı (Gün)",
         "Frekans Kaynağı",
         "Önceki Uzaklık",
@@ -24,7 +18,10 @@ object RoutineExcelExporter {
         "Kümülatif Süre (dk)",
     )
 
-    fun build(plan: MonthlyRoutinePlan): ByteArray {
+    fun build(
+        plan: MonthlyRoutinePlan,
+        officialRecords: List<OfficialRegistryRecord> = emptyList(),
+    ): ByteArray {
         val output = ByteArrayOutputStream()
         ZipOutputStream(output).use { zip ->
             zip.putXml("[Content_Types].xml", contentTypes())
@@ -37,7 +34,7 @@ object RoutineExcelExporter {
                 val weekDays = plan.days.filter { it.weekNumber == week }
                 zip.putXml(
                     "xl/worksheets/sheet$week.xml",
-                    worksheet(week, weekDays, plan),
+                    worksheet(week, weekDays, plan, officialRecords),
                 )
             }
         }
@@ -48,6 +45,7 @@ object RoutineExcelExporter {
         weekNumber: Int,
         days: List<RoutineDayPlan>,
         plan: MonthlyRoutinePlan,
+        officialRecords: List<OfficialRegistryRecord>,
     ): String {
         val mergeRefs = mutableListOf<String>()
         var rowNumber = 1
@@ -72,7 +70,7 @@ object RoutineExcelExporter {
                         height = 24,
                     ),
                 )
-                mergeRefs += "A$dayStart:N$dayStart"
+                mergeRefs += "A$dayStart:${columnName(headers.size)}$dayStart"
                 rowNumber++
 
                 append(
@@ -99,45 +97,34 @@ object RoutineExcelExporter {
                             ),
                         ),
                     )
-                    mergeRefs += "A$rowNumber:N$rowNumber"
+                    mergeRefs += "A$rowNumber:${columnName(headers.size)}$rowNumber"
                     rowNumber++
                 } else {
                     day.stops.forEach { stop ->
                         val customer = stop.customer
-                        val values = listOf(
-                            customer.businessName,
-                            customer.contactName.orEmpty(),
-                            customer.phone.orEmpty(),
-                            customer.city,
-                            customer.district,
-                            customer.address.orEmpty(),
+                        val commonValues = BusinessExcelSchema.customerValues(
+                            customer = customer,
+                            officialRecords = officialRecords,
                         )
                         val cells = mutableListOf<String>()
-                        values.forEachIndexed { index, value ->
-                            cells += textCell(
-                                columnName(index + 1) + rowNumber,
-                                value,
-                                style = 2,
-                            )
+                        commonValues.forEachIndexed { index, value ->
+                            val ref = columnName(index + 1) + rowNumber
+                            cells += if (index == X_COLUMN_INDEX || index == Y_COLUMN_INDEX) {
+                                numericOrTextCell(ref, value, style = 3)
+                            } else {
+                                textCell(ref, value, style = 2)
+                            }
                         }
-                        cells += numericOrTextCell(
-                            "G$rowNumber",
-                            customer.longitude?.toString().orEmpty(),
-                            style = 3,
-                        )
-                        cells += numericOrTextCell(
-                            "H$rowNumber",
-                            customer.latitude?.toString().orEmpty(),
-                            style = 3,
-                        )
+
+                        val routeStart = commonValues.size + 1
                         val frequency = plan.frequencyFor(customer.id)
                         cells += numericOrTextCell(
-                            "I$rowNumber",
+                            columnName(routeStart) + rowNumber,
                             frequency?.intervalDays?.toString().orEmpty(),
                             style = 2,
                         )
                         cells += textCell(
-                            "J$rowNumber",
+                            columnName(routeStart + 1) + rowNumber,
                             when (frequency?.source) {
                                 VisitFrequencySource.AUTO -> "Otomatik"
                                 VisitFrequencySource.MANUAL -> "Manuel"
@@ -146,22 +133,22 @@ object RoutineExcelExporter {
                             style = 2,
                         )
                         cells += numericCell(
-                            "K$rowNumber",
+                            columnName(routeStart + 2) + rowNumber,
                             stop.distanceFromPreviousKm,
                             style = 5,
                         )
                         cells += numericCell(
-                            "L$rowNumber",
+                            columnName(routeStart + 3) + rowNumber,
                             stop.cumulativeDistanceKm,
                             style = 5,
                         )
                         cells += numericCell(
-                            "M$rowNumber",
+                            columnName(routeStart + 4) + rowNumber,
                             stop.estimatedMinutesFromPrevious.toDouble(),
                             style = 6,
                         )
                         cells += numericCell(
-                            "N$rowNumber",
+                            columnName(routeStart + 5) + rowNumber,
                             stop.cumulativeEstimatedMinutes.toDouble(),
                             style = 6,
                         )
@@ -187,15 +174,17 @@ object RoutineExcelExporter {
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <sheetFormatPr defaultRowHeight="18"/>
   <cols>
-    <col min="1" max="1" width="30" customWidth="1"/>
-    <col min="2" max="2" width="24" customWidth="1"/>
-    <col min="3" max="3" width="20" customWidth="1"/>
-    <col min="4" max="5" width="18" customWidth="1"/>
-    <col min="6" max="6" width="46" customWidth="1"/>
-    <col min="7" max="8" width="16" customWidth="1"/>
-    <col min="9" max="10" width="20" customWidth="1"/>
-    <col min="11" max="12" width="20" customWidth="1"/>
-    <col min="13" max="14" width="18" customWidth="1"/>
+    <col min="1" max="4" width="28" customWidth="1"/>
+    <col min="5" max="8" width="20" customWidth="1"/>
+    <col min="9" max="18" width="20" customWidth="1"/>
+    <col min="19" max="20" width="18" customWidth="1"/>
+    <col min="21" max="21" width="32" customWidth="1"/>
+    <col min="22" max="24" width="18" customWidth="1"/>
+    <col min="25" max="26" width="44" customWidth="1"/>
+    <col min="27" max="28" width="16" customWidth="1"/>
+    <col min="29" max="29" width="48" customWidth="1"/>
+    <col min="30" max="31" width="24" customWidth="1"/>
+    <col min="32" max="37" width="20" customWidth="1"/>
   </cols>
   <sheetData>$rows</sheetData>
   $merges
@@ -204,6 +193,9 @@ object RoutineExcelExporter {
   <headerFooter><oddHeader>&amp;C&amp;B$weekNumber. Hafta - LANU Aylık Rutin Planı</oddHeader></headerFooter>
 </worksheet>"""
     }
+
+    private const val X_COLUMN_INDEX = 26
+    private const val Y_COLUMN_INDEX = 27
 
     private fun rowXml(
         rowNumber: Int,
