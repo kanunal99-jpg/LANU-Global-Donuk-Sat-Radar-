@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.lanu.globaldonuksatisradari.crm.CommercialCrmRepository
 import com.lanu.globaldonuksatisradari.crm.CrmActivity
 import com.lanu.globaldonuksatisradari.crm.CrmOpportunity
 import com.lanu.globaldonuksatisradari.crm.CrmOpportunityStatus
@@ -52,6 +53,8 @@ fun CrmCustomerDetailScreen(
     nextActions: List<CrmNextAction>,
     transitions: List<CrmStageTransition>,
     opportunities: List<CrmOpportunity>,
+    commercialRepository: CommercialCrmRepository,
+    catalogProducts: List<CatalogProduct>,
     onBack: () -> Unit,
     onStageChange: (CrmStage, String?) -> Unit,
     onRecordActivity: (CrmActivityType, String?) -> Unit,
