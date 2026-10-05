@@ -1,6 +1,8 @@
 package com.lanu.globaldonuksatisradari
 
 import android.annotation.SuppressLint
+import android.os.Handler
+import android.os.Looper
 import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -231,11 +233,17 @@ private class MapJavascriptBridge(
     private val onReady: () -> Unit,
     private val onError: () -> Unit,
 ) {
-    @JavascriptInterface
-    fun onReady() = onReady.invoke()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     @JavascriptInterface
-    fun onError(@Suppress("UNUSED_PARAMETER") reason: String) = onError.invoke()
+    fun onReady() {
+        mainHandler.post(onReady)
+    }
+
+    @JavascriptInterface
+    fun onError(@Suppress("UNUSED_PARAMETER") reason: String) {
+        mainHandler.post(onError)
+    }
 }
 
 private fun hasValidMapCoordinate(business: VerifiedBusiness): Boolean {
