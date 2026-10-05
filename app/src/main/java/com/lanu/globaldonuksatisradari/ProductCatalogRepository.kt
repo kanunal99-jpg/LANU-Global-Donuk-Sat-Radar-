@@ -26,6 +26,12 @@ data class CatalogProduct(
     val sourceUrl: String?,
     val sourceVerifiedAtEpochMs: Long?,
     val updatedAtEpochMs: Long,
+    val localImagePath: String? = null,
+    val imageSource: ProductImageSource = when {
+        !localImagePath.isNullOrBlank() -> ProductImageSource.GALLERY
+        !imageUrl.isNullOrBlank() -> ProductImageSource.URL
+        else -> ProductImageSource.NONE
+    },
 )
 
 object ProductMediaValidation {
@@ -71,7 +77,9 @@ object ProductPrice {
 }
 
 class ProductCatalogRepository(context: Context) {
-    private val preferences = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private val preferences = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val imageStorage = ProductImageStorage(appContext)
     private val state = MutableStateFlow(load())
 
     val products: StateFlow<List<CatalogProduct>> = state.asStateFlow()
@@ -89,6 +97,8 @@ class ProductCatalogRepository(context: Context) {
         imageUrl: String? = null,
         sourceUrl: String? = null,
         sourceVerifiedAtEpochMs: Long? = null,
+        localImagePath: String? = null,
+        imageSource: ProductImageSource? = null,
     ): CatalogProduct {
         val normalizedName = name.trim()
         require(normalizedName.isNotEmpty()) { "Ürün adı boş olamaz." }
@@ -96,10 +106,23 @@ class ProductCatalogRepository(context: Context) {
 
         ProductMediaValidation.requireHttpsUrl(imageUrl, "Ürün fotoğrafı URL")
         ProductMediaValidation.requireHttpsUrl(sourceUrl, "Kaynak URL")
+        val normalizedLocalPath = localImagePath?.trim()?.takeIf(String::isNotEmpty)
+        val resolvedImageSource = imageSource ?: when {
+            normalizedLocalPath != null -> ProductImageSource.GALLERY
+            !imageUrl.isNullOrBlank() -> ProductImageSource.URL
+            else -> ProductImageSource.NONE
+        }
+        require(
+            resolvedImageSource == ProductImageSource.NONE ||
+                (resolvedImageSource == ProductImageSource.URL && !imageUrl.isNullOrBlank()) ||
+                (resolvedImageSource in setOf(ProductImageSource.GALLERY, ProductImageSource.CAMERA) &&
+                    normalizedLocalPath != null)
+        ) { "Ürün görsel kaynağı ile görsel verisi uyuşmuyor." }
 
         val normalizedCurrency = currency.trim().uppercase(Locale.ROOT)
         require(normalizedCurrency.length == 3) { "Para birimi 3 harf olmalıdır. Örnek: TRY" }
 
+        val existingProduct = id?.let { currentId -> state.value.firstOrNull { it.id == currentId } }
         val product = CatalogProduct(
             id = id?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString(),
             name = normalizedName,
@@ -113,7 +136,15 @@ class ProductCatalogRepository(context: Context) {
             sourceUrl = sourceUrl?.trim()?.takeIf { it.isNotEmpty() },
             sourceVerifiedAtEpochMs = sourceVerifiedAtEpochMs,
             updatedAtEpochMs = System.currentTimeMillis(),
+            localImagePath = normalizedLocalPath,
+            imageSource = resolvedImageSource,
         )
+
+        if (existingProduct?.localImagePath != null &&
+            existingProduct.localImagePath != product.localImagePath
+        ) {
+            imageStorage.deleteLocalImage(existingProduct.localImagePath)
+        }
 
         val updated = state.value
             .filterNot { it.id == product.id }
@@ -126,6 +157,7 @@ class ProductCatalogRepository(context: Context) {
 
     @Synchronized
     fun delete(id: String) {
+        state.value.firstOrNull { it.id == id }?.localImagePath?.let(imageStorage::deleteLocalImage)
         val updated = state.value.filterNot { it.id == id }
         persist(updated)
         state.value = updated
@@ -133,6 +165,7 @@ class ProductCatalogRepository(context: Context) {
 
     @Synchronized
     fun clearAll() {
+        state.value.forEach { product -> imageStorage.deleteLocalImage(product.localImagePath) }
         persist(emptyList())
         state.value = emptyList()
     }
@@ -158,6 +191,16 @@ class ProductCatalogRepository(context: Context) {
                             sourceUrl = item.optString("sourceUrl").takeIf { it.isNotBlank() },
                             sourceVerifiedAtEpochMs = item.optLong("sourceVerifiedAtEpochMs", 0L).takeIf { it > 0L },
                             updatedAtEpochMs = item.optLong("updatedAtEpochMs", 0L),
+                            localImagePath = item.optString("localImagePath").takeIf { it.isNotBlank() },
+                            imageSource = runCatching {
+                                ProductImageSource.valueOf(item.optString("imageSource"))
+                            }.getOrElse {
+                                when {
+                                    item.optString("localImagePath").isNotBlank() -> ProductImageSource.GALLERY
+                                    item.optString("imageUrl").isNotBlank() -> ProductImageSource.URL
+                                    else -> ProductImageSource.NONE
+                                }
+                            },
                         ),
                     )
                 }
@@ -182,6 +225,8 @@ class ProductCatalogRepository(context: Context) {
                     put("sourceUrl", product.sourceUrl)
                     put("sourceVerifiedAtEpochMs", product.sourceVerifiedAtEpochMs)
                     put("updatedAtEpochMs", product.updatedAtEpochMs)
+                    put("localImagePath", product.localImagePath)
+                    put("imageSource", product.imageSource.name)
                 },
             )
         }
