@@ -1286,7 +1286,6 @@ object OfficialRegistryImportParser {
         "tescil durumu",
         "faaliyet durumu",
         "sicil durumu",
-        "bugunku sirket durumu",
     )
     private val CITY_HEADERS = setOf("il", "il adi", "sehir", "city")
     private val DISTRICT_HEADERS = setOf("ilce", "ilce adi", "district")
@@ -1303,6 +1302,7 @@ object OfficialRegistryImportParser {
     private val ADDRESS_HEADERS = setOf(
         "adres",
         "acik adres",
+        "adres ilandaki kaynak yazimi",
         "is yeri adresi",
         "isyeri adresi",
         "merkez adresi",
