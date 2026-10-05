@@ -277,6 +277,7 @@ class MainActivitySmokeTest {
         composeRule.activityRule.scenario.recreate()
         waitForTag("nav_map").assertHasClickAction().performClick()
         waitForTag("crm_map_screen").assertIsDisplayed()
+        waitForTag("business_map_container").performScrollTo().assertIsDisplayed()
         waitForText("Harita Smoke Nokta").assertExists()
         waitForTag("crm_map_open_" + customerId)
             .performScrollTo()
