@@ -1,5 +1,7 @@
 package com.lanu.globaldonuksatisradari
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,15 +32,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 @Composable
@@ -58,6 +65,38 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
     var imageUrl by remember { mutableStateOf("") }
     var sourceUrl by remember { mutableStateOf("https://globaldonukgida.com/") }
     var editorError by remember { mutableStateOf<String?>(null) }
+    var cameraTarget by remember { mutableStateOf<CameraImageTarget?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            editorError = runCatching {
+                val persisted = withContext(Dispatchers.IO) {
+                    ProductMediaStore.persistGalleryImage(context, uri)
+                }
+                imageUrl = persisted
+            }.exceptionOrNull()?.message
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture(),
+    ) { success ->
+        val target = cameraTarget
+        cameraTarget = null
+        if (target == null) return@rememberLauncherForActivityResult
+        if (!success) {
+            runCatching { target.file.delete() }
+            return@rememberLauncherForActivityResult
+        }
+        editorError = runCatching {
+            imageUrl = ProductMediaStore.finalizeCameraImage(context, target)
+        }.exceptionOrNull()?.message
+    }
 
     fun openNew() {
         editingId = null
@@ -202,7 +241,67 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                     }
                     OutlinedTextField(value = price, onValueChange = { price = it }, modifier = Modifier.fillMaxWidth().testTag("product_price_input"), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), label = { Text("Birim fiyat *") }, placeholder = { Text("Örn. 1250,50") })
                     OutlinedTextField(value = description, onValueChange = { description = it }, modifier = Modifier.fillMaxWidth(), minLines = 3, label = { Text("Ürün açıklaması") })
-                    OutlinedTextField(value = imageUrl, onValueChange = { imageUrl = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Ürün fotoğrafı URL") })
+                    if (imageUrl.isNotBlank()) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().height(180.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            AsyncImage(
+                                model = imageUrl,
+                                contentDescription = "Ürün görseli önizleme",
+                                modifier = Modifier.fillMaxWidth().height(180.dp).testTag("product_image_preview"),
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
+                        Text(
+                            if (imageUrl.startsWith("https://")) "Görsel kaynağı: URL"
+                            else "Görsel kaynağı: Galeri/Kamera",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    OutlinedTextField(
+                        value = imageUrl.takeIf { it.startsWith("https://") }.orEmpty(),
+                        onValueChange = { imageUrl = it.trim() },
+                        modifier = Modifier.fillMaxWidth().testTag("product_image_url_input"),
+                        singleLine = true,
+                        label = { Text("Ürün fotoğrafı HTTPS URL") },
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = { galleryLauncher.launch("image/*") },
+                            modifier = Modifier.weight(1f).testTag("product_image_gallery"),
+                        ) {
+                            Text("Galeriden seç")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                editorError = runCatching {
+                                    ProductMediaStore.createCameraTarget(context)
+                                }.fold(
+                                    onSuccess = { target ->
+                                        cameraTarget = target
+                                        cameraLauncher.launch(target.uri)
+                                        null
+                                    },
+                                    onFailure = { it.message },
+                                )
+                            },
+                            modifier = Modifier.weight(1f).testTag("product_image_camera"),
+                        ) {
+                            Text("Fotoğraf çek")
+                        }
+                    }
+                    if (imageUrl.isNotBlank()) {
+                        TextButton(
+                            onClick = { imageUrl = "" },
+                            modifier = Modifier.fillMaxWidth().testTag("product_image_remove"),
+                        ) {
+                            Text("Görseli kaldır")
+                        }
+                    }
                     OutlinedTextField(value = sourceUrl, onValueChange = { sourceUrl = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Kaynak URL (opsiyonel)") })
                     OutlinedTextField(value = note, onValueChange = { note = it }, modifier = Modifier.fillMaxWidth(), minLines = 2, label = { Text("Not") })
                     editorError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
