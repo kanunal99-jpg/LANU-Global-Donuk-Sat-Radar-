@@ -62,7 +62,14 @@ enum class AppSection {
     AI_ASSISTANT,
 }
 
-private val cities = TurkeyCityCatalog.ALL.map { entry -> City(entry.name, entry.fallbackDistricts) }
+private val cities = TurkeyCityCatalog.ALL.map { entry ->
+    City(
+        name = entry.name,
+        districts = entry.fallbackDistricts,
+        queryName = entry.queryCityName,
+        restrictToDistricts = entry.restrictToFallbackDistricts,
+    )
+}
 private fun matchesInventoryPresence(value: String?, filter: String): Boolean = when (filter) {
     "Tümü" -> true
     "Var" -> !value.isNullOrBlank()
