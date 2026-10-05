@@ -116,20 +116,26 @@ class ProductCatalogRepository(context: Context) {
             updatedAtEpochMs = System.currentTimeMillis(),
         )
 
+        val previous = state.value.firstOrNull { it.id == product.id }
         val updated = state.value
             .filterNot { it.id == product.id }
             .plus(product)
             .sortedBy { it.name.lowercase(Locale("tr", "TR")) }
         persist(updated)
         state.value = updated
+        if (previous?.imageUrl != null && previous.imageUrl != product.imageUrl) {
+            ProductMediaStore.removeLocalImage(appContext, previous.imageUrl)
+        }
         return product
     }
 
     @Synchronized
     fun delete(id: String) {
+        val removed = state.value.firstOrNull { it.id == id }
         val updated = state.value.filterNot { it.id == id }
         persist(updated)
         state.value = updated
+        ProductMediaStore.removeLocalImage(appContext, removed?.imageUrl)
     }
 
     @Synchronized
