@@ -445,25 +445,33 @@ class OfficialRegistryStore(
             ?.trim()
             ?.takeIf(String::isNotEmpty)
             ?.let(OfficialRegistryNormalizer::text)
-        if (registration != null) {
-            if (record.source == OfficialRegistrySource.TTSG) {
-                return listOf(
-                    record.source.name,
-                    "event",
-                    registration,
-                    OfficialRegistryNormalizer.text(record.publicationDate.orEmpty()),
-                    OfficialRegistryNormalizer.text(record.gazetteNumber.orEmpty()),
-                    OfficialRegistryNormalizer.text(record.gazettePage.orEmpty()),
-                    OfficialRegistryNormalizer.text(record.registryEvent.orEmpty()),
-                    OfficialRegistryNormalizer.text(record.sourceReference.orEmpty()),
-                ).joinToString("|")
-            }
-            return listOf(record.source.name, "registry", registration).joinToString("|")
-        }
         val mersis = record.mersisNumber
             ?.trim()
             ?.takeIf(String::isNotEmpty)
             ?.let(OfficialRegistryNormalizer::text)
+
+        if (record.source == OfficialRegistrySource.TTSG) {
+            val identity = registration
+                ?: mersis
+                ?: listOf(
+                    OfficialRegistryNormalizer.text(record.businessName),
+                    OfficialRegistryNormalizer.text(record.registryOffice.orEmpty()),
+                ).joinToString(":")
+            return listOf(
+                record.source.name,
+                "event",
+                identity,
+                OfficialRegistryNormalizer.text(record.publicationDate.orEmpty()),
+                OfficialRegistryNormalizer.text(record.gazetteNumber.orEmpty()),
+                OfficialRegistryNormalizer.text(record.gazettePage.orEmpty()),
+                OfficialRegistryNormalizer.text(record.registryEvent.orEmpty()),
+                OfficialRegistryNormalizer.text(record.sourceReference.orEmpty()),
+            ).joinToString("|")
+        }
+
+        if (registration != null) {
+            return listOf(record.source.name, "registry", registration).joinToString("|")
+        }
         if (mersis != null) {
             return listOf(record.source.name, "mersis", mersis).joinToString("|")
         }
@@ -767,8 +775,11 @@ object OfficialRegistryDiscovery {
     }
 
     private fun officialIdentityKey(record: OfficialRegistryRecord): String {
-        val registrationNumber = record.registrationNumber?.trim().orEmpty()
-        return record.source.descriptor.id + "|" + registrationNumber
+        val identityNumber = record.registrationNumber
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: record.mersisNumber?.trim().orEmpty()
+        return record.source.descriptor.id + "|" + identityNumber
     }
 }
 
