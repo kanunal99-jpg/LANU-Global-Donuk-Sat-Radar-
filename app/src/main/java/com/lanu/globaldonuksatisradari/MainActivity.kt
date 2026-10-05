@@ -44,7 +44,11 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 
-data class City(val name: String, val districts: List<String>)
+data class City(
+    val name: String,
+    val districts: List<String>,
+    val label: String = name,
+)
 
 enum class AppSection {
     RADAR,
@@ -57,7 +61,16 @@ enum class AppSection {
     AI_ASSISTANT,
 }
 
-private val cities = TurkeyCityCatalog.ALL.map { entry -> City(entry.name, entry.fallbackDistricts) }
+private val cities = TurkeyCityCatalog.ALL.flatMap { entry ->
+    if (entry.name == "İstanbul") {
+        listOf(
+            City("İstanbul", IstanbulDistricts.ANATOLIAN, "İstanbul Anadolu"),
+            City("İstanbul", IstanbulDistricts.EUROPEAN, "İstanbul Avrupa"),
+        )
+    } else {
+        listOf(City(entry.name, entry.fallbackDistricts))
+    }
+}
 private fun matchesInventoryPresence(value: String?, filter: String): Boolean = when (filter) {
     "Tümü" -> true
     "Var" -> !value.isNullOrBlank()
@@ -96,8 +109,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     }
     val initialCity = remember {
         val savedCity = uiPreferences.getString("selected_city", null)
-        cities.firstOrNull { it.name.equals(savedCity, ignoreCase = true) }
-            ?: cities.firstOrNull { it.name == "İstanbul" }
+        cities.firstOrNull { it.label.equals(savedCity, ignoreCase = true) }
+            ?: cities.firstOrNull { it.label == "İstanbul Anadolu" }
             ?: cities.first()
     }
     var selectedCity by remember { mutableStateOf(initialCity) }
@@ -153,7 +166,14 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     LaunchedEffect(selectedCity.name) {
         districtLoading = true
         availableDistricts = runCatching {
-            districtRepository.getDistricts(selectedCity.name, selectedCity.districts)
+            val fetched = districtRepository.getDistricts(selectedCity.name, selectedCity.districts)
+            if (selectedCity.name == "İstanbul" && selectedCity.districts.isNotEmpty()) {
+                fetched.filter { district ->
+                    selectedCity.districts.any { it.equals(district, ignoreCase = true) }
+                }.ifEmpty { selectedCity.districts }
+            } else {
+                fetched
+            }
         }.getOrElse { throwable ->
             if (throwable is CancellationException) throw throwable
             Log.w("LanuRadar", "İlçe kataloğu yenilenemedi; yerel liste kullanılıyor.", throwable)
@@ -187,7 +207,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
 
     LaunchedEffect(selectedCity.name, selectedDistrict) {
         uiPreferences.edit()
-            .putString("selected_city", selectedCity.name)
+            .putString("selected_city", selectedCity.label)
             .putString("selected_district", selectedDistrict)
             .apply()
     }
@@ -417,8 +437,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         item {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                 Box(Modifier.weight(1f)) {
-                                    OutlinedButton(onClick = { cityMenu = true }, modifier = Modifier.fillMaxWidth()) { Text(selectedCity.name) }
-                                    DropdownMenu(cityMenu, { cityMenu = false }) { cities.forEach { city -> DropdownMenuItem({ Text(city.name) }, onClick = { invalidateSearch(); selectedCity = city; selectedDistrict = "Tümü"; results = emptyList(); resetFilters(); cityMenu = false }) } }
+                                    OutlinedButton(onClick = { cityMenu = true }, modifier = Modifier.fillMaxWidth().testTag("city_filter")) { Text(selectedCity.label) }
+                                    DropdownMenu(cityMenu, { cityMenu = false }) { cities.forEach { city -> DropdownMenuItem({ Text(city.label) }, onClick = { invalidateSearch(); selectedCity = city; selectedDistrict = "Tümü"; results = emptyList(); resetFilters(); cityMenu = false }) } }
                                 }
                                 Box(Modifier.weight(1f)) {
                                     OutlinedButton(onClick = { districtMenu = true }, modifier = Modifier.fillMaxWidth().testTag("district_filter")) { Text(if (districtLoading) "Yükleniyor…" else selectedDistrict) }
@@ -430,9 +450,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             }
                         }
                         item {
-                            val neighborhoods = remember(availableNeighborhoods, results) {
+                            val neighborhoods = remember(availableNeighborhoods) {
                                 listOf("Tümü") +
-                                    (availableNeighborhoods + results.mapNotNull { it.neighborhood })
+                                    availableNeighborhoods
                                         .filter { it.isNotBlank() }
                                         .distinct()
                                         .sortedWith(String.CASE_INSENSITIVE_ORDER)
