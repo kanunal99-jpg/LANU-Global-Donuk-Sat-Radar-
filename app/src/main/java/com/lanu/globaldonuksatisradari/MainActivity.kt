@@ -173,10 +173,19 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val districtRepository = remember(context) { DistrictCatalogRepository(context) }
     val neighborhoodRepository = remember(context) { NeighborhoodCatalogRepository(context) }
     val scanHistoryRepository = remember(context) { RadarScanHistoryRepository(context) }
-    LaunchedEffect(selectedCity.name) {
+    LaunchedEffect(selectedCity.name, selectedCity.queryName) {
         districtLoading = true
         availableDistricts = runCatching {
-            districtRepository.getDistricts(selectedCity.name, selectedCity.districts)
+            districtRepository.getDistricts(selectedCity.queryName, selectedCity.districts)
+                .let { discovered ->
+                    if (selectedCity.restrictToDistricts) {
+                        discovered.filter { district ->
+                            selectedCity.districts.any { it.equals(district, ignoreCase = true) }
+                        }.ifEmpty { selectedCity.districts }
+                    } else {
+                        discovered
+                    }
+                }
         }.getOrElse { throwable ->
             if (throwable is CancellationException) throw throwable
             Log.w("LanuRadar", "İlçe kataloğu yenilenemedi; yerel liste kullanılıyor.", throwable)
