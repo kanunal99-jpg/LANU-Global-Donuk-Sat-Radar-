@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun CrmCustomerContactsSection(
     customer: CrmCustomer,
+    catalogProducts: List<CatalogProduct> = emptyList(),
     onMessage: (String) -> Unit,
 ) {
     val context = LocalContext.current
@@ -100,6 +101,7 @@ fun CrmCustomerContactsSection(
         orders = orders,
         quoteLines = quoteLines,
         orderLines = orderLines,
+        catalogProducts = catalogProducts,
         onCreateQuote = { quoteNumber, currency ->
             scope.launch {
                 runCatching {
@@ -113,12 +115,12 @@ fun CrmCustomerContactsSection(
                     .onFailure { onMessage("Teklif oluşturulamadı: ${it.message.orEmpty()}") }
             }
         },
-        onAddQuoteLine = { quoteId, productName, unit, quantityMilli, unitPriceMinor ->
+        onAddQuoteLine = { quoteId, productId, productName, unit, quantityMilli, unitPriceMinor ->
             scope.launch {
                 runCatching {
                     commercialRepository.addQuoteLine(
                         quoteId = quoteId,
-                        productId = null,
+                        productId = productId,
                         productName = productName,
                         unit = unit,
                         quantityMilli = quantityMilli,
