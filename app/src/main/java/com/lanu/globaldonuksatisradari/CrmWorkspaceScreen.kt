@@ -1,5 +1,10 @@
 package com.lanu.globaldonuksatisradari
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,12 +26,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.lanu.globaldonuksatisradari.crm.CrmCustomer
 import com.lanu.globaldonuksatisradari.crm.CrmDashboardMetrics
 import com.lanu.globaldonuksatisradari.crm.CrmNextAction
 import com.lanu.globaldonuksatisradari.crm.CrmNextActionType
+import com.lanu.globaldonuksatisradari.crm.CrmReminderWorker
+import androidx.core.content.ContextCompat
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -145,6 +153,15 @@ private fun CrmTodayScreen(
         bucketOpenActions(openActions, now)
     }
     val customerById = remember(customers) { customers.associateBy { it.id } }
+    val context = LocalContext.current
+    var notificationPermissionGranted by remember {
+        mutableStateOf(CrmReminderWorker.notificationPermissionGranted(context))
+    }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        notificationPermissionGranted = granted
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -179,6 +196,31 @@ private fun CrmTodayScreen(
                         },
                         style = MaterialTheme.typography.bodySmall,
                     )
+                }
+            }
+        }
+
+        if (!notificationPermissionGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            item {
+                Card(Modifier.fillMaxWidth().testTag("crm_notification_permission_card")) {
+                    Column(
+                        Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text("Takip bildirimleri kapalı", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Bildirim izni verilmezse takipler kaybolmaz; Bugün ekranı uygulama içi güvenli fallback olarak çalışır.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Button(
+                            onClick = {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("crm_enable_notifications"),
+                        ) {
+                            Text("Bildirim izni ver")
+                        }
+                    }
                 }
             }
         }
