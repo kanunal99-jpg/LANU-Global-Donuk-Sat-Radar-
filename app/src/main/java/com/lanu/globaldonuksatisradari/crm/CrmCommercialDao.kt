@@ -49,6 +49,14 @@ interface CrmOrderLineDao {
     @Query("SELECT * FROM crm_order_line WHERE orderId = :orderId ORDER BY createdAtEpochMs ASC, id ASC")
     fun observeForOrder(orderId: String): Flow<List<CrmOrderLineEntity>>
 
+    @Query(
+        "SELECT l.* FROM crm_order_line l " +
+            "JOIN crm_order o ON o.id = l.orderId " +
+            "WHERE o.customerId = :customerId " +
+            "ORDER BY l.createdAtEpochMs ASC, l.id ASC",
+    )
+    fun observeForCustomer(customerId: String): Flow<List<CrmOrderLineEntity>>
+
     @Query("SELECT * FROM crm_order_line WHERE orderId = :orderId ORDER BY createdAtEpochMs ASC, id ASC")
     suspend fun listForOrder(orderId: String): List<CrmOrderLineEntity>
 
