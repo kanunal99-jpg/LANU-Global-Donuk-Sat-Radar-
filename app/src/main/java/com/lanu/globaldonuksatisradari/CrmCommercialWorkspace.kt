@@ -21,17 +21,15 @@ fun CrmCommercialWorkspace(
     val orders by repository.observeOrders(customerId).collectAsState(initial = emptyList())
     val products by productRepository.products.collectAsState()
 
-    val quoteLines = buildMap {
-        quotes.forEach { quote ->
-            val lines by repository.observeQuoteLines(quote.id).collectAsState(initial = emptyList())
-            put(quote.id, lines)
-        }
+    val quoteLines = mutableMapOf<String, List<com.lanu.globaldonuksatisradari.crm.CrmCommercialLine>>()
+    for (quote in quotes) {
+        val lines by repository.observeQuoteLines(quote.id).collectAsState(initial = emptyList())
+        quoteLines[quote.id] = lines
     }
-    val orderLines = buildMap {
-        orders.forEach { order ->
-            val lines by repository.observeOrderLines(order.id).collectAsState(initial = emptyList())
-            put(order.id, lines)
-        }
+    val orderLines = mutableMapOf<String, List<com.lanu.globaldonuksatisradari.crm.CrmCommercialLine>>()
+    for (order in orders) {
+        val lines by repository.observeOrderLines(order.id).collectAsState(initial = emptyList())
+        orderLines[order.id] = lines
     }
 
     CrmCommercialSection(
