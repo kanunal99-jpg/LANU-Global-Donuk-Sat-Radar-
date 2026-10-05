@@ -44,7 +44,12 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 
-data class City(val name: String, val districts: List<String>)
+data class City(
+    val name: String,
+    val districts: List<String>,
+    val queryName: String = name,
+    val restrictToDistricts: Boolean = false,
+)
 
 enum class AppSection {
     RADAR,
