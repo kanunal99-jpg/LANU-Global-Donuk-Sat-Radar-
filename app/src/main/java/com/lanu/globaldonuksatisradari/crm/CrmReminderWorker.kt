@@ -74,9 +74,16 @@ class CrmReminderWorker(
                 .setContentIntent(pendingIntent)
                 .build()
 
-            NotificationManagerCompat.from(applicationContext)
-                .notify(action.id.hashCode(), notification)
-            prefs.edit().putLong(prefKey, action.dueAtEpochMs).apply()
+            val notified = try {
+                NotificationManagerCompat.from(applicationContext)
+                    .notify(action.id.hashCode(), notification)
+                true
+            } catch (_: SecurityException) {
+                false
+            }
+            if (notified) {
+                prefs.edit().putLong(prefKey, action.dueAtEpochMs).apply()
+            }
         }
         return Result.success()
     }
