@@ -767,7 +767,28 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             }
                         },
                     )
-                    AppSection.ROUTINE -> RoutineScreen(crmCustomers, selectedCity.queryName, selectedDistrict)
+                    AppSection.ROUTINE -> RoutineScreen(
+                        customers = crmCustomers,
+                        selectedCity = selectedCity.queryName,
+                        selectedDistrict = selectedDistrict,
+                        onOpenCustomer = { selectedCustomerId = it },
+                        onRecordVisit = { customerId ->
+                            scope.launch {
+                                runCatching {
+                                    localCrmRepository.recordActivity(
+                                        customerId = customerId,
+                                        type = CrmActivityType.VISIT,
+                                        note = "Rutin üzerinden ziyaret kaydı",
+                                        createdByUserId = activeOwnerUserId,
+                                    )
+                                }.onSuccess {
+                                    crmMessage = "Ziyaret CRM aktivitesine kaydedildi."
+                                }.onFailure {
+                                    crmMessage = "Ziyaret kaydedilemedi: ${it.message.orEmpty()}"
+                                }
+                            }
+                        },
+                    )
                     AppSection.MORE -> LazyColumn(
                         modifier = Modifier
                             .testTag("more_screen")
