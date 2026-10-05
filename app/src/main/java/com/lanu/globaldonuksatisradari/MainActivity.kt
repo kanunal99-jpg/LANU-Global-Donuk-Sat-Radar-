@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.lanu.globaldonuksatisradari.crm.CommercialCrmRepository
 import com.lanu.globaldonuksatisradari.crm.CrmActivityType
 import com.lanu.globaldonuksatisradari.crm.CrmDashboardMetrics
 import com.lanu.globaldonuksatisradari.crm.CrmNextActionType
@@ -232,12 +233,19 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
             .apply()
     }
 
-    val localCrmRepository = remember(context) { LocalCrmRepository(LanuCrmDatabase.getInstance(context)) }
+    val crmDatabase = remember(context) { LanuCrmDatabase.getInstance(context) }
+    val localCrmRepository = remember(crmDatabase) { LocalCrmRepository(crmDatabase) }
     val productCatalogRepository = remember(context) { ProductCatalogRepository(context) }
     val officialRegistryStore = remember(context) { OfficialRegistryStore(context) }
 
     val cloudSessionState = auth?.session?.collectAsState()
     val activeOwnerUserId = cloudSessionState?.value?.userId
+    val commercialCrmRepository = remember(crmDatabase, activeOwnerUserId) {
+        CommercialCrmRepository(
+            database = crmDatabase,
+            ownerUserId = activeOwnerUserId,
+        )
+    }
     val allCrmCustomers by localCrmRepository.observeCustomers(null).collectAsState(initial = emptyList())
     val crmCustomers = remember(allCrmCustomers, activeOwnerUserId) {
         val ownerScoped = if (activeOwnerUserId == null) {
@@ -891,6 +899,14 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         onTransitionOpportunity = { opportunityId, status -> scope.launch { runCatching { localCrmRepository.transitionOpportunity(opportunityId, status) }.onSuccess { crmMessage = "Fırsat durumu güncellendi." }.onFailure { crmMessage = "Fırsat durumu güncellenemedi: ${it.message.orEmpty()}" } } },
                         onSaveNotes = { notes -> scope.launch { runCatching { localCrmRepository.updateCustomerNotes(customer.id, notes) }.onSuccess { crmMessage = "Müşteri notu kaydedildi." }.onFailure { crmMessage = "Müşteri notu kaydedilemedi: ${it.message.orEmpty()}" } } },
                         onWorkspaceMessage = { crmMessage = it },
+                        commercialContent = {
+                            CrmCommercialWorkspace(
+                                customerId = customer.id,
+                                repository = commercialCrmRepository,
+                                productRepository = productCatalogRepository,
+                                onMessage = { crmMessage = it },
+                            )
+                        },
                         message = crmMessage,
                     )
                     }
