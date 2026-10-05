@@ -1,5 +1,6 @@
 package com.lanu.globaldonuksatisradari.data
 
+import com.lanu.globaldonuksatisradari.export.BusinessExcelSchema
 import java.io.ByteArrayOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -7,34 +8,7 @@ import java.util.zip.ZipOutputStream
 object OfficialRegistryExcelExporter {
     const val MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-    val headers: List<String> = listOf(
-        "Ad Soyad",
-        "Nokta Adı",
-        "İşletme Türü",
-        "TC/Vergi No",
-        "Telefon No",
-        "İl",
-        "İlçe",
-        "Mahalle",
-        "Açık Adres",
-        "X",
-        "Y",
-        "Konum Bilgileri",
-        "Kaynak",
-        "Sicil / Kayıt No",
-        "MERSİS No",
-        "Sicil Müdürlüğü",
-        "Sicil Olayı",
-        "Yayın Tarihi",
-        "Tescil Tarihi",
-        "Gazete Sayı",
-        "Gazete Sayfa",
-        "Kaynak Referansı",
-        "NACE",
-        "Durum",
-        "Resmî Kimlik",
-        "Web Sitesi",
-    )
+    val headers: List<String> = BusinessExcelSchema.commonHeaders
 
     fun build(records: List<OfficialRegistryRecord>): ByteArray {
         val output = ByteArrayOutputStream()
@@ -62,34 +36,7 @@ object OfficialRegistryExcelExporter {
 
             records.forEachIndexed { index, record ->
                 val rowNumber = index + 2
-                val values = listOf(
-                    "",
-                    record.businessName,
-                    "",
-                    record.taxOrNationalId.orEmpty(),
-                    record.phone.orEmpty(),
-                    record.city.orEmpty(),
-                    record.district.orEmpty(),
-                    record.neighborhood.orEmpty(),
-                    record.address.orEmpty(),
-                    "",
-                    "",
-                    "",
-                    sourceLabel(record.source),
-                    record.registrationNumber.orEmpty(),
-                    record.mersisNumber.orEmpty(),
-                    record.registryOffice.orEmpty(),
-                    record.registryEvent.orEmpty(),
-                    record.publicationDate.orEmpty(),
-                    record.registrationDate.orEmpty(),
-                    record.gazetteNumber.orEmpty(),
-                    record.gazettePage.orEmpty(),
-                    record.sourceReference.orEmpty(),
-                    record.naceCode.orEmpty(),
-                    statusLabel(record),
-                    if (OfficialRegistryTrust.isIdentityVerified(record)) "Doğrulandı" else "Sicil/MERSİS No Yok",
-                    record.website.orEmpty(),
-                )
+                val values = BusinessExcelSchema.registryValues(record)
                 append(
                     rowXml(
                         rowNumber,
@@ -111,42 +58,20 @@ object OfficialRegistryExcelExporter {
   </sheetViews>
   <sheetFormatPr defaultRowHeight="18"/>
   <cols>
-    <col min="1" max="1" width="22" customWidth="1"/>
-    <col min="2" max="2" width="32" customWidth="1"/>
-    <col min="3" max="4" width="20" customWidth="1"/>
-    <col min="5" max="5" width="20" customWidth="1"/>
-    <col min="6" max="8" width="18" customWidth="1"/>
-    <col min="9" max="9" width="48" customWidth="1"/>
-    <col min="10" max="11" width="16" customWidth="1"/>
-    <col min="12" max="12" width="48" customWidth="1"/>
-    <col min="13" max="16" width="20" customWidth="1"/>
-    <col min="17" max="17" width="34" customWidth="1"/>
-    <col min="18" max="21" width="16" customWidth="1"/>
-    <col min="22" max="22" width="44" customWidth="1"/>
-    <col min="23" max="25" width="20" customWidth="1"/>
-    <col min="26" max="26" width="36" customWidth="1"/>
+    <col min="1" max="4" width="28" customWidth="1"/>
+    <col min="5" max="8" width="20" customWidth="1"/>
+    <col min="9" max="18" width="20" customWidth="1"/>
+    <col min="19" max="20" width="18" customWidth="1"/>
+    <col min="21" max="21" width="32" customWidth="1"/>
+    <col min="22" max="24" width="18" customWidth="1"/>
+    <col min="25" max="26" width="44" customWidth="1"/>
+    <col min="27" max="28" width="16" customWidth="1"/>
+    <col min="29" max="29" width="48" customWidth="1"/>
+    <col min="30" max="31" width="24" customWidth="1"/>
   </cols>
   <sheetData>${rows}</sheetData>
-  <autoFilter ref="A1:Z${lastRow}"/>
+  <autoFilter ref="A1:${columnName(headers.size)}${lastRow}"/>
 </worksheet>"""
-    }
-
-    private fun sourceLabel(source: OfficialRegistrySource): String = when (source) {
-        OfficialRegistrySource.ITO -> "İTO"
-        OfficialRegistrySource.CHAMBER -> "ODA"
-        OfficialRegistrySource.TOBB -> "TOBB"
-        OfficialRegistrySource.MERSIS -> "MERSİS"
-        OfficialRegistrySource.ESBIS -> "ESBİS"
-        OfficialRegistrySource.TTSG -> "TTSG"
-    }
-
-    private fun statusLabel(record: OfficialRegistryRecord): String = when {
-        record.status.isNullOrBlank() && record.source == OfficialRegistrySource.TTSG ->
-            "Güncel durum doğrulanmadı"
-        record.status.isNullOrBlank() -> "Durum belirtilmemiş"
-        OfficialRegistryStatus.isActive(record.status) -> "FAAL"
-        OfficialRegistryStatus.isInactive(record.status) -> "AKTİF DEĞİL"
-        else -> record.status.trim()
     }
 
     private fun rowXml(rowNumber: Int, cells: List<String>): String =
