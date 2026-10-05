@@ -153,7 +153,9 @@ class MainActivitySmokeTest {
         }
 
         composeRule.activityRule.scenario.recreate()
-        scrollMainToText("Smoke CRM Kafe").assertIsDisplayed()
+        waitForTag("nav_crm").assertHasClickAction().performClick()
+        waitForTag("crm_tab_customers").assertHasClickAction().performClick()
+        waitForText("Smoke CRM Kafe").assertIsDisplayed()
         waitForTag("crm_open_instrumentation-ui-crm-detail")
             .assertIsDisplayed()
             .assertHasClickAction()
@@ -165,14 +167,17 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun navigationBackForwardAndNewSections_areReachable() {
-        waitForText("Nokta").performClick()
-        waitForText("Manuel Nokta Kaydı").assertIsDisplayed()
+        waitForTag("nav_map").assertHasClickAction().performClick()
+        waitForText("CRM Haritası").assertIsDisplayed()
 
         waitForText("← Geri").performClick()
         waitForText("Satış & CRM Radarı").assertExists()
 
         waitForText("İleri →").performClick()
-        waitForText("Manuel Nokta Kaydı").assertExists()
+        waitForText("CRM Haritası").assertExists()
+
+        waitForTag("nav_crm").assertHasClickAction().performClick()
+        waitForTag("crm_today_screen").assertIsDisplayed()
 
         waitForText("Rutin").performClick()
         waitForText("Yakınlık Bazlı Rutin").assertIsDisplayed()
@@ -180,7 +185,8 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun manualPoint_rejectsMissingRequiredFieldsWithoutWriting() {
-        waitForText("Nokta").performClick()
+        waitForTag("nav_more").assertHasClickAction().performClick()
+        waitForTag("more_manual_point").assertHasClickAction().performClick()
         waitForText("Manuel Nokta Kaydı").assertIsDisplayed()
 
         waitForTag("manual_point_save")
@@ -232,6 +238,36 @@ class MainActivitySmokeTest {
     }
 
     @Test(timeout = 60_000)
+    fun crmMap_showsPersistedCoordinatePointAndOpensDetail() {
+        var customerId = ""
+        runBlocking {
+            val context = composeRule.activity
+            val repository = LocalCrmRepository(LanuCrmDatabase.getInstance(context))
+            customerId = repository.addManualCustomerPoint(
+                businessName = "Harita Smoke Nokta",
+                address = "Moda Test Adres",
+                city = "İstanbul",
+                district = "Kadıköy",
+                neighborhood = "Caferağa",
+                latitude = 40.987,
+                longitude = 29.028,
+                signboardName = "Harita Smoke Tabela",
+            ).id
+        }
+
+        composeRule.activityRule.scenario.recreate()
+        waitForTag("nav_map").assertHasClickAction().performClick()
+        waitForTag("crm_map_screen").assertIsDisplayed()
+        waitForText("Harita Smoke Nokta").assertExists()
+        waitForTag("crm_map_open_" + customerId)
+            .performScrollTo()
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
+        waitForTag("crm_detail_back").assertIsDisplayed()
+    }
+
+    @Test(timeout = 60_000)
     fun crmExcelActions_areAvailableForPersistedPoints() {
         runBlocking {
             val context = composeRule.activity
@@ -252,8 +288,9 @@ class MainActivitySmokeTest {
         }
 
         composeRule.activityRule.scenario.recreate()
-        scrollMainToTag("crm_excel_save")
-        waitForTag("crm_excel_save").assertIsDisplayed().assertHasClickAction()
+        waitForTag("nav_crm").assertHasClickAction().performClick()
+        waitForTag("crm_tab_customers").assertHasClickAction().performClick()
+        waitForTag("crm_excel_save").performScrollTo().assertIsDisplayed().assertHasClickAction()
         waitForTag("crm_excel_share").assertIsDisplayed().assertHasClickAction()
     }
 
@@ -292,7 +329,8 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun aiAssistant_localFallbackWorksWithoutApiKey() {
-        waitForTag("nav_ai").assertHasClickAction().performClick()
+        waitForTag("nav_more").assertHasClickAction().performClick()
+        waitForTag("more_ai").assertHasClickAction().performClick()
         waitForTag("ai_screen").assertIsDisplayed()
         waitForTag("ai_local_summary")
             .performScrollTo()
@@ -310,7 +348,8 @@ class MainActivitySmokeTest {
 
     @Test(timeout = 60_000)
     fun productCatalog_canOpenAndAddManualPrice() {
-        waitForText("Ürünler").performClick()
+        waitForTag("nav_more").assertHasClickAction().performClick()
+        waitForTag("more_products").assertHasClickAction().performClick()
         waitForText("Ürün Kataloğu").assertIsDisplayed()
 
         val addButton = waitForTag("product_add_button").assertIsDisplayed().assertHasClickAction()
