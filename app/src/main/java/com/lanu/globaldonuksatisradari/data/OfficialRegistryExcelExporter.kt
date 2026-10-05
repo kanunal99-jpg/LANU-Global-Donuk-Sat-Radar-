@@ -1,5 +1,7 @@
 package com.lanu.globaldonuksatisradari.data
 
+import com.lanu.globaldonuksatisradari.crm.CrmCustomer
+import com.lanu.globaldonuksatisradari.export.BusinessExcelContextIndex
 import com.lanu.globaldonuksatisradari.export.BusinessExcelSchema
 import java.io.ByteArrayOutputStream
 import java.util.zip.ZipEntry
@@ -10,7 +12,11 @@ object OfficialRegistryExcelExporter {
 
     val headers: List<String> = BusinessExcelSchema.commonHeaders
 
-    fun build(records: List<OfficialRegistryRecord>): ByteArray {
+    fun build(
+        records: List<OfficialRegistryRecord>,
+        customers: List<CrmCustomer> = emptyList(),
+        businesses: List<VerifiedBusiness> = emptyList(),
+    ): ByteArray {
         val output = ByteArrayOutputStream()
         ZipOutputStream(output).use { zip ->
             zip.putXml("[Content_Types].xml", contentTypes())
@@ -18,12 +24,17 @@ object OfficialRegistryExcelExporter {
             zip.putXml("xl/workbook.xml", workbook())
             zip.putXml("xl/_rels/workbook.xml.rels", workbookRelationships())
             zip.putXml("xl/styles.xml", styles())
-            zip.putXml("xl/worksheets/sheet1.xml", worksheet(records))
+            zip.putXml("xl/worksheets/sheet1.xml", worksheet(records, customers, businesses))
         }
         return output.toByteArray()
     }
 
-    private fun worksheet(records: List<OfficialRegistryRecord>): String {
+    private fun worksheet(
+        records: List<OfficialRegistryRecord>,
+        customers: List<CrmCustomer>,
+        businesses: List<VerifiedBusiness>,
+    ): String {
+        val contextIndex = BusinessExcelContextIndex.from(customers, businesses)
         val rows = buildString {
             append(
                 rowXml(
@@ -36,7 +47,11 @@ object OfficialRegistryExcelExporter {
 
             records.forEachIndexed { index, record ->
                 val rowNumber = index + 2
-                val values = BusinessExcelSchema.registryValues(record)
+                val values = BusinessExcelSchema.registryValues(
+                    record = record,
+                    customer = contextIndex.customerFor(record),
+                    business = contextIndex.businessFor(record),
+                )
                 append(
                     rowXml(
                         rowNumber,
