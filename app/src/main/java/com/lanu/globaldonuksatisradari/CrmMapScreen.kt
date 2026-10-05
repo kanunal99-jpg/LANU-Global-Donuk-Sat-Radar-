@@ -34,8 +34,8 @@ private val CRM_MAP_SOURCE = DataSourceDescriptor(
     name = "Yerel CRM",
     publisher = "LANU",
     licenseOrTerms = "Kullanıcı tarafından kaydedilmiş CRM verisi",
-    sourceUrl = "local://crm",
-    lastVerifiedAtEpochMs = 0L,
+    sourceUrl = "https://github.com/kanunal99-jpg/LANU-Global-Donuk-Sat-Radar-",
+    lastVerifiedAtEpochMs = 1L,
 )
 
 @Composable
