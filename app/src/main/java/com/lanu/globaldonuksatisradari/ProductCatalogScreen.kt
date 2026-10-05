@@ -14,6 +14,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -29,20 +32,29 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import java.io.File
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun ProductCatalogScreen(repository: ProductCatalogRepository) {
+    val context = LocalContext.current
+    val imageStorage = remember(context) { ProductImageStorage(context) }
+    val scope = rememberCoroutineScope()
     val products by repository.products.collectAsState()
     var query by remember { mutableStateOf("") }
     var editorOpen by remember { mutableStateOf(false) }
@@ -56,8 +68,75 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
     var note by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var imageUrl by remember { mutableStateOf("") }
+    var localImagePath by remember { mutableStateOf<String?>(null) }
+    var originalLocalImagePath by remember { mutableStateOf<String?>(null) }
+    var imageSource by remember { mutableStateOf(ProductImageSource.NONE) }
+    var cameraTempPath by remember { mutableStateOf<String?>(null) }
     var sourceUrl by remember { mutableStateOf("https://globaldonukgida.com/") }
     var editorError by remember { mutableStateOf<String?>(null) }
+
+    fun clearDraftLocalImageIfNeeded() {
+        val draft = localImagePath
+        if (draft != null && draft != originalLocalImagePath) {
+            imageStorage.deleteLocalImage(draft)
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        imageStorage.importFromUri(uri, ProductImageSource.GALLERY)
+                    }
+                }.onSuccess { path ->
+                    clearDraftLocalImageIfNeeded()
+                    localImagePath = path
+                    imageSource = ProductImageSource.GALLERY
+                    imageUrl = ""
+                    editorError = null
+                }.onFailure { error ->
+                    editorError = error.message ?: "Galeri görseli eklenemedi."
+                }
+            }
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture(),
+    ) { success ->
+        val temp = cameraTempPath
+        cameraTempPath = null
+        if (success && temp != null) {
+            scope.launch {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        imageStorage.persistCameraCapture(temp)
+                    }
+                }.onSuccess { path ->
+                    clearDraftLocalImageIfNeeded()
+                    localImagePath = path
+                    imageSource = ProductImageSource.CAMERA
+                    imageUrl = ""
+                    editorError = null
+                }.onFailure { error ->
+                    imageStorage.discardCameraCapture(temp)
+                    editorError = error.message ?: "Kamera görseli kaydedilemedi."
+                }
+            }
+        } else {
+            imageStorage.discardCameraCapture(temp)
+        }
+    }
+
+    fun dismissEditor() {
+        clearDraftLocalImageIfNeeded()
+        imageStorage.discardCameraCapture(cameraTempPath)
+        cameraTempPath = null
+        editorOpen = false
+    }
 
     fun openNew() {
         editingId = null
@@ -69,6 +148,10 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         note = ""
         description = ""
         imageUrl = ""
+        localImagePath = null
+        originalLocalImagePath = null
+        imageSource = ProductImageSource.NONE
+        cameraTempPath = null
         sourceUrl = "https://globaldonukgida.com/"
         editorError = null
         editorOpen = true
@@ -84,6 +167,10 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         note = product.note.orEmpty()
         description = product.description.orEmpty()
         imageUrl = product.imageUrl.orEmpty()
+        localImagePath = product.localImagePath
+        originalLocalImagePath = product.localImagePath
+        imageSource = product.imageSource
+        cameraTempPath = null
         sourceUrl = product.sourceUrl ?: "https://globaldonukgida.com/"
         editorError = null
         editorOpen = true
@@ -105,10 +192,15 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                 currency = currency,
                 note = note,
                 description = description,
-                imageUrl = imageUrl,
+                imageUrl = imageUrl.takeIf { imageSource == ProductImageSource.URL },
                 sourceUrl = sourceUrl,
                 sourceVerifiedAtEpochMs = preservedVerification,
+                localImagePath = localImagePath.takeIf {
+                    imageSource == ProductImageSource.GALLERY || imageSource == ProductImageSource.CAMERA
+                },
+                imageSource = imageSource,
             )
+            originalLocalImagePath = localImagePath
             editorOpen = false
         }.exceptionOrNull()?.message
     }
@@ -186,7 +278,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
 
     if (editorOpen) {
         AlertDialog(
-            onDismissRequest = { editorOpen = false },
+            onDismissRequest = ::dismissEditor,
             modifier = Modifier.testTag("product_editor_dialog").semantics { testTagsAsResourceId = true },
             title = { Text(if (editingId == null) "Yeni Ürün" else "Ürünü Düzenle", modifier = Modifier.testTag("product_editor_open_state")) },
             text = {
@@ -209,7 +301,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                 }
             },
             confirmButton = { Button(onClick = ::save, modifier = Modifier.testTag("product_save_button")) { Text("Kaydet") } },
-            dismissButton = { TextButton(onClick = { editorOpen = false }) { Text("Vazgeç") } },
+            dismissButton = { TextButton(onClick = ::dismissEditor) { Text("Vazgeç") } },
         )
     }
 
