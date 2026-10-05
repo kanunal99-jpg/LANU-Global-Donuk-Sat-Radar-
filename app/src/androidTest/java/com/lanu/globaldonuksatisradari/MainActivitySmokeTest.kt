@@ -376,7 +376,9 @@ class MainActivitySmokeTest {
         composeRule.waitForIdle()
 
         waitForTag("product_editor_dialog").assertIsDisplayed()
-        waitForTag("product_name_input").assertIsDisplayed().performTextInput("Smoke Donuk Ürün")
+        waitForTag("product_image_gallery").performScrollTo().assertHasClickAction()
+        waitForTag("product_image_camera").performScrollTo().assertHasClickAction()
+        waitForTag("product_name_input").performScrollTo().assertIsDisplayed().performTextInput("Smoke Donuk Ürün")
         waitForTag("product_price_input").assertIsDisplayed().performTextInput("125,50")
         waitForTag("product_save_button").assertIsDisplayed().performTouchInput { click() }
 
