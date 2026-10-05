@@ -37,6 +37,12 @@ class BusinessMapPreviewTest {
         assertTrue(html.contains("Gerçek İşletme"))
         assertTrue(html.contains("40.987"))
         assertTrue(html.contains("29.028"))
+        assertTrue(html.contains("unpkg.com/leaflet@1.9.4"))
+        assertTrue(html.contains("cdn.jsdelivr.net/npm/leaflet@1.9.4"))
+        assertTrue(html.contains("L.circleMarker"))
+        assertTrue(html.contains("loadLeafletFallback"))
+        assertTrue(html.contains("AndroidMapBridge.onReady"))
+        assertTrue(html.contains("AndroidMapBridge.onError"))
     }
 
     @Test
