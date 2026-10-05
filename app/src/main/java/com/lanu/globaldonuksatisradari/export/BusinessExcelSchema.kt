@@ -120,11 +120,7 @@ object BusinessExcelSchema {
             record.businessName,
             record.naceCode?.let { "NACE $it" }.orEmpty(),
             "",
-            if (record.status.isNullOrBlank() && record.source == OfficialRegistrySource.TTSG) {
-                "Güncel durum doğrulanmadı"
-            } else {
-                record.status.orEmpty()
-            },
+            officialStatusLabel(record),
             sourceLabel(record.source),
             record.registryOffice.orEmpty(),
             record.registrationNumber.orEmpty(),
@@ -245,7 +241,7 @@ object BusinessExcelOfficialResolver {
                 ?: ttsg?.businessName,
             status = statusFromCustomer(customer)
                 .takeUnless { it == "DOĞRULANMADI" }
-                ?: currentRegistry?.status,
+                ?: currentRegistry?.let(::officialStatusLabel),
             sources = sources,
             registryOffice = matched.firstNotNullOfOrNull { it.registryOffice?.takeIf(String::isNotBlank) },
             registrationNumber = preferredIdentity?.registrationNumber
@@ -296,6 +292,49 @@ object BusinessExcelOfficialResolver {
                 }.getOrNull()
             }
             ?: Long.MIN_VALUE
+
+    private fun officialStatusLabel(record: OfficialRegistryRecord): String {
+        if (record.status.isNullOrBlank()) {
+            return if (record.source == OfficialRegistrySource.TTSG) {
+                "Güncel durum doğrulanmadı"
+            } else {
+                "Durum belirtilmemiş"
+            }
+        }
+        val normalized = record.status
+            .trim()
+            .replace('İ', 'I')
+            .lowercase(Locale.ROOT)
+            .replace("\u0307", "")
+            .replace('ı', 'i')
+            .replace('ğ', 'g')
+            .replace('ü', 'u')
+            .replace('ş', 's')
+            .replace('ö', 'o')
+            .replace('ç', 'c')
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .trim()
+        return when {
+            normalized == "faal" ||
+                normalized == "aktif" ||
+                normalized.contains("faal uye") ||
+                normalized.contains("faal kayit") -> "FAAL"
+            listOf(
+                "terkin",
+                "kapali",
+                "kapanmis",
+                "kapanis",
+                "pasif",
+                "askida",
+                "aski",
+                "silinmis",
+                "tasfiye sonu",
+                "tasfiyenin sona ermesi",
+                "tasfiyenin sonu",
+            ).any { token -> normalized == token || normalized.contains(token) } -> "AKTİF DEĞİL"
+            else -> record.status.trim()
+        }
+    }
 
     private fun statusFromCustomer(customer: CrmCustomer): String = when (customer.registryStatus) {
         CrmRegistryStatus.ACTIVE -> "AKTİF"
