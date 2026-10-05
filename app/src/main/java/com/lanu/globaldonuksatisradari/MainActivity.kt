@@ -23,6 +23,7 @@ import com.lanu.globaldonuksatisradari.crm.CrmActivityType
 import com.lanu.globaldonuksatisradari.crm.CrmDashboardMetrics
 import com.lanu.globaldonuksatisradari.crm.CrmNextActionType
 import com.lanu.globaldonuksatisradari.crm.CrmOpportunityStatus
+import com.lanu.globaldonuksatisradari.crm.CrmReminderScheduler
 import com.lanu.globaldonuksatisradari.crm.CrmStage
 import com.lanu.globaldonuksatisradari.crm.CrmSyncScheduler
 import com.lanu.globaldonuksatisradari.crm.SupabaseAuthClient
@@ -96,7 +97,10 @@ class MainActivity : ComponentActivity() {
         auth = SupabaseAuthClient(this)
         val cloudAuth = if (isInstrumentationTest()) null else auth
         setContent { SalesRadarApp(cloudAuth) }
-        lifecycleScope.launch(Dispatchers.IO) { runCatching { CrmSyncScheduler.schedule(applicationContext) } }
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { CrmSyncScheduler.schedule(applicationContext) }
+            runCatching { CrmReminderScheduler.schedule(applicationContext) }
+        }
     }
 }
 
