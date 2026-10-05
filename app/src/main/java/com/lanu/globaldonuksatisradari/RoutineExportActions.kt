@@ -21,8 +21,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import com.lanu.globaldonuksatisradari.crm.CrmLocationEnrichmentService
 import com.lanu.globaldonuksatisradari.crm.MonthlyRoutinePlan
 import com.lanu.globaldonuksatisradari.crm.RoutineExcelExporter
+import com.lanu.globaldonuksatisradari.data.OfficialRegistryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -40,6 +42,8 @@ fun RoutineExportActions(
     var pendingWorkbook by remember { mutableStateOf<ByteArray?>(null) }
     var status by remember { mutableStateOf<String?>(null) }
     var exporting by remember { mutableStateOf(false) }
+    val locationEnrichment = remember(context) { CrmLocationEnrichmentService(context) }
+    val officialRegistryStore = remember(context) { OfficialRegistryStore(context) }
 
     val fileName = remember(plan.totalPointCount, planLabel) {
         "LANU-Aylik-Rutin-" +
@@ -84,10 +88,22 @@ fun RoutineExportActions(
                 onClick = {
                     scope.launch {
                         exporting = true
-                        status = planLabel + " rutin Excel hazırlanıyor…"
+                        status = planLabel + " rutin verileri konum ve resmî sicille zenginleştiriliyor…"
                         runCatching {
+                            val enrichedPlan = enrichRoutinePlanForExport(
+                                plan = plan,
+                                locationEnrichment = locationEnrichment,
+                            )
+                            val officialRecords = withContext(Dispatchers.IO) {
+                                enrichedPlan.days
+                                    .flatMap { it.stops }
+                                    .map { it.customer.city.trim() }
+                                    .filter(String::isNotBlank)
+                                    .distinct()
+                                    .flatMap { city -> officialRegistryStore.recordsFor(city, null) }
+                            }
                             withContext(Dispatchers.Default) {
-                                RoutineExcelExporter.build(plan)
+                                RoutineExcelExporter.build(enrichedPlan, officialRecords)
                             }
                         }.onSuccess { bytes ->
                             pendingWorkbook = bytes
@@ -113,8 +129,20 @@ fun RoutineExportActions(
                         exporting = true
                         status = "Rutin Excel paylaşım dosyası hazırlanıyor…"
                         runCatching {
+                            val enrichedPlan = enrichRoutinePlanForExport(
+                                plan = plan,
+                                locationEnrichment = locationEnrichment,
+                            )
+                            val officialRecords = withContext(Dispatchers.IO) {
+                                enrichedPlan.days
+                                    .flatMap { it.stops }
+                                    .map { it.customer.city.trim() }
+                                    .filter(String::isNotBlank)
+                                    .distinct()
+                                    .flatMap { city -> officialRegistryStore.recordsFor(city, null) }
+                            }
                             val bytes = withContext(Dispatchers.Default) {
-                                RoutineExcelExporter.build(plan)
+                                RoutineExcelExporter.build(enrichedPlan, officialRecords)
                             }
                             val file = withContext(Dispatchers.IO) {
                                 val exportDir = File(context.cacheDir, "routine_exports").apply { mkdirs() }
@@ -148,3 +176,23 @@ fun RoutineExportActions(
         status?.let { Text(it) }
     }
 }
+private suspend fun enrichRoutinePlanForExport(
+    plan: MonthlyRoutinePlan,
+    locationEnrichment: CrmLocationEnrichmentService,
+): MonthlyRoutinePlan {
+    val uniqueCustomers = plan.days
+        .flatMap { it.stops }
+        .map { it.customer }
+        .distinctBy { it.id }
+    val enrichedById = locationEnrichment.enrich(uniqueCustomers).associateBy { it.id }
+    return plan.copy(
+        days = plan.days.map { day ->
+            day.copy(
+                stops = day.stops.map { stop ->
+                    stop.copy(customer = enrichedById[stop.customer.id] ?: stop.customer)
+                },
+            )
+        },
+    )
+}
+

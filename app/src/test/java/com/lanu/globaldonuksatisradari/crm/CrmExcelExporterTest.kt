@@ -1,5 +1,7 @@
 package com.lanu.globaldonuksatisradari.crm
 
+import com.lanu.globaldonuksatisradari.data.OfficialRegistryRecord
+import com.lanu.globaldonuksatisradari.data.OfficialRegistrySource
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
@@ -31,7 +33,46 @@ class CrmExcelExporterTest {
             updatedAtEpochMs = 1L,
         )
 
-        val bytes = CrmExcelExporter.build(listOf(customer))
+        val officialRecords = listOf(
+            OfficialRegistryRecord(
+                source = OfficialRegistrySource.MERSIS,
+                registrationNumber = "SICIL-123",
+                businessName = "TEST NOKTASI GIDA LİMİTED ŞİRKETİ",
+                status = "Faal",
+                city = "İstanbul",
+                district = "Kadıköy",
+                neighborhood = "Caferağa",
+                address = "Resmî Adres",
+                phone = null,
+                website = null,
+                importedAtEpochMs = 2L,
+                naceCode = "56.10.01",
+                taxOrNationalId = "1234567890",
+            ),
+            OfficialRegistryRecord(
+                source = OfficialRegistrySource.TTSG,
+                registrationNumber = "SICIL-123",
+                businessName = "TEST NOKTASI GIDA LİMİTED ŞİRKETİ",
+                status = null,
+                city = "İstanbul",
+                district = "Kadıköy",
+                neighborhood = null,
+                address = "Tarihsel İlan Adresi",
+                phone = null,
+                website = null,
+                importedAtEpochMs = 3L,
+                mersisNumber = "0123456789012345",
+                registryOffice = "İSTANBUL",
+                registryEvent = "Değişiklik - Adres",
+                publicationDate = "10.10.2025",
+                registrationDate = "08.10.2025",
+                gazetteNumber = "11434",
+                gazettePage = "89",
+                sourceReference = "ilan-ref-1",
+            ),
+        )
+
+        val bytes = CrmExcelExporter.build(listOf(customer), officialRecords)
         assertTrue(bytes.size > 1000)
 
         var sheetXml = ""
@@ -56,6 +97,17 @@ class CrmExcelExporterTest {
         assertTrue(sheetXml.contains("İTO Resmî Üye/Firma Kaydı"))
         assertTrue(sheetXml.contains("SICIL-123"))
         assertTrue(sheetXml.contains("Radar"))
+        assertTrue(sheetXml.contains("TEST NOKTASI GIDA LİMİTED ŞİRKETİ"))
+        assertTrue(sheetXml.contains("0123456789012345"))
+        assertTrue(sheetXml.contains("İSTANBUL"))
+        assertTrue(sheetXml.contains("Değişiklik - Adres"))
+        assertTrue(sheetXml.contains("10.10.2025"))
+        assertTrue(sheetXml.contains("08.10.2025"))
+        assertTrue(sheetXml.contains("11434"))
+        assertTrue(sheetXml.contains("89"))
+        assertTrue(sheetXml.contains("ilan-ref-1"))
+        assertTrue(sheetXml.contains("56.10.01"))
+        assertTrue(sheetXml.contains("Tarihsel İlan Adresi"))
         assertTrue(sheetXml.contains("1234567890"))
         assertTrue(sheetXml.contains("05550000000"))
         assertTrue(sheetXml.contains("https://example.com"))

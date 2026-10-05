@@ -27,12 +27,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.lanu.globaldonuksatisradari.crm.CrmCustomer
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryImportSummary
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryRecord
 import com.lanu.globaldonuksatisradari.data.OfficialRegistrySource
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryStatus
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryStore
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryTrust
+import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -40,6 +42,8 @@ import kotlinx.coroutines.withContext
 @Composable
 fun OfficialRegistryImportCard(
     defaultCity: String? = null,
+    contextCustomers: List<CrmCustomer> = emptyList(),
+    contextBusinesses: List<VerifiedBusiness> = emptyList(),
     onImported: (OfficialRegistryImportSummary, List<OfficialRegistryRecord>) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
@@ -314,6 +318,8 @@ fun OfficialRegistryImportCard(
                 OfficialRegistryExportActions(
                     records = filteredRecords,
                     source = selectedSource,
+                    customers = contextCustomers,
+                    businesses = contextBusinesses,
                 )
                 Text(
                     "Excel dışa aktarımı ekranda gösterilen ilk 30 kayıtla sınırlı değildir; filtreye uyan ${filteredRecords.size} kaydın tamamını içerir.",

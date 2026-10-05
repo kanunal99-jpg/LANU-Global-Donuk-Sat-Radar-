@@ -21,9 +21,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import com.lanu.globaldonuksatisradari.crm.CrmCustomer
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryExcelExporter
 import com.lanu.globaldonuksatisradari.data.OfficialRegistryRecord
 import com.lanu.globaldonuksatisradari.data.OfficialRegistrySource
+import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,6 +37,8 @@ import java.time.format.DateTimeFormatter
 fun OfficialRegistryExportActions(
     records: List<OfficialRegistryRecord>,
     source: OfficialRegistrySource,
+    customers: List<CrmCustomer> = emptyList(),
+    businesses: List<VerifiedBusiness> = emptyList(),
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -84,7 +88,7 @@ fun OfficialRegistryExportActions(
                         status = "Resmî sicil Excel dosyası hazırlanıyor…"
                         runCatching {
                             withContext(Dispatchers.Default) {
-                                OfficialRegistryExcelExporter.build(records)
+                                OfficialRegistryExcelExporter.build(records, customers, businesses)
                             }
                         }.onSuccess { bytes ->
                             pendingWorkbook = bytes
@@ -109,7 +113,7 @@ fun OfficialRegistryExportActions(
                         status = "Paylaşım dosyası hazırlanıyor…"
                         runCatching {
                             val bytes = withContext(Dispatchers.Default) {
-                                OfficialRegistryExcelExporter.build(records)
+                                OfficialRegistryExcelExporter.build(records, customers, businesses)
                             }
                             val file = withContext(Dispatchers.IO) {
                                 val exportDir = File(context.cacheDir, "registry_exports").apply { mkdirs() }
