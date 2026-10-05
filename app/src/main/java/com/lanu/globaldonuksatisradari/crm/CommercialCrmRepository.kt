@@ -31,6 +31,12 @@ class CommercialCrmRepository(
     fun observeOrderLines(orderId: String): Flow<List<CrmCommercialLine>> =
         database.orderLineDao().observeForOrder(orderId).map { rows -> rows.map(::orderLineToDomain) }
 
+    fun observeQuoteLinesForCustomer(customerId: String): Flow<List<CrmCommercialLine>> =
+        database.quoteLineDao().observeForCustomer(customerId).map { rows -> rows.map(::quoteLineToDomain) }
+
+    fun observeOrderLinesForCustomer(customerId: String): Flow<List<CrmCommercialLine>> =
+        database.orderLineDao().observeForCustomer(customerId).map { rows -> rows.map(::orderLineToDomain) }
+
     suspend fun createQuote(
         customerId: String,
         opportunityId: String?,
