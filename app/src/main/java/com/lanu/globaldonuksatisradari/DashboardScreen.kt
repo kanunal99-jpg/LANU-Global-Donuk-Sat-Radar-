@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,9 +22,7 @@ import com.lanu.globaldonuksatisradari.crm.CrmDashboardMetrics
 fun SalesDashboard(
     selectedCity: String,
     selectedDistrict: String,
-    availableDistricts: List<String>,
     metrics: CrmDashboardMetrics,
-    onDistrictSelected: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Satış Dashboard", style = MaterialTheme.typography.headlineSmall)
@@ -48,27 +45,14 @@ fun SalesDashboard(
         }
 
         Card(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Filtreler", style = MaterialTheme.typography.titleMedium)
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Aktif kapsam", style = MaterialTheme.typography.titleMedium)
                 Text("Şehir: $selectedCity")
                 Text("İlçe: $selectedDistrict")
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = selectedDistrict == "Tümü",
-                        onClick = { onDistrictSelected("Tümü") },
-                        label = { Text("Tümü") }
-                    )
-                    availableDistricts.forEach { district ->
-                        FilterChip(
-                            selected = selectedDistrict == district,
-                            onClick = { onDistrictSelected(district) },
-                            label = { Text(district) }
-                        )
-                    }
-                }
+                Text(
+                    "Kapsam Radar seçiminden gelir; Dashboard ikinci bir filtre üretmez.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
 

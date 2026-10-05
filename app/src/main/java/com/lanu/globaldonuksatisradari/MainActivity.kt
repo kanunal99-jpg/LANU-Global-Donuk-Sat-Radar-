@@ -46,7 +46,16 @@ import kotlinx.coroutines.withTimeout
 
 data class City(val name: String, val districts: List<String>)
 
-enum class AppSection { RADAR, PRODUCT_CATALOG, MANUAL_POINT, ROUTINE, AI_ASSISTANT }
+enum class AppSection {
+    RADAR,
+    MAP,
+    CRM,
+    ROUTINE,
+    MORE,
+    PRODUCT_CATALOG,
+    MANUAL_POINT,
+    AI_ASSISTANT,
+}
 
 private val cities = TurkeyCityCatalog.ALL.map { entry -> City(entry.name, entry.fallbackDistricts) }
 private fun matchesInventoryPresence(value: String?, filter: String): Boolean = when (filter) {
@@ -328,16 +337,44 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
             },
             bottomBar = {
                 NavigationBar {
-                    NavigationBarItem(section == AppSection.RADAR && selectedCrmCustomer == null, { selectedCustomerId = null; navigateTo(AppSection.RADAR) }, { Text("⌖") }, label = { Text("Radar") })
-                    NavigationBarItem(section == AppSection.PRODUCT_CATALOG && selectedCrmCustomer == null, { selectedCustomerId = null; navigateTo(AppSection.PRODUCT_CATALOG) }, { Text("₺") }, label = { Text("Ürünler") })
-                    NavigationBarItem(section == AppSection.MANUAL_POINT && selectedCrmCustomer == null, { selectedCustomerId = null; navigateTo(AppSection.MANUAL_POINT) }, { Text("+") }, label = { Text("Nokta") })
-                    NavigationBarItem(section == AppSection.ROUTINE && selectedCrmCustomer == null, { selectedCustomerId = null; navigateTo(AppSection.ROUTINE) }, { Text("↗") }, label = { Text("Rutin") })
                     NavigationBarItem(
-                        selected = section == AppSection.AI_ASSISTANT && selectedCrmCustomer == null,
-                        onClick = { selectedCustomerId = null; navigateTo(AppSection.AI_ASSISTANT) },
-                        icon = { Text("AI") },
-                        label = { Text("Asistan") },
-                        modifier = Modifier.testTag("nav_ai"),
+                        selected = section == AppSection.RADAR && selectedCrmCustomer == null,
+                        onClick = { selectedCustomerId = null; navigateTo(AppSection.RADAR) },
+                        icon = { Text("⌖") },
+                        label = { Text("Radar") },
+                        modifier = Modifier.testTag("nav_radar"),
+                    )
+                    NavigationBarItem(
+                        selected = section == AppSection.MAP && selectedCrmCustomer == null,
+                        onClick = { selectedCustomerId = null; navigateTo(AppSection.MAP) },
+                        icon = { Text("◉") },
+                        label = { Text("Harita") },
+                        modifier = Modifier.testTag("nav_map"),
+                    )
+                    NavigationBarItem(
+                        selected = section == AppSection.CRM && selectedCrmCustomer == null,
+                        onClick = { selectedCustomerId = null; navigateTo(AppSection.CRM) },
+                        icon = { Text("CRM") },
+                        label = { Text("CRM") },
+                        modifier = Modifier.testTag("nav_crm"),
+                    )
+                    NavigationBarItem(
+                        selected = section == AppSection.ROUTINE && selectedCrmCustomer == null,
+                        onClick = { selectedCustomerId = null; navigateTo(AppSection.ROUTINE) },
+                        icon = { Text("↗") },
+                        label = { Text("Rutin") },
+                    )
+                    NavigationBarItem(
+                        selected = section in setOf(
+                            AppSection.MORE,
+                            AppSection.PRODUCT_CATALOG,
+                            AppSection.MANUAL_POINT,
+                            AppSection.AI_ASSISTANT,
+                        ) && selectedCrmCustomer == null,
+                        onClick = { selectedCustomerId = null; navigateTo(AppSection.MORE) },
+                        icon = { Text("•••") },
+                        label = { Text("Daha") },
+                        modifier = Modifier.testTag("nav_more"),
                     )
                 }
             },
@@ -354,47 +391,6 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             LanuHeroHeader()
                             Text("Satış & CRM Radarı", style = MaterialTheme.typography.headlineSmall)
                             Text("Gerçek işletmeleri bulun, kaliteyi kontrol edin ve CRM'e aktarın.", style = MaterialTheme.typography.bodyMedium)
-                        }
-                        item {
-                            OfficialRegistryImportCard(
-                                defaultCity = selectedCity.name,
-                                contextCustomers = crmCustomers,
-                                contextBusinesses = results,
-                            ) { summary, records ->
-                                scope.launch {
-                                    runCatching {
-                                        localCrmRepository.enrichCustomersFromOfficialRegistryForOwner(
-                                            records = records,
-                                            ownerUserId = activeOwnerUserId,
-                                        )
-                                    }.onSuccess { enriched ->
-                                        crmMessage = buildString {
-                                            append(summary.source.name)
-                                            append(": ")
-                                            append(summary.importedCount)
-                                            append(" kayıt içe alındı • sicil kimliği doğrulanan ")
-                                            append(summary.verifiedIdentityCount)
-                                            append(" • telefon bulunan ")
-                                            append(summary.phoneCount)
-                                            append(". CRM eşleşmesi ")
-                                            append(enriched.matched)
-                                            append(" • güncellenen ")
-                                            append(enriched.updated)
-                                            if (summary.verifiedIdentityCount == 0) {
-                                                append(" • sicil numarası olmadığı için resmî CRM zenginleştirmesi yapılmadı")
-                                            }
-                                            if (enriched.inactiveMatches > 0) {
-                                                append(" • aktif olmayan eşleşme ")
-                                                append(enriched.inactiveMatches)
-                                            }
-                                        }
-                                    }.onFailure { error ->
-                                        Log.e("LanuRegistry", "Resmî sicil CRM zenginleştirmesi başarısız.", error)
-                                        crmMessage = "Resmî kayıt içe aktarıldı; CRM zenginleştirmesi tamamlanamadı: " +
-                                            error.message.orEmpty()
-                                    }
-                                }
-                            }
                         }
                         item {
                             OutlinedTextField(
@@ -664,23 +660,6 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             }
                         }
                         selectedBusiness?.let { business -> item { BusinessDetailCard(business, { selectedBusiness = null }) } }
-                        item { SalesDashboard(selectedCity.name, selectedDistrict, availableDistricts, dashboardMetrics) { invalidateSearch(); selectedDistrict = it; results = emptyList(); selectedBusiness = null; selectedCustomerId = null } }
-                        item {
-                            Card(Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("CRM ve Excel", style = MaterialTheme.typography.titleMedium)
-                                    Text("Seçili bölgede ${filteredCrmCustomers.size} CRM noktası • cihaz toplamı ${crmCustomers.size}")
-                                    Text(
-                                        if (pendingSyncCount == 0) {
-                                            "Tüm yerel değişiklikler işlendi."
-                                        } else {
-                                            "$pendingSyncCount yerel değişiklik bulut aktarımı bekliyor; oturum yoksa cihazda güvenle saklanır."
-                                        },
-                                    )
-                                    CrmExportActions(filteredCrmCustomers)
-                                }
-                            }
-                        }
                         if (visibleResults.isNotEmpty()) {
                             item {
                                 Card(Modifier.fillMaxWidth()) {
@@ -691,7 +670,6 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     }
                                 }
                             }
-                            item { BusinessMapPreview(visibleResults) }
                         }
                         items(visibleResults, key = { it.id }) { business ->
                             BusinessResultCard(
@@ -714,21 +692,98 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 }
                             }
                         }
-                        if (filteredCrmCustomers.isNotEmpty()) {
-                            item { Text("CRM müşterileri", style = MaterialTheme.typography.titleMedium) }
-                            items(filteredCrmCustomers, key = { it.id }) { customer ->
-                                Card(Modifier.fillMaxWidth()) {
-                                    Row(Modifier.padding(14.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Column(Modifier.weight(1f)) { Text(customer.businessName, style = MaterialTheme.typography.titleMedium); Text("${customer.city} • ${customer.district} • ${customer.stage.name}", style = MaterialTheme.typography.bodySmall) }
-                                        OutlinedButton(
-                                            onClick = { selectedCustomerId = customer.id },
-                                            modifier = Modifier.testTag("crm_open_${customer.businessSourceId}"),
-                                        ) { Text("Aç") }
+                    }
+                    AppSection.MAP -> CrmMapScreen(
+                        customers = crmCustomers,
+                        radarBusinesses = visibleResults,
+                        selectedCity = selectedCity.name,
+                        selectedDistrict = selectedDistrict,
+                        onOpenCustomer = { selectedCustomerId = it },
+                    )
+                    AppSection.CRM -> CrmWorkspaceScreen(
+                        customers = filteredCrmCustomers,
+                        openActions = regionNextActions,
+                        metrics = dashboardMetrics,
+                        selectedCity = selectedCity.name,
+                        selectedDistrict = selectedDistrict,
+                        pendingSyncCount = pendingSyncCount,
+                        onOpenCustomer = { selectedCustomerId = it },
+                        onCompleteAction = { actionId ->
+                            scope.launch {
+                                runCatching {
+                                    localCrmRepository.completeNextAction(
+                                        actionId,
+                                        completedByUserId = activeOwnerUserId,
+                                    )
+                                }.onSuccess {
+                                    crmMessage = "Takip tamamlandı."
+                                }.onFailure {
+                                    crmMessage = "Takip tamamlanamadı: ${it.message.orEmpty()}"
+                                }
+                            }
+                        },
+                    )
+                    AppSection.ROUTINE -> RoutineScreen(crmCustomers, selectedCity.name, selectedDistrict)
+                    AppSection.MORE -> LazyColumn(
+                        modifier = Modifier
+                            .testTag("more_screen")
+                            .padding(horizontal = 16.dp),
+                        contentPadding = PaddingValues(vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        item {
+                            MoreMenuCard(
+                                onProducts = { navigateTo(AppSection.PRODUCT_CATALOG) },
+                                onManualPoint = { navigateTo(AppSection.MANUAL_POINT) },
+                                onAi = { navigateTo(AppSection.AI_ASSISTANT) },
+                            )
+                        }
+                        item {
+                            OfficialRegistryImportCard(
+                                defaultCity = selectedCity.name,
+                                contextCustomers = crmCustomers,
+                                contextBusinesses = results,
+                            ) { summary, records ->
+                                scope.launch {
+                                    runCatching {
+                                        localCrmRepository.enrichCustomersFromOfficialRegistryForOwner(
+                                            records = records,
+                                            ownerUserId = activeOwnerUserId,
+                                        )
+                                    }.onSuccess { enriched ->
+                                        crmMessage = buildString {
+                                            append(summary.source.name)
+                                            append(": ")
+                                            append(summary.importedCount)
+                                            append(" kayıt içe alındı • sicil kimliği doğrulanan ")
+                                            append(summary.verifiedIdentityCount)
+                                            append(" • CRM eşleşmesi ")
+                                            append(enriched.matched)
+                                            append(" • güncellenen ")
+                                            append(enriched.updated)
+                                            if (enriched.inactiveMatches > 0) {
+                                                append(" • aktif olmayan eşleşme ")
+                                                append(enriched.inactiveMatches)
+                                            }
+                                        }
+                                    }.onFailure { error ->
+                                        Log.e("LanuRegistry", "Resmî sicil CRM zenginleştirmesi başarısız.", error)
+                                        crmMessage = "Resmî kayıt içe aktarıldı; CRM zenginleştirmesi tamamlanamadı: " +
+                                            error.message.orEmpty()
                                     }
                                 }
                             }
                         }
-                        auth?.let { cloudAuth -> item { SupabaseSessionCard(cloudAuth) } }
+                        crmMessage?.let { message ->
+                            item {
+                                Card(Modifier.fillMaxWidth()) {
+                                    Text(message, Modifier.padding(16.dp))
+                                }
+                            }
+                        }
+                        auth?.let { cloudAuth ->
+                            item { SupabaseSessionCard(cloudAuth) }
+                        }
                     }
                     AppSection.PRODUCT_CATALOG -> ProductCatalogScreen(productCatalogRepository)
                     AppSection.MANUAL_POINT -> ManualPointScreen(
@@ -736,7 +791,6 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         defaultCity = selectedCity.name,
                         ownerUserId = activeOwnerUserId,
                     ) { navigateTo(AppSection.ROUTINE) }
-                    AppSection.ROUTINE -> RoutineScreen(crmCustomers, selectedCity.name, selectedDistrict)
                     AppSection.AI_ASSISTANT -> SalesAiScreen(salesAiContext)
                     }
                 } else {
