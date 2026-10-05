@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -36,8 +38,16 @@ fun CrmCommercialSection(
     orders: List<CrmOrder>,
     quoteLines: Map<String, List<CrmCommercialLine>>,
     orderLines: Map<String, List<CrmCommercialLine>>,
+    catalogProducts: List<CatalogProduct> = emptyList(),
     onCreateQuote: (quoteNumber: String, currency: String) -> Unit,
-    onAddQuoteLine: (quoteId: String, productName: String, unit: String, quantityMilli: Long, unitPriceMinor: Long) -> Unit,
+    onAddQuoteLine: (
+        quoteId: String,
+        productId: String?,
+        productName: String,
+        unit: String,
+        quantityMilli: Long,
+        unitPriceMinor: Long,
+    ) -> Unit,
     onSendQuote: (String) -> Unit,
     onAcceptQuote: (String) -> Unit,
     onCreateOrder: (quoteId: String, orderNumber: String) -> Unit,
@@ -49,6 +59,8 @@ fun CrmCommercialSection(
     var quantity by remember { mutableStateOf("1") }
     var price by remember { mutableStateOf("") }
     var orderNumber by remember { mutableStateOf("") }
+    var selectedProductId by remember { mutableStateOf<String?>(null) }
+    var productMenuOpen by remember { mutableStateOf(false) }
     var inputError by remember { mutableStateOf<String?>(null) }
 
     Card(Modifier.fillMaxWidth().testTag("crm_commercial_section")) {
@@ -92,16 +104,73 @@ fun CrmCommercialSection(
                         Text("${quote.quoteNumber} • ${quote.status.name} • ${quote.currency}")
                         lines.forEach { line -> Text("• ${line.productName} — ${line.quantityMilli / 1000.0} ${line.unit}") }
                         if (quote.status == CrmQuoteStatus.DRAFT) {
+                            if (catalogProducts.isNotEmpty()) {
+                                OutlinedButton(
+                                    onClick = { productMenuOpen = true },
+                                    modifier = Modifier.fillMaxWidth().testTag("crm_quote_catalog_picker"),
+                                ) {
+                                    Text(
+                                        selectedProductId
+                                            ?.let { id -> catalogProducts.firstOrNull { it.id == id }?.name }
+                                            ?.let { "Katalog: $it" }
+                                            ?: "Katalogdan ürün seç",
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = productMenuOpen,
+                                    onDismissRequest = { productMenuOpen = false },
+                                ) {
+                                    catalogProducts.forEach { product ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    product.name + " • " +
+                                                        ProductPrice.formatMinor(product.priceMinor, product.currency),
+                                                )
+                                            },
+                                            onClick = {
+                                                selectedProductId = product.id
+                                                productName = product.name
+                                                unit = product.unit
+                                                price = java.math.BigDecimal.valueOf(product.priceMinor, 2)
+                                                    .stripTrailingZeros()
+                                                    .toPlainString()
+                                                productMenuOpen = false
+                                                inputError = null
+                                            },
+                                        )
+                                    }
+                                }
+                            }
                             OutlinedTextField(
                                 productName,
-                                { productName = it },
+                                {
+                                    productName = it
+                                    selectedProductId = null
+                                },
                                 Modifier.fillMaxWidth().testTag("crm_quote_product_input"),
                                 label = { Text("Ürün adı") },
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedTextField(unit, { unit = it }, Modifier.weight(1f).testTag("crm_quote_unit_input"), label = { Text("Birim") })
+                                OutlinedTextField(
+                                    unit,
+                                    {
+                                        unit = it
+                                        selectedProductId = null
+                                    },
+                                    Modifier.weight(1f).testTag("crm_quote_unit_input"),
+                                    label = { Text("Birim") },
+                                )
                                 OutlinedTextField(quantity, { quantity = it }, Modifier.weight(1f).testTag("crm_quote_quantity_input"), label = { Text("Miktar") })
-                                OutlinedTextField(price, { price = it }, Modifier.weight(1f).testTag("crm_quote_price_input"), label = { Text("Birim fiyat") })
+                                OutlinedTextField(
+                                    price,
+                                    {
+                                        price = it
+                                        selectedProductId = null
+                                    },
+                                    Modifier.weight(1f).testTag("crm_quote_price_input"),
+                                    label = { Text("Birim fiyat") },
+                                )
                             }
                             Button(
                                 onClick = {
@@ -114,7 +183,15 @@ fun CrmCommercialSection(
                                         unitPriceMinor == null || unitPriceMinor < 0L -> inputError = "Birim fiyat negatif olamaz ve en fazla 2 ondalık basamak içermelidir."
                                         else -> {
                                             inputError = null
-                                            onAddQuoteLine(quote.id, productName.trim(), unit.trim(), quantityMilli, unitPriceMinor)
+                                            onAddQuoteLine(
+                                                quote.id,
+                                                selectedProductId,
+                                                productName.trim(),
+                                                unit.trim(),
+                                                quantityMilli,
+                                                unitPriceMinor,
+                                            )
+                                            selectedProductId = null
                                             productName = ""
                                             price = ""
                                             quantity = "1"
