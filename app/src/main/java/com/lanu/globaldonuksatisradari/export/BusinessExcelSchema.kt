@@ -106,7 +106,7 @@ object BusinessExcelSchema {
             customer.longitude?.toString().orEmpty(),
             customer.latitude?.toString().orEmpty(),
             mapLink,
-            customer.businessSourceId,
+            sourceOriginLabel(customer.businessSourceId),
             dataQualityLabel(customer.dataQuality),
         )
     }
@@ -145,9 +145,9 @@ object BusinessExcelSchema {
             "",
             "Resmî Sicil",
             if (!record.registrationNumber.isNullOrBlank() || !record.mersisNumber.isNullOrBlank()) {
-                "Resmî kimlik doğrulandı"
+                "Resmî Kimlik: Doğrulandı"
             } else {
-                "Sicil kimliği eksik"
+                "Resmî Kimlik: Sicil/MERSİS No Yok"
             },
         )
     }
@@ -178,11 +178,17 @@ object BusinessExcelSchema {
         CrmStage.LOST -> "Kaybedildi"
     }
 
+    private fun sourceOriginLabel(sourceId: String): String = when {
+        sourceId.startsWith("manual:", ignoreCase = true) -> "Manuel ($sourceId)"
+        sourceId.isBlank() -> ""
+        else -> "Radar ($sourceId)"
+    }
+
     private fun dataQualityLabel(quality: DataQuality): String = when (quality) {
         DataQuality.OBSERVED -> "Gözlemlendi"
         DataQuality.ESTIMATED -> "Tahmini"
         DataQuality.USER_ENTERED -> "Kullanıcı Girişi"
-        DataQuality.UNKNOWN -> "Bilinmiyor"
+        DataQuality.UNKNOWN -> "Belirtilmedi"
     }
 }
 
