@@ -71,7 +71,8 @@ object ProductPrice {
 }
 
 class ProductCatalogRepository(context: Context) {
-    private val preferences = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private val preferences = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val state = MutableStateFlow(load())
 
     val products: StateFlow<List<CatalogProduct>> = state.asStateFlow()
@@ -94,7 +95,7 @@ class ProductCatalogRepository(context: Context) {
         require(normalizedName.isNotEmpty()) { "Ürün adı boş olamaz." }
         require(priceMinor >= 0L) { "Fiyat negatif olamaz." }
 
-        ProductMediaValidation.requireHttpsUrl(imageUrl, "Ürün fotoğrafı URL")
+        ProductMediaStore.validateReference(appContext, imageUrl)
         ProductMediaValidation.requireHttpsUrl(sourceUrl, "Kaynak URL")
 
         val normalizedCurrency = currency.trim().uppercase(Locale.ROOT)
