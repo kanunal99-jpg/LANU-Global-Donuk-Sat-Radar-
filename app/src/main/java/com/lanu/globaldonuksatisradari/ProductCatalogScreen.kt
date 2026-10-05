@@ -63,6 +63,8 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
     var note by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var imageUrl by remember { mutableStateOf("") }
+    var originalImageUrl by remember { mutableStateOf<String?>(null) }
+    var temporaryLocalImage by remember { mutableStateOf<String?>(null) }
     var sourceUrl by remember { mutableStateOf("https://globaldonukgida.com/") }
     var editorError by remember { mutableStateOf<String?>(null) }
     var cameraTarget by remember { mutableStateOf<CameraImageTarget?>(null) }
@@ -78,6 +80,10 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                 val persisted = withContext(Dispatchers.IO) {
                     ProductMediaStore.persistGalleryImage(context, uri)
                 }
+                temporaryLocalImage?.let { previous ->
+                    if (previous != persisted) ProductMediaStore.removeLocalImage(context, previous)
+                }
+                temporaryLocalImage = persisted
                 imageUrl = persisted
             }.exceptionOrNull()?.message
         }
@@ -94,7 +100,12 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
             return@rememberLauncherForActivityResult
         }
         editorError = runCatching {
-            imageUrl = ProductMediaStore.finalizeCameraImage(context, target)
+            val persisted = ProductMediaStore.finalizeCameraImage(context, target)
+            temporaryLocalImage?.let { previous ->
+                if (previous != persisted) ProductMediaStore.removeLocalImage(context, previous)
+            }
+            temporaryLocalImage = persisted
+            imageUrl = persisted
         }.exceptionOrNull()?.message
     }
 
@@ -107,6 +118,9 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         currency = "TRY"
         note = ""
         description = ""
+        temporaryLocalImage?.let { ProductMediaStore.removeLocalImage(context, it) }
+        temporaryLocalImage = null
+        originalImageUrl = null
         imageUrl = ""
         sourceUrl = "https://globaldonukgida.com/"
         editorError = null
@@ -122,6 +136,9 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         currency = product.currency
         note = product.note.orEmpty()
         description = product.description.orEmpty()
+        temporaryLocalImage?.let { ProductMediaStore.removeLocalImage(context, it) }
+        temporaryLocalImage = null
+        originalImageUrl = product.imageUrl
         imageUrl = product.imageUrl.orEmpty()
         sourceUrl = product.sourceUrl ?: "https://globaldonukgida.com/"
         editorError = null
@@ -148,6 +165,8 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                 sourceUrl = sourceUrl,
                 sourceVerifiedAtEpochMs = preservedVerification,
             )
+            temporaryLocalImage = null
+            originalImageUrl = imageUrl.takeIf(String::isNotBlank)
             editorOpen = false
         }.exceptionOrNull()?.message
     }
@@ -225,7 +244,12 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
 
     if (editorOpen) {
         AlertDialog(
-            onDismissRequest = { editorOpen = false },
+            onDismissRequest = {
+                temporaryLocalImage?.let { ProductMediaStore.removeLocalImage(context, it) }
+                temporaryLocalImage = null
+                imageUrl = originalImageUrl.orEmpty()
+                editorOpen = false
+            },
             modifier = Modifier.testTag("product_editor_dialog").semantics { testTagsAsResourceId = true },
             title = { Text(if (editingId == null) "Yeni Ürün" else "Ürünü Düzenle", modifier = Modifier.testTag("product_editor_open_state")) },
             text = {
@@ -261,7 +285,11 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                     }
                     OutlinedTextField(
                         value = imageUrl.takeIf { it.startsWith("https://") }.orEmpty(),
-                        onValueChange = { imageUrl = it.trim() },
+                        onValueChange = { value ->
+                            temporaryLocalImage?.let { ProductMediaStore.removeLocalImage(context, it) }
+                            temporaryLocalImage = null
+                            imageUrl = value.trim()
+                        },
                         modifier = Modifier.fillMaxWidth().testTag("product_image_url_input"),
                         singleLine = true,
                         label = { Text("Ürün fotoğrafı HTTPS URL") },
@@ -296,7 +324,11 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                     }
                     if (imageUrl.isNotBlank()) {
                         TextButton(
-                            onClick = { imageUrl = "" },
+                            onClick = {
+                                temporaryLocalImage?.let { ProductMediaStore.removeLocalImage(context, it) }
+                                temporaryLocalImage = null
+                                imageUrl = ""
+                            },
                             modifier = Modifier.fillMaxWidth().testTag("product_image_remove"),
                         ) {
                             Text("Görseli kaldır")
@@ -308,7 +340,16 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                 }
             },
             confirmButton = { Button(onClick = ::save, modifier = Modifier.testTag("product_save_button")) { Text("Kaydet") } },
-            dismissButton = { TextButton(onClick = { editorOpen = false }) { Text("Vazgeç") } },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        temporaryLocalImage?.let { ProductMediaStore.removeLocalImage(context, it) }
+                        temporaryLocalImage = null
+                        imageUrl = originalImageUrl.orEmpty()
+                        editorOpen = false
+                    },
+                ) { Text("Vazgeç") }
+            },
         )
     }
 
