@@ -17,6 +17,14 @@ interface CrmQuoteLineDao {
     @Query("SELECT * FROM crm_quote_line WHERE quoteId = :quoteId ORDER BY createdAtEpochMs ASC, id ASC")
     fun observeForQuote(quoteId: String): Flow<List<CrmQuoteLineEntity>>
 
+    @Query(
+        "SELECT l.* FROM crm_quote_line l " +
+            "JOIN crm_quote q ON q.id = l.quoteId " +
+            "WHERE q.customerId = :customerId " +
+            "ORDER BY l.createdAtEpochMs ASC, l.id ASC",
+    )
+    fun observeForCustomer(customerId: String): Flow<List<CrmQuoteLineEntity>>
+
     @Query("SELECT * FROM crm_quote_line WHERE quoteId = :quoteId ORDER BY createdAtEpochMs ASC, id ASC")
     suspend fun listForQuote(quoteId: String): List<CrmQuoteLineEntity>
 
