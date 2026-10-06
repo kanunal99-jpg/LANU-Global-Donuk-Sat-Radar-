@@ -24,7 +24,6 @@ interface CrmCustomerDao {
         """
         SELECT * FROM crm_customer
         WHERE businessSourceId = :businessSourceId
-          AND mergedIntoCustomerId IS NULL
           AND ((ownerUserId = :ownerUserId) OR (ownerUserId IS NULL AND :ownerUserId IS NULL))
         LIMIT 1
         """,
