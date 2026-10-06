@@ -56,12 +56,11 @@ fun RoutineScreen(
                 longitude in -180.0..180.0
         }
     }
-    val automaticComputation by produceState<RoutineComputation?>(
-        initialValue = null,
-        routable,
-        startId,
-    ) {
-        value = withContext(Dispatchers.Default) {
+    var automaticComputation by remember(routable, startId) {
+        mutableStateOf<RoutineComputation?>(null)
+    }
+    LaunchedEffect(routable, startId) {
+        automaticComputation = withContext(Dispatchers.Default) {
             RoutineComputation(
                 route = CrmRoutePlanner.plan(routable, startId),
                 automaticPlan = MonthlyRoutinePlanner.plan(routable, startId),
@@ -73,13 +72,11 @@ fun RoutineScreen(
 
     val manualIntervalDays = manualIntervalInput.trim().toIntOrNull()
         ?.takeIf { it in 1..365 }
-    val manualPlan by produceState<MonthlyRoutinePlan?>(
-        initialValue = null,
-        routable,
-        startId,
-        manualIntervalDays,
-    ) {
-        value = if (manualIntervalDays == null) {
+    var manualPlan by remember(routable, startId, manualIntervalDays) {
+        mutableStateOf<MonthlyRoutinePlan?>(null)
+    }
+    LaunchedEffect(routable, startId, manualIntervalDays) {
+        manualPlan = if (manualIntervalDays == null) {
             null
         } else {
             withContext(Dispatchers.Default) {
