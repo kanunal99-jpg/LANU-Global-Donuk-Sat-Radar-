@@ -17,7 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -82,29 +82,32 @@ fun CrmWorkspaceScreen(
         modifier = Modifier.testTag("crm_workspace"),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        TabRow(selectedTabIndex = tab.ordinal) {
+        ScrollableTabRow(
+            selectedTabIndex = tab.ordinal,
+            edgePadding = 12.dp,
+        ) {
             Tab(
                 selected = tab == CrmWorkspaceTab.TODAY,
                 onClick = { tab = CrmWorkspaceTab.TODAY },
-                text = { Text("Bugün") },
+                text = { Text("Bugün", maxLines = 1) },
                 modifier = Modifier.testTag("crm_tab_today"),
             )
             Tab(
                 selected = tab == CrmWorkspaceTab.CUSTOMERS,
                 onClick = { tab = CrmWorkspaceTab.CUSTOMERS },
-                text = { Text("Müşteriler") },
+                text = { Text("Müşteriler", maxLines = 1) },
                 modifier = Modifier.testTag("crm_tab_customers"),
             )
             Tab(
                 selected = tab == CrmWorkspaceTab.DUPLICATES,
                 onClick = { tab = CrmWorkspaceTab.DUPLICATES },
-                text = { Text("Mükerrer") },
+                text = { Text("Mükerrer", maxLines = 1) },
                 modifier = Modifier.testTag("crm_tab_duplicates"),
             )
             Tab(
                 selected = tab == CrmWorkspaceTab.DASHBOARD,
                 onClick = { tab = CrmWorkspaceTab.DASHBOARD },
-                text = { Text("Dashboard") },
+                text = { Text("Dashboard", maxLines = 1) },
                 modifier = Modifier.testTag("crm_tab_dashboard"),
             )
         }
