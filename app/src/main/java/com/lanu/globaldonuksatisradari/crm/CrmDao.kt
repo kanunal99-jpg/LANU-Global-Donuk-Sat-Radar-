@@ -242,6 +242,13 @@ interface CrmNextActionDao {
     )
     fun observeDue(nowEpochMs: Long, limit: Int): Flow<List<CrmNextActionEntity>>
 
+    @Query(
+        "SELECT * FROM crm_next_action " +
+            "WHERE completedAtEpochMs IS NULL AND dueAtEpochMs <= :nowEpochMs " +
+            "ORDER BY dueAtEpochMs ASC LIMIT :limit",
+    )
+    suspend fun due(nowEpochMs: Long, limit: Int): List<CrmNextActionEntity>
+
     @Query("SELECT * FROM crm_next_action WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): CrmNextActionEntity?
 
