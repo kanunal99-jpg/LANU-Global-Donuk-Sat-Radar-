@@ -97,6 +97,42 @@ private fun normalizeNeighborhoodLabel(value: String?): String {
     return normalized
 }
 
+private fun scopeCrmCustomersForCitySelection(
+    customers: List<com.lanu.globaldonuksatisradari.crm.CrmCustomer>,
+    city: City,
+    selectedDistrict: String,
+): List<com.lanu.globaldonuksatisradari.crm.CrmCustomer> {
+    val cityScoped = customers.filter { it.city.equals(city.name, ignoreCase = true) }
+    if (selectedDistrict != "Tümü") {
+        return cityScoped.filter { it.district.equals(selectedDistrict, ignoreCase = true) }
+    }
+    if (city.name == "İstanbul") {
+        val allowed = city.districts
+            .map { BusinessDeduplication.normalizeForComparison(it) }
+            .toSet()
+        return cityScoped.filter {
+            BusinessDeduplication.normalizeForComparison(it.district) in allowed
+        }
+    }
+    return cityScoped
+}
+
+private fun businessMatchesCitySelection(
+    business: VerifiedBusiness,
+    city: City,
+    selectedDistrict: String,
+): Boolean {
+    if (!business.city.equals(city.name, ignoreCase = true)) return false
+    if (selectedDistrict != "Tümü") {
+        return business.district.equals(selectedDistrict, ignoreCase = true)
+    }
+    if (city.name != "İstanbul") return true
+    val districtKey = BusinessDeduplication.normalizeForComparison(business.district)
+    return city.districts.any {
+        BusinessDeduplication.normalizeForComparison(it) == districtKey
+    }
+}
+
 class MainActivity : ComponentActivity() {
     private fun isInstrumentationTest(): Boolean = runCatching { Class.forName("androidx.test.platform.app.InstrumentationRegistry") }.isSuccess
     private lateinit var auth: SupabaseAuthClient
@@ -192,7 +228,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val districtRepository = remember(context) { DistrictCatalogRepository(context) }
     val neighborhoodRepository = remember(context) { NeighborhoodCatalogRepository(context) }
     val scanHistoryRepository = remember(context) { RadarScanHistoryRepository(context) }
-    LaunchedEffect(selectedCity.name) {
+    LaunchedEffect(selectedCity.label) {
         districtLoading = true
         availableDistricts = runCatching {
             val fetched = districtRepository.getDistricts(selectedCity.name, selectedCity.districts)
@@ -215,7 +251,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         }
         districtLoading = false
     }
-    LaunchedEffect(selectedCity.name, selectedDistrict) {
+    LaunchedEffect(selectedCity.label, selectedDistrict) {
         selectedNeighborhood = "Tümü"
         neighborhoodMenu = false
         availableNeighborhoods = emptyList()
@@ -296,8 +332,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
             Log.w("LanuRegistry", "Başlangıç resmî sicil zenginleştirmesi tamamlanamadı.", error)
         }
     }
-    val filteredCrmCustomers = remember(crmCustomers, selectedCity.name, selectedDistrict) {
-        scopeCrmCustomers(crmCustomers, selectedCity.name, selectedDistrict)
+    val filteredCrmCustomers = remember(crmCustomers, selectedCity.label, selectedDistrict) {
+        scopeCrmCustomersForCitySelection(crmCustomers, selectedCity, selectedDistrict)
     }
     val selectedCrmCustomer = selectedCustomerId?.let { id -> crmCustomers.firstOrNull { it.id == id } }
     val selectedCustomerKey = selectedCustomerId.orEmpty()
@@ -317,9 +353,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val allRegionOpportunities by remember(regionKey) {
         localCrmRepository.observeOpportunitiesForRegion(selectedCity.name, regionDistrict)
     }.collectAsState(initial = emptyList())
-    val regionCustomerIds = remember(crmCustomers, selectedCity.name, selectedDistrict) {
-        scopeCrmCustomers(crmCustomers, selectedCity.name, selectedDistrict)
-            .mapTo(mutableSetOf()) { it.id }
+    val regionCustomerIds = remember(filteredCrmCustomers) {
+        filteredCrmCustomers.mapTo(mutableSetOf()) { it.id }
     }
     val regionActivities = remember(allRegionActivities, regionCustomerIds) {
         allRegionActivities.filter { it.customerId in regionCustomerIds }
@@ -336,6 +371,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     }
     val visibleResults = remember(
         results,
+        selectedCity.label,
         selectedDistrict,
         selectedNeighborhood,
         categoryFilter,
@@ -347,7 +383,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         openingHoursFilter,
     ) {
         results.filter { business ->
-            (selectedDistrict == "Tümü" || business.district.equals(selectedDistrict, true)) &&
+            businessMatchesCitySelection(business, selectedCity, selectedDistrict) &&
                 (
                     selectedNeighborhood == "Tümü" ||
                         normalizeNeighborhoodLabel(business.neighborhood) ==
@@ -781,7 +817,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         }
                     }
                     AppSection.MAP -> CrmMapScreen(
-                        customers = crmCustomers,
+                        customers = filteredCrmCustomers,
                         radarBusinesses = visibleResults,
                         selectedCity = selectedCity.name,
                         selectedDistrict = selectedDistrict,
@@ -825,7 +861,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             }
                         },
                     )
-                    AppSection.ROUTINE -> RoutineScreen(crmCustomers, selectedCity.name, selectedDistrict)
+                    AppSection.ROUTINE -> RoutineScreen(filteredCrmCustomers, selectedCity.name, selectedDistrict)
                     AppSection.MORE -> LazyColumn(
                         modifier = Modifier
                             .testTag("more_screen")
@@ -891,6 +927,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                     AppSection.MANUAL_POINT -> ManualPointScreen(
                         repository = localCrmRepository,
                         defaultCity = selectedCity.name,
+                        cityLabel = selectedCity.label,
+                        districtOptions = selectedCity.districts,
                         ownerUserId = activeOwnerUserId,
                     ) { navigateTo(AppSection.ROUTINE) }
                     AppSection.AI_ASSISTANT -> SalesAiScreen(salesAiContext)
