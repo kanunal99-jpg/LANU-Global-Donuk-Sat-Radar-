@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -23,6 +24,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -33,6 +35,8 @@ import com.lanu.globaldonuksatisradari.crm.CrmDashboardMetrics
 import com.lanu.globaldonuksatisradari.crm.CrmDuplicateDetector
 import com.lanu.globaldonuksatisradari.crm.CrmNextAction
 import com.lanu.globaldonuksatisradari.crm.CrmNextActionType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -429,7 +433,14 @@ private fun CrmDuplicateReviewScreen(
     onOpenCustomer: (String) -> Unit,
     onMergeCustomers: (targetCustomerId: String, sourceCustomerId: String) -> Unit,
 ) {
-    val candidates = remember(customers) { CrmDuplicateDetector.find(customers) }
+    val candidates by produceState<List<com.lanu.globaldonuksatisradari.crm.CrmDuplicateCandidate>?>(
+        initialValue = null,
+        customers,
+    ) {
+        value = withContext(Dispatchers.Default) {
+            CrmDuplicateDetector.find(customers)
+        }
+    }
     var pendingMerge by remember { mutableStateOf<Pair<CrmCustomer, CrmCustomer>?>(null) }
 
     pendingMerge?.let { (target, source) ->
@@ -472,16 +483,31 @@ private fun CrmDuplicateReviewScreen(
                 "Sicil/VKN, telefon, işletme adı, adres ve yakın koordinat kanıtları birlikte değerlendirilir.",
                 style = MaterialTheme.typography.bodySmall,
             )
-            Text("${candidates.size} aday çift", modifier = Modifier.testTag("crm_duplicate_count"))
+            Text(
+                candidates?.let { "${it.size} aday çift" } ?: "Analiz hazırlanıyor…",
+                modifier = Modifier.testTag("crm_duplicate_count"),
+            )
         }
-        if (candidates.isEmpty()) {
+        if (candidates == null) {
+            item {
+                Card(Modifier.fillMaxWidth()) {
+                    Row(
+                        Modifier.padding(14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        CircularProgressIndicator()
+                        Text("Mükerrer adayları arka planda analiz ediliyor.")
+                    }
+                }
+            }
+        } else if (candidates!!.isEmpty()) {
             item {
                 Card(Modifier.fillMaxWidth()) {
                     Text("Güçlü mükerrer adayı bulunmadı.", Modifier.padding(14.dp))
                 }
             }
         }
-        items(candidates, key = { it.first.id + "|" + it.second.id }) { candidate ->
+        items(candidates.orEmpty(), key = { it.first.id + "|" + it.second.id }) { candidate ->
             Card(Modifier.fillMaxWidth()) {
                 Column(
                     Modifier.padding(14.dp),
