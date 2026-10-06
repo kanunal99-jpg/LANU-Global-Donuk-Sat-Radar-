@@ -82,6 +82,7 @@ data class CrmCustomer(
     val registryStatus: CrmRegistryStatus = CrmRegistryStatus.UNVERIFIED,
     val registrySource: String? = null,
     val registryNumber: String? = null,
+    val tags: Set<String> = emptySet(),
     val createdAtEpochMs: Long,
     val updatedAtEpochMs: Long,
     val version: Long = 0L,
