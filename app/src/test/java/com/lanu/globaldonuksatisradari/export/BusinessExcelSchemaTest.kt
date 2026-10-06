@@ -41,6 +41,7 @@ class BusinessExcelSchemaTest {
             "X",
             "Y",
             "Konum Bilgileri",
+            "Etiketler",
         ).forEach { required ->
             assertTrue("Ortak Excel alanı eksik: $required", required in BusinessExcelSchema.commonHeaders)
         }
