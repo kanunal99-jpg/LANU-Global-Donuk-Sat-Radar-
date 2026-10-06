@@ -388,6 +388,7 @@ class LocalCrmRepository(
         var updated = 0
         var inactiveMatches = 0
         val customers = database.customerDao().all()
+            .filter { it.mergedIntoCustomerId.isNullOrBlank() }
             .filter { !ownerScoped || it.ownerUserId == ownerUserId }
 
         customers.forEach { existing ->
