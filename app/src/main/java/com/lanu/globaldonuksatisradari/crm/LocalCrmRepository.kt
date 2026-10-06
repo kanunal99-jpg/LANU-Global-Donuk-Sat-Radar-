@@ -86,6 +86,39 @@ class LocalCrmRepository(
         return CrmMappings.toDomain(updated)
     }
 
+    suspend fun updateCustomerTags(
+        customerId: String,
+        tags: Collection<String>,
+    ): CrmCustomer {
+        val current = database.customerDao().findById(customerId)
+            ?: error("CRM müşterisi bulunamadı: $customerId")
+        val timestamp = now()
+        val updated = current.copy(
+            tagsCsv = CrmTagCodec.encode(tags),
+            updatedAtEpochMs = timestamp,
+            version = current.version + 1L,
+            syncState = syncStateFor(current.ownerUserId).name,
+        )
+        database.withTransaction {
+            database.customerDao().upsert(updated)
+            enqueueIfCloudOwned(
+                current.ownerUserId,
+                SyncOperationEntity(
+                    id = idGenerator(),
+                    entityType = ENTITY_CUSTOMER,
+                    entityId = updated.id,
+                    operation = OP_UPDATE,
+                    payloadVersion = updated.version,
+                    payloadJson = CrmPayloads.customer(CrmMappings.toDomain(updated)),
+                    createdAtEpochMs = timestamp,
+                    attemptCount = 0,
+                    lastError = null,
+                ),
+            )
+        }
+        return CrmMappings.toDomain(updated)
+    }
+
     suspend fun addBusinessAsCustomer(
         business: VerifiedBusiness,
         ownerUserId: String? = null,
@@ -831,6 +864,7 @@ private object CrmMappings {
         registryStatus = model.registryStatus.name,
         registrySource = model.registrySource,
         registryNumber = model.registryNumber,
+        tagsCsv = CrmTagCodec.encode(model.tags),
         createdAtEpochMs = model.createdAtEpochMs,
         updatedAtEpochMs = model.updatedAtEpochMs,
         version = model.version,
@@ -862,6 +896,7 @@ private object CrmMappings {
         }.getOrDefault(CrmRegistryStatus.UNVERIFIED),
         registrySource = entity.registrySource,
         registryNumber = entity.registryNumber,
+        tags = CrmTagCodec.decode(entity.tagsCsv),
         createdAtEpochMs = entity.createdAtEpochMs,
         updatedAtEpochMs = entity.updatedAtEpochMs,
         version = entity.version,
@@ -1016,6 +1051,7 @@ private object CrmPayloads {
         put("registryStatus", customer.registryStatus.name)
         put("registrySource", customer.registrySource)
         put("registryNumber", customer.registryNumber)
+        put("tagsCsv", CrmTagCodec.encode(customer.tags))
         put("createdAtEpochMs", customer.createdAtEpochMs)
         put("updatedAtEpochMs", customer.updatedAtEpochMs)
         put("version", customer.version)
