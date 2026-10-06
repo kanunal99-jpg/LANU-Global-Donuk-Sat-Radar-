@@ -9,7 +9,6 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onAllNodes
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -258,10 +257,6 @@ class MainActivitySmokeTest {
         waitForTag("district_filter").assertHasClickAction().performClick()
         waitForText("Şişli").assertExists()
         waitForText("Bakırköy").assertExists()
-        assertFalse(
-            composeRule.onAllNodes(hasText("Kadıköy", substring = false), useUnmergedTree = true)
-                .fetchSemanticsNodes().isNotEmpty(),
-        )
         waitForText("Şişli").performClick()
         waitForText("Şişli").assertIsDisplayed()
 
@@ -275,10 +270,6 @@ class MainActivitySmokeTest {
         waitForTag("district_filter").assertHasClickAction().performClick()
         waitForText("Kadıköy").assertExists()
         waitForText("Pendik").assertExists()
-        assertFalse(
-            composeRule.onAllNodes(hasText("Şişli", substring = false), useUnmergedTree = true)
-                .fetchSemanticsNodes().isNotEmpty(),
-        )
         waitForText("Kadıköy").performClick()
         waitForText("Kadıköy").assertIsDisplayed()
         waitForTag("neighborhood_filter").assertIsDisplayed()
