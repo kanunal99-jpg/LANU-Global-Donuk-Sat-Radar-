@@ -1,5 +1,7 @@
 package com.lanu.globaldonuksatisradari
 
+import androidx.activity.compose.setContent
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertHasClickAction
@@ -18,6 +20,7 @@ import androidx.compose.ui.test.click
 import androidx.work.WorkManager
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
+import com.lanu.globaldonuksatisradari.crm.CrmReminderRecoveryScheduler
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.data.DataSourceDescriptor
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
@@ -33,6 +36,60 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 @OptIn(ExperimentalTestApi::class)
 class MainActivitySmokeTest {
+    @Test(timeout = 60_000)
+    fun mapFallback_rendersWithoutNetworkReadiness() {
+        val source = DataSourceDescriptor(
+            id = "map-fallback-smoke",
+            name = "Smoke Source",
+            publisher = "LANU",
+            licenseOrTerms = "Test",
+            sourceUrl = "https://example.com/",
+            lastVerifiedAtEpochMs = 1L,
+        )
+        val business = VerifiedBusiness(
+            id = "map-fallback-point",
+            name = "Fallback Nokta",
+            city = "İstanbul",
+            district = "Kadıköy",
+            neighborhood = "Moda",
+            source = source,
+            verifiedAtEpochMs = 1L,
+            latitude = 40.987,
+            longitude = 29.028,
+        )
+
+        composeRule.activity.runOnUiThread {
+            composeRule.activity.setContent {
+                MaterialTheme {
+                    BusinessMapPreview(listOf(business))
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        waitForTag("business_map_container").assertIsDisplayed()
+        waitForTag("business_map_fallback").assertIsDisplayed()
+    }
+
+    @Test(timeout = 60_000)
+    fun launch_schedulesCrmReminderRecovery() {
+        val context = composeRule.activity
+        composeRule.waitUntil(30_000) {
+            runCatching {
+                WorkManager.getInstance(context)
+                    .getWorkInfosForUniqueWork(CrmReminderRecoveryScheduler.uniqueWorkName())
+                    .get()
+                    .isNotEmpty()
+            }.getOrDefault(false)
+        }
+        assertTrue(
+            WorkManager.getInstance(context)
+                .getWorkInfosForUniqueWork(CrmReminderRecoveryScheduler.uniqueWorkName())
+                .get()
+                .isNotEmpty(),
+        )
+    }
+
+
 
     private fun waitForText(text: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
         val matcher = hasText(text, substring = false)
@@ -255,12 +312,19 @@ class MainActivitySmokeTest {
             ).id
         }
 
+        composeRule.activity.getSharedPreferences("lanu_ui_state", android.content.Context.MODE_PRIVATE)
+            .edit()
+            .putString("selected_city", "İstanbul Anadolu")
+            .putString("selected_district", "Tümü")
+            .apply()
         composeRule.activityRule.scenario.recreate()
         waitForTag("nav_map").assertHasClickAction().performClick()
         waitForTag("crm_map_screen").assertIsDisplayed()
-        waitForText("Harita Smoke Nokta").assertExists()
+        composeRule.onNodeWithTag("crm_map_screen")
+            .performScrollToNode(hasTestTag("crm_map_open_" + customerId))
+        composeRule.waitForIdle()
+        waitForText("Harita Smoke Nokta").assertIsDisplayed()
         waitForTag("crm_map_open_" + customerId)
-            .performScrollTo()
             .assertIsDisplayed()
             .assertHasClickAction()
             .performClick()

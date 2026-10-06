@@ -39,6 +39,9 @@ class BusinessMapPreviewTest {
         assertTrue(html.contains("29.028"))
         assertTrue(html.contains("markerClusterGroup"))
         assertTrue(html.contains("chunkedLoading"))
+        assertTrue(html.contains("AndroidMapBridge.onReady"))
+        assertTrue(html.contains("AndroidMapBridge.onError"))
+        assertTrue(html.contains("cdn.jsdelivr.net/npm/leaflet@1.9.4"))
         assertTrue(html.contains("cdn.jsdelivr.net"))
     }
 
