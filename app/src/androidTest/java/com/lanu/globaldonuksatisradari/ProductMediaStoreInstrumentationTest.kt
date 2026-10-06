@@ -38,6 +38,31 @@ class ProductMediaStoreInstrumentationTest {
         repository.delete(unique)
     }
 
+    @Test(expected = IllegalArgumentException::class)
+    fun emptyCameraFileIsRejected() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val target = ProductMediaStore.createCameraTarget(context)
+        try {
+            ProductMediaStore.finalizeCameraImage(context, target)
+        } finally {
+            target.file.delete()
+        }
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun oversizedCameraFileIsRejected() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val target = ProductMediaStore.createCameraTarget(context)
+        try {
+            java.io.RandomAccessFile(target.file, "rw").use {
+                it.setLength(ProductMediaStore.MAX_IMAGE_BYTES + 1L)
+            }
+            ProductMediaStore.finalizeCameraImage(context, target)
+        } finally {
+            target.file.delete()
+        }
+    }
+
     @Test
     fun cameraTargetFinalizesAsPrivateValidatedFileReference() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
