@@ -236,8 +236,8 @@ class MainActivitySmokeTest {
         waitForTag("nav_crm").assertHasClickAction().performClick()
         waitForTag("crm_today_screen").assertIsDisplayed()
 
-        waitForText("Rutin").performClick()
-        waitForText("Yakınlık Bazlı Rutin").assertIsDisplayed()
+        waitForTag("nav_routine").assertHasClickAction().performClick()
+        waitForTag("routine_screen").assertIsDisplayed()
     }
 
     @Test(timeout = 60_000)
@@ -379,7 +379,8 @@ class MainActivitySmokeTest {
         }
 
         composeRule.activityRule.scenario.recreate()
-        waitForText("Rutin").performClick()
+        waitForTag("nav_routine").assertHasClickAction().performClick()
+        waitForTag("routine_screen").assertIsDisplayed()
         waitForText("Otomatik Aylık Ziyaret Planı").assertIsDisplayed()
         waitForTag("routine_excel_save")
             .performScrollTo()

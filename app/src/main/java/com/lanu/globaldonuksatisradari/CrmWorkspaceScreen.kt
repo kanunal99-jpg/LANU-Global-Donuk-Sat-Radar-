@@ -12,15 +12,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +35,8 @@ import com.lanu.globaldonuksatisradari.crm.CrmDashboardMetrics
 import com.lanu.globaldonuksatisradari.crm.CrmDuplicateDetector
 import com.lanu.globaldonuksatisradari.crm.CrmNextAction
 import com.lanu.globaldonuksatisradari.crm.CrmNextActionType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -82,29 +86,32 @@ fun CrmWorkspaceScreen(
         modifier = Modifier.testTag("crm_workspace"),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        TabRow(selectedTabIndex = tab.ordinal) {
+        ScrollableTabRow(
+            selectedTabIndex = tab.ordinal,
+            edgePadding = 8.dp,
+        ) {
             Tab(
                 selected = tab == CrmWorkspaceTab.TODAY,
                 onClick = { tab = CrmWorkspaceTab.TODAY },
-                text = { Text("Bugün") },
+                text = { Text("Bugün", maxLines = 1, softWrap = false) },
                 modifier = Modifier.testTag("crm_tab_today"),
             )
             Tab(
                 selected = tab == CrmWorkspaceTab.CUSTOMERS,
                 onClick = { tab = CrmWorkspaceTab.CUSTOMERS },
-                text = { Text("Müşteriler") },
+                text = { Text("Müşteriler", maxLines = 1, softWrap = false) },
                 modifier = Modifier.testTag("crm_tab_customers"),
             )
             Tab(
                 selected = tab == CrmWorkspaceTab.DUPLICATES,
                 onClick = { tab = CrmWorkspaceTab.DUPLICATES },
-                text = { Text("Mükerrer") },
+                text = { Text("Mükerrer", maxLines = 1, softWrap = false) },
                 modifier = Modifier.testTag("crm_tab_duplicates"),
             )
             Tab(
                 selected = tab == CrmWorkspaceTab.DASHBOARD,
                 onClick = { tab = CrmWorkspaceTab.DASHBOARD },
-                text = { Text("Dashboard") },
+                text = { Text("Dashboard", maxLines = 1, softWrap = false) },
                 modifier = Modifier.testTag("crm_tab_dashboard"),
             )
         }
@@ -426,7 +433,14 @@ private fun CrmDuplicateReviewScreen(
     onOpenCustomer: (String) -> Unit,
     onMergeCustomers: (targetCustomerId: String, sourceCustomerId: String) -> Unit,
 ) {
-    val candidates = remember(customers) { CrmDuplicateDetector.find(customers) }
+    var candidates by remember(customers) {
+        mutableStateOf<List<com.lanu.globaldonuksatisradari.crm.CrmDuplicateCandidate>?>(null)
+    }
+    LaunchedEffect(customers) {
+        candidates = withContext(Dispatchers.Default) {
+            CrmDuplicateDetector.find(customers)
+        }
+    }
     var pendingMerge by remember { mutableStateOf<Pair<CrmCustomer, CrmCustomer>?>(null) }
 
     pendingMerge?.let { (target, source) ->
@@ -469,16 +483,31 @@ private fun CrmDuplicateReviewScreen(
                 "Sicil/VKN, telefon, işletme adı, adres ve yakın koordinat kanıtları birlikte değerlendirilir.",
                 style = MaterialTheme.typography.bodySmall,
             )
-            Text("${candidates.size} aday çift", modifier = Modifier.testTag("crm_duplicate_count"))
+            Text(
+                candidates?.let { "${it.size} aday çift" } ?: "Analiz hazırlanıyor…",
+                modifier = Modifier.testTag("crm_duplicate_count"),
+            )
         }
-        if (candidates.isEmpty()) {
+        if (candidates == null) {
+            item {
+                Card(Modifier.fillMaxWidth()) {
+                    Row(
+                        Modifier.padding(14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        CircularProgressIndicator()
+                        Text("Mükerrer adayları arka planda analiz ediliyor.")
+                    }
+                }
+            }
+        } else if (candidates!!.isEmpty()) {
             item {
                 Card(Modifier.fillMaxWidth()) {
                     Text("Güçlü mükerrer adayı bulunmadı.", Modifier.padding(14.dp))
                 }
             }
         }
-        items(candidates, key = { it.first.id + "|" + it.second.id }) { candidate ->
+        items(candidates.orEmpty(), key = { it.first.id + "|" + it.second.id }) { candidate ->
             Card(Modifier.fillMaxWidth()) {
                 Column(
                     Modifier.padding(14.dp),

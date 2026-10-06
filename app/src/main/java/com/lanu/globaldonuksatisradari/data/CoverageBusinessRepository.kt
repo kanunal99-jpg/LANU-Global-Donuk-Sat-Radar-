@@ -132,6 +132,7 @@ class CoverageBusinessRepository(
         city: String,
         district: String?,
         neighborhood: String?,
+        districtScopeOverride: List<String>? = null,
     ): List<VerifiedBusiness> {
         val normalizedDistrict = district?.takeUnless { it.isBlank() || it.equals("Tümü", true) }
         val normalizedNeighborhood = neighborhood
@@ -144,7 +145,11 @@ class CoverageBusinessRepository(
             emptyList()
         }
         val discoveredDistricts = if (normalizedDistrict == null) {
-            districtCatalog.getDistricts(city, fallbackDistricts)
+            districtScopeOverride
+                ?.filter(String::isNotBlank)
+                ?.distinctBy(BusinessDeduplication::normalizeForComparison)
+                ?.takeIf(List<String>::isNotEmpty)
+                ?: districtCatalog.getDistricts(city, fallbackDistricts)
         } else {
             emptyList()
         }
@@ -165,7 +170,18 @@ class CoverageBusinessRepository(
                 city = city,
                 district = normalizedDistrict,
                 neighborhood = normalizedNeighborhood,
-            )
+            ).let { records ->
+                if (normalizedDistrict == null && districtScopeOverride != null) {
+                    val allowed = discoveredDistricts
+                        .map(BusinessDeduplication::normalizeForComparison)
+                        .toSet()
+                    records.filter {
+                        BusinessDeduplication.normalizeForComparison(it.district) in allowed
+                    }
+                } else {
+                    records
+                }
+            }
         }.onFailure { error ->
             Log.w(
                 "LanuRadar",
@@ -183,7 +199,18 @@ class CoverageBusinessRepository(
             city = city,
             district = normalizedDistrict,
             neighborhood = normalizedNeighborhood,
-        )
+        ).let { records ->
+            if (normalizedDistrict == null && districtScopeOverride != null) {
+                val allowed = discoveredDistricts
+                    .map(BusinessDeduplication::normalizeForComparison)
+                    .toSet()
+                records.filter {
+                    BusinessDeduplication.normalizeForComparison(it.district) in allowed
+                }
+            } else {
+                records
+            }
+        }
 
         val scans = engine.scanAll(scopes)
         var discovered = BusinessDeduplication.deduplicateCrossSource(
@@ -217,7 +244,18 @@ class CoverageBusinessRepository(
             discovered = discovered.filter(BusinessEntityEligibility::keepForBusinessInventory)
         }
 
-        val registryRecords = officialRegistryStore.recordsFor(city, normalizedDistrict)
+        val registryRecords = officialRegistryStore.recordsFor(city, normalizedDistrict).let { records ->
+            if (normalizedDistrict == null && districtScopeOverride != null) {
+                val allowed = discoveredDistricts
+                    .map(BusinessDeduplication::normalizeForComparison)
+                    .toSet()
+                records.filter {
+                    BusinessDeduplication.normalizeForComparison(it.district.orEmpty()) in allowed
+                }
+            } else {
+                records
+            }
+        }
         return if (query.isBlank()) {
             OfficialRegistryDiscovery.mergeIntoBroadInventory(
                 discovered = discovered,

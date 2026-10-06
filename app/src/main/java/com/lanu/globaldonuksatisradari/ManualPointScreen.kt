@@ -2,6 +2,7 @@ package com.lanu.globaldonuksatisradari
 
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,10 +12,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
@@ -26,6 +35,8 @@ import kotlinx.coroutines.launch
 fun ManualPointScreen(
     repository: LocalCrmRepository,
     defaultCity: String,
+    cityLabel: String = defaultCity,
+    districtOptions: List<String> = emptyList(),
     ownerUserId: String? = null,
     onSaved: () -> Unit,
 ) {
@@ -36,8 +47,9 @@ fun ManualPointScreen(
     var taxOrNationalId by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
-    var city by remember(defaultCity) { mutableStateOf(defaultCity) }
-    var district by remember { mutableStateOf("") }
+    val city = defaultCity
+    var district by remember(defaultCity, districtOptions) { mutableStateOf("") }
+    var districtMenu by remember { mutableStateOf(false) }
     var neighborhood by remember { mutableStateOf("") }
     var longitudeX by remember { mutableStateOf("") }
     var latitudeY by remember { mutableStateOf("") }
@@ -53,11 +65,15 @@ fun ManualPointScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text("Manuel Nokta Kaydı", style = MaterialTheme.typography.headlineSmall)
-        Text("Adres ve koordinatlarını bildiğiniz müşteri/noktayı doğrudan CRM havuzuna ekleyin.")
+        Text(
+            "Aktif il/bölge kapsamındaki doğrulanmış ilçelerden seçim yaparak müşteri/noktayı CRM havuzuna ekleyin.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
         OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("Nokta / işletme adı") }, singleLine = true)
         OutlinedTextField(signboardName, { signboardName = it }, Modifier.fillMaxWidth(), label = { Text("Tabela adı (opsiyonel)") }, singleLine = true)
         OutlinedTextField(contactName, { contactName = it }, Modifier.fillMaxWidth(), label = { Text("Ad Soyad (opsiyonel)") }, singleLine = true)
         OutlinedTextField(businessType, { businessType = it }, Modifier.fillMaxWidth(), label = { Text("İşletme türü (opsiyonel)") }, singleLine = true)
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 taxOrNationalId,
@@ -76,13 +92,64 @@ fun ManualPointScreen(
                 singleLine = true,
             )
         }
-        OutlinedTextField(address, { address = it }, Modifier.fillMaxWidth(), label = { Text("Açık adres") }, minLines = 2)
+
+        OutlinedTextField(
+            address,
+            { address = it },
+            Modifier.fillMaxWidth(),
+            label = { Text("Açık adres") },
+            minLines = 2,
+        )
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedTextField(city, { city = it }, Modifier.weight(1f), label = { Text("İl") }, singleLine = true)
-            OutlinedTextField(district, { district = it }, Modifier.weight(1f), label = { Text("İlçe") }, singleLine = true)
+            OutlinedTextField(
+                value = cityLabel,
+                onValueChange = {},
+                modifier = Modifier.weight(1f),
+                readOnly = true,
+                label = { Text("İl / bölge") },
+                singleLine = true,
+            )
+            Box(Modifier.weight(1f)) {
+                OutlinedButton(
+                    onClick = { if (districtOptions.isNotEmpty()) districtMenu = true },
+                    enabled = districtOptions.isNotEmpty(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("manual_district_selector"),
+                ) {
+                    Text(district.ifBlank { "İlçe seç" }, maxLines = 1)
+                }
+                DropdownMenu(
+                    expanded = districtMenu,
+                    onDismissRequest = { districtMenu = false },
+                ) {
+                    districtOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = {
+                                district = option
+                                districtMenu = false
+                            },
+                        )
+                    }
+                }
+            }
         }
-        OutlinedTextField(neighborhood, { neighborhood = it }, Modifier.fillMaxWidth(), label = { Text("Mahalle") }, singleLine = true)
-        Text("Koordinat sistemi: X = Boylam (-180..180), Y = Enlem (-90..90)")
+
+        OutlinedTextField(
+            neighborhood,
+            { neighborhood = it },
+            Modifier.fillMaxWidth(),
+            label = { Text("Mahalle") },
+            singleLine = true,
+        )
+
+        Text(
+            "Koordinat sistemi: X = Boylam (-180..180), Y = Enlem (-90..90)",
+            style = MaterialTheme.typography.bodySmall,
+        )
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 longitudeX,
@@ -101,6 +168,7 @@ fun ManualPointScreen(
                 singleLine = true,
             )
         }
+
         Button(
             enabled = !saving,
             onClick = {
@@ -108,6 +176,12 @@ fun ManualPointScreen(
                 val lat = latitudeY.replace(',', '.').toDoubleOrNull()
                 if (name.isBlank() || address.isBlank() || city.isBlank() || district.isBlank()) {
                     message = "Ad, adres, il ve ilçe zorunludur."
+                    return@Button
+                }
+                if (districtOptions.isNotEmpty() &&
+                    districtOptions.none { it.equals(district, ignoreCase = true) }
+                ) {
+                    message = "Seçilen ilçe aktif il/bölge kapsamına ait değil."
                     return@Button
                 }
                 if (lon == null || lat == null || lon !in -180.0..180.0 || lat !in -90.0..90.0) {
@@ -144,16 +218,23 @@ fun ManualPointScreen(
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth().testTag("manual_point_save"),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("manual_point_save"),
         ) {
             Text(if (saving) "Kaydediliyor…" else "Noktayı kaydet")
         }
+
         message?.let {
             Text(
                 it,
                 modifier = Modifier.testTag("manual_point_message"),
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (it.startsWith("Manuel nokta kaydedildi")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                color = if (it.startsWith("Manuel nokta kaydedildi")) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
             )
         }
     }

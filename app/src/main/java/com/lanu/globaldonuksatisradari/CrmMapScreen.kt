@@ -297,4 +297,4 @@ internal fun stageLabelForMap(stage: CrmStage): String = when (stage) {
     CrmStage.LOST -> "Kaybedildi"
 }
 
-private const val MAX_MAP_POINTS = 750
+private const val MAX_MAP_POINTS = 350

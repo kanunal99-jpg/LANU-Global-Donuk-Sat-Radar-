@@ -97,6 +97,52 @@ private fun normalizeNeighborhoodLabel(value: String?): String {
     return normalized
 }
 
+internal fun scopeCrmCustomersForCitySelection(
+    customers: List<com.lanu.globaldonuksatisradari.crm.CrmCustomer>,
+    city: City,
+    selectedDistrict: String,
+): List<com.lanu.globaldonuksatisradari.crm.CrmCustomer> {
+    val cityScoped = customers.filter { it.city.equals(city.name, ignoreCase = true) }
+    if (selectedDistrict != "Tümü") {
+        if (city.name == "İstanbul" &&
+            city.districts.none { it.equals(selectedDistrict, ignoreCase = true) }
+        ) {
+            return emptyList()
+        }
+        return cityScoped.filter { it.district.equals(selectedDistrict, ignoreCase = true) }
+    }
+    if (city.name == "İstanbul") {
+        val allowed = city.districts
+            .map { BusinessDeduplication.normalizeForComparison(it) }
+            .toSet()
+        return cityScoped.filter {
+            BusinessDeduplication.normalizeForComparison(it.district) in allowed
+        }
+    }
+    return cityScoped
+}
+
+internal fun businessMatchesCitySelection(
+    business: VerifiedBusiness,
+    city: City,
+    selectedDistrict: String,
+): Boolean {
+    if (!business.city.equals(city.name, ignoreCase = true)) return false
+    if (selectedDistrict != "Tümü") {
+        if (city.name == "İstanbul" &&
+            city.districts.none { it.equals(selectedDistrict, ignoreCase = true) }
+        ) {
+            return false
+        }
+        return business.district.equals(selectedDistrict, ignoreCase = true)
+    }
+    if (city.name != "İstanbul") return true
+    val districtKey = BusinessDeduplication.normalizeForComparison(business.district)
+    return city.districts.any {
+        BusinessDeduplication.normalizeForComparison(it) == districtKey
+    }
+}
+
 class MainActivity : ComponentActivity() {
     private fun isInstrumentationTest(): Boolean = runCatching { Class.forName("androidx.test.platform.app.InstrumentationRegistry") }.isSuccess
     private lateinit var auth: SupabaseAuthClient
@@ -168,6 +214,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var coordinateFilter by remember { mutableStateOf("Tümü") }
     var menuFilter by remember { mutableStateOf("Tümü") }
     var openingHoursFilter by remember { mutableStateOf("Tümü") }
+    var showFilterDetails by rememberSaveable { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<VerifiedBusiness>>(emptyList()) }
     var selectedBusiness by remember { mutableStateOf<VerifiedBusiness?>(null) }
@@ -192,7 +239,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val districtRepository = remember(context) { DistrictCatalogRepository(context) }
     val neighborhoodRepository = remember(context) { NeighborhoodCatalogRepository(context) }
     val scanHistoryRepository = remember(context) { RadarScanHistoryRepository(context) }
-    LaunchedEffect(selectedCity.name) {
+    LaunchedEffect(selectedCity.label) {
         districtLoading = true
         availableDistricts = runCatching {
             val fetched = districtRepository.getDistricts(selectedCity.name, selectedCity.districts)
@@ -215,7 +262,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         }
         districtLoading = false
     }
-    LaunchedEffect(selectedCity.name, selectedDistrict) {
+    LaunchedEffect(selectedCity.label, selectedDistrict) {
         selectedNeighborhood = "Tümü"
         neighborhoodMenu = false
         availableNeighborhoods = emptyList()
@@ -296,8 +343,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
             Log.w("LanuRegistry", "Başlangıç resmî sicil zenginleştirmesi tamamlanamadı.", error)
         }
     }
-    val filteredCrmCustomers = remember(crmCustomers, selectedCity.name, selectedDistrict) {
-        scopeCrmCustomers(crmCustomers, selectedCity.name, selectedDistrict)
+    val filteredCrmCustomers = remember(crmCustomers, selectedCity.label, selectedDistrict) {
+        scopeCrmCustomersForCitySelection(crmCustomers, selectedCity, selectedDistrict)
     }
     val selectedCrmCustomer = selectedCustomerId?.let { id -> crmCustomers.firstOrNull { it.id == id } }
     val selectedCustomerKey = selectedCustomerId.orEmpty()
@@ -317,9 +364,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val allRegionOpportunities by remember(regionKey) {
         localCrmRepository.observeOpportunitiesForRegion(selectedCity.name, regionDistrict)
     }.collectAsState(initial = emptyList())
-    val regionCustomerIds = remember(crmCustomers, selectedCity.name, selectedDistrict) {
-        scopeCrmCustomers(crmCustomers, selectedCity.name, selectedDistrict)
-            .mapTo(mutableSetOf()) { it.id }
+    val regionCustomerIds = remember(filteredCrmCustomers) {
+        filteredCrmCustomers.mapTo(mutableSetOf()) { it.id }
     }
     val regionActivities = remember(allRegionActivities, regionCustomerIds) {
         allRegionActivities.filter { it.customerId in regionCustomerIds }
@@ -336,6 +382,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     }
     val visibleResults = remember(
         results,
+        selectedCity.label,
         selectedDistrict,
         selectedNeighborhood,
         categoryFilter,
@@ -347,7 +394,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         openingHoursFilter,
     ) {
         results.filter { business ->
-            (selectedDistrict == "Tümü" || business.district.equals(selectedDistrict, true)) &&
+            businessMatchesCitySelection(business, selectedCity, selectedDistrict) &&
                 (
                     selectedNeighborhood == "Tümü" ||
                         normalizeNeighborhoodLabel(business.neighborhood) ==
@@ -411,10 +458,22 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     LanuGlobalTheme {
         Scaffold(
             topBar = {
-                TopAppBar(
+                CenterAlignedTopAppBar(
                     title = { LanuBrandLockup(compact = true) },
-                    navigationIcon = { TextButton(onClick = { if (selectedCrmCustomer != null) selectedCustomerId = null else goBack() }, enabled = selectedCrmCustomer != null || backStack.isNotEmpty()) { Text("← Geri") } },
-                    actions = { TextButton(onClick = { goForward() }, enabled = forwardStack.isNotEmpty()) { Text("İleri →") } },
+                    navigationIcon = {
+                        if (selectedCrmCustomer != null || backStack.isNotEmpty()) {
+                            TextButton(
+                                onClick = {
+                                    if (selectedCrmCustomer != null) selectedCustomerId = null else goBack()
+                                },
+                            ) { Text("← Geri") }
+                        }
+                    },
+                    actions = {
+                        if (forwardStack.isNotEmpty()) {
+                            TextButton(onClick = { goForward() }) { Text("İleri →") }
+                        }
+                    },
                 )
             },
             bottomBar = {
@@ -445,6 +504,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         onClick = { selectedCustomerId = null; navigateTo(AppSection.ROUTINE) },
                         icon = { Text("↗") },
                         label = { Text("Rutin") },
+                        modifier = Modifier.testTag("nav_routine"),
                     )
                     NavigationBarItem(
                         selected = section in setOf(
@@ -560,26 +620,37 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Column(Modifier.weight(1f)) {
-                                            Text("Hızlı filtreler", style = MaterialTheme.typography.titleMedium)
+                                            Text("Filtreler", style = MaterialTheme.typography.titleMedium)
                                             Text(
-                                                "81 il destekli. İl / ilçe / mahalle seçimi doğrudan kaynak taramasına uygulanır. " +
-                                                    "Kategori “Tümü” ise sektör sınırlaması olmadan Overture Türkiye işletme dizini, " +
-                                                    "OpenStreetMap ve içe aktarılan resmî sicil kayıtları birlikte kullanılır; mağaza, ofis/şirket, " +
-                                                    "üretici, toptancı, sanayi, konaklama, sağlık, eğitim, otomotiv, finans, inşaat, tarım, " +
-                                                    "lojistik ve diğer işletme aileleri kapsama girer. Telefon/web yalnız kaynakta varsa gösterilir.",
+                                                "81 il • 973 ilçe • çoklu işletme kaynağı",
                                                 style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                         }
-                                        TextButton(
-                                            onClick = {
-                                                invalidateSearch()
-                                                resetFilters()
-                                                results = emptyList()
-                                                selectedBusiness = null
-                                                scanDelta = null
-                                                newBusinessKeys = emptySet()
-                                            },
-                                        ) { Text("Temizle") }
+                                        Row {
+                                            TextButton(onClick = { showFilterDetails = !showFilterDetails }) {
+                                                Text(if (showFilterDetails) "Detayı gizle" else "Kapsam")
+                                            }
+                                            TextButton(
+                                                onClick = {
+                                                    invalidateSearch()
+                                                    resetFilters()
+                                                    results = emptyList()
+                                                    selectedBusiness = null
+                                                    scanDelta = null
+                                                    newBusinessKeys = emptySet()
+                                                },
+                                            ) { Text("Temizle") }
+                                        }
+                                    }
+                                    if (showFilterDetails) {
+                                        Text(
+                                            "İl / ilçe / mahalle doğrudan kaynak taramasına uygulanır. Kategori Tümü iken sektör sınırlaması yapılmaz; " +
+                                                "Overture, OpenStreetMap ve içe aktarılan resmî sicil verileri birlikte değerlendirilir. " +
+                                                "Telefon, web, menü ve çalışma saati yalnız kaynakta mevcutsa gösterilir.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
                                     }
                                     InventoryFilterMenu(
                                         "Kategori",
@@ -634,6 +705,14 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                                     city = requestCity,
                                                     district = requestDistrict,
                                                     neighborhood = requestNeighborhood,
+                                                    districtScopeOverride = if (
+                                                        requestCity == "İstanbul" &&
+                                                        requestDistrict == null
+                                                    ) {
+                                                        selectedCity.districts
+                                                    } else {
+                                                        null
+                                                    },
                                                 )
                                             }
                                         }
@@ -780,7 +859,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         }
                     }
                     AppSection.MAP -> CrmMapScreen(
-                        customers = crmCustomers,
+                        customers = filteredCrmCustomers,
                         radarBusinesses = visibleResults,
                         selectedCity = selectedCity.name,
                         selectedDistrict = selectedDistrict,
@@ -824,7 +903,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             }
                         },
                     )
-                    AppSection.ROUTINE -> RoutineScreen(crmCustomers, selectedCity.name, selectedDistrict)
+                    AppSection.ROUTINE -> RoutineScreen(filteredCrmCustomers, selectedCity.name, selectedDistrict)
                     AppSection.MORE -> LazyColumn(
                         modifier = Modifier
                             .testTag("more_screen")
@@ -890,6 +969,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                     AppSection.MANUAL_POINT -> ManualPointScreen(
                         repository = localCrmRepository,
                         defaultCity = selectedCity.name,
+                        cityLabel = selectedCity.label,
+                        districtOptions = availableDistricts,
                         ownerUserId = activeOwnerUserId,
                     ) { navigateTo(AppSection.ROUTINE) }
                     AppSection.AI_ASSISTANT -> SalesAiScreen(salesAiContext)
