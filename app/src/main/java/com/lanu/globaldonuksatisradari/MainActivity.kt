@@ -705,6 +705,14 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                                     city = requestCity,
                                                     district = requestDistrict,
                                                     neighborhood = requestNeighborhood,
+                                                    districtScopeOverride = if (
+                                                        requestCity == "İstanbul" &&
+                                                        requestDistrict == null
+                                                    ) {
+                                                        selectedCity.districts
+                                                    } else {
+                                                        null
+                                                    },
                                                 )
                                             }
                                         }
