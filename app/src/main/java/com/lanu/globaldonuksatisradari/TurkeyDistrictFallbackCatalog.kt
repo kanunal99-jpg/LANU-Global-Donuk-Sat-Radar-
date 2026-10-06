@@ -98,12 +98,30 @@ object TurkeyDistrictFallbackCatalog {
         "Zonguldak" to listOf("Alaplı", "Çaycuma", "Devrek", "Ereğli", "Gökçebey", "Kilimli", "Kozlu", "Merkez")
     )
 
-    fun districts(province: String): List<String> =
-        BY_PROVINCE.entries.firstOrNull { (name, _) ->
-            name.equals(province.trim(), ignoreCase = true)
+    fun districts(province: String): List<String> {
+        val key = normalizeProvince(province)
+        return BY_PROVINCE.entries.firstOrNull { (name, _) ->
+            normalizeProvince(name) == key
         }?.value.orEmpty()
+    }
 
     fun provinceNames(): Set<String> = BY_PROVINCE.keys
 
     fun totalDistrictCount(): Int = BY_PROVINCE.values.sumOf { it.size }
+
+    private fun normalizeProvince(value: String): String =
+        value.trim()
+            .replace('İ', 'I')
+            .lowercase(java.util.Locale.ROOT)
+            .replace("\\u0307", "")
+            .replace('ı', 'i')
+            .replace('â', 'a')
+            .replace('î', 'i')
+            .replace('û', 'u')
+            .replace('ğ', 'g')
+            .replace('ü', 'u')
+            .replace('ş', 's')
+            .replace('ö', 'o')
+            .replace('ç', 'c')
+            .replace(Regex("[^a-z0-9]+"), "")
 }
