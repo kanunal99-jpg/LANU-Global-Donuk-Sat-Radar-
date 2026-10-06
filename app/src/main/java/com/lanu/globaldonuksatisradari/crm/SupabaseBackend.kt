@@ -371,7 +371,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                         database.activityDao().upsert(
                             CrmActivityEntity(
                                 id = id,
-                                customerId = p.getString("customer_id"),
+                                customerId = resolveMergedCustomerId(database, p.getString("customer_id")),
                                 type = p.getString("type"),
                                 occurredAtEpochMs = parseInstant(p.optString("occurred_at")),
                                 note = p.optString("note").takeIf(String::isNotBlank),
@@ -398,7 +398,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                         database.nextActionDao().upsert(
                             CrmNextActionEntity(
                                 id = id,
-                                customerId = p.getString("customer_id"),
+                                customerId = resolveMergedCustomerId(database, p.getString("customer_id")),
                                 type = p.getString("type"),
                                 dueAtEpochMs = parseInstant(p.optString("due_at")),
                                 note = p.optString("note").takeIf(String::isNotBlank),
@@ -430,7 +430,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                         database.opportunityDao().upsert(
                             CrmOpportunityEntity(
                                 id = id,
-                                customerId = p.getString("customer_id"),
+                                customerId = resolveMergedCustomerId(database, p.getString("customer_id")),
                                 title = p.optString("title"),
                                 status = p.optString("status", CrmOpportunityStatus.OPEN.name),
                                 notes = p.optString("note").takeIf(String::isNotBlank),
@@ -450,7 +450,7 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                     database.stageTransitionDao().insert(
                         CrmStageTransitionEntity(
                             id = p.getString("id"),
-                            customerId = p.getString("customer_id"),
+                            customerId = resolveMergedCustomerId(database, p.getString("customer_id")),
                             fromStage = p.optString("from_stage").takeIf(String::isNotBlank),
                             toStage = p.optString("to_stage"),
                             changedAtEpochMs = parseInstant(p.optString("changed_at")),
@@ -464,6 +464,21 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
         }.getOrElse {
             RemotePullResult.RetryableFailure(it.message ?: "Uzak CRM verisi alınamadı.")
         }
+    }
+
+    private suspend fun resolveMergedCustomerId(
+        database: LanuCrmDatabase,
+        customerId: String,
+    ): String {
+        var currentId = customerId
+        val seen = mutableSetOf<String>()
+        repeat(8) {
+            if (!seen.add(currentId)) return currentId
+            val row = database.customerDao().findById(currentId) ?: return currentId
+            val next = row.mergedIntoCustomerId?.takeIf(String::isNotBlank) ?: return currentId
+            currentId = next
+        }
+        return currentId
     }
 
     private fun fetchAll(table: String, orderColumn: String, session: SupabaseSession): List<JSONObject> {
