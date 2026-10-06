@@ -446,12 +446,34 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
             topBar = {
                 TopAppBar(
                     title = { LanuBrandLockup(compact = true) },
-                    navigationIcon = { TextButton(onClick = { if (selectedCrmCustomer != null) selectedCustomerId = null else goBack() }, enabled = selectedCrmCustomer != null || backStack.isNotEmpty()) { Text("← Geri") } },
-                    actions = { TextButton(onClick = { goForward() }, enabled = forwardStack.isNotEmpty()) { Text("İleri →") } },
+                    navigationIcon = {
+                        if (selectedCrmCustomer != null || backStack.isNotEmpty()) {
+                            TextButton(
+                                onClick = {
+                                    if (selectedCrmCustomer != null) selectedCustomerId = null else goBack()
+                                },
+                            ) {
+                                Text("‹ Geri", maxLines = 1)
+                            }
+                        }
+                    },
+                    actions = {
+                        if (forwardStack.isNotEmpty()) {
+                            TextButton(onClick = { goForward() }) {
+                                Text("İleri ›", maxLines = 1)
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
                 )
             },
             bottomBar = {
-                NavigationBar {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 2.dp,
+                ) {
                     NavigationBarItem(
                         selected = section == AppSection.RADAR && selectedCrmCustomer == null,
                         onClick = { selectedCustomerId = null; navigateTo(AppSection.RADAR) },
@@ -469,7 +491,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                     NavigationBarItem(
                         selected = section == AppSection.CRM && selectedCrmCustomer == null,
                         onClick = { selectedCustomerId = null; navigateTo(AppSection.CRM) },
-                        icon = { Text("CRM") },
+                        icon = { Text("▣") },
                         label = { Text("CRM") },
                         modifier = Modifier.testTag("nav_crm"),
                     )
@@ -503,9 +525,11 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         item {
-                            LanuHeroHeader()
                             Text("Satış & CRM Radarı", style = MaterialTheme.typography.headlineSmall)
-                            Text("Gerçek işletmeleri bulun, kaliteyi kontrol edin ve CRM'e aktarın.", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "Gerçek işletmeleri bulun, filtreleyin ve CRM'e aktarın.",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
                         }
                         item {
                             OutlinedTextField(
@@ -595,12 +619,9 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         Column(Modifier.weight(1f)) {
                                             Text("Hızlı filtreler", style = MaterialTheme.typography.titleMedium)
                                             Text(
-                                                "81 il destekli. İl / ilçe / mahalle seçimi doğrudan kaynak taramasına uygulanır. " +
-                                                    "Kategori “Tümü” ise sektör sınırlaması olmadan Overture Türkiye işletme dizini, " +
-                                                    "OpenStreetMap ve içe aktarılan resmî sicil kayıtları birlikte kullanılır; mağaza, ofis/şirket, " +
-                                                    "üretici, toptancı, sanayi, konaklama, sağlık, eğitim, otomotiv, finans, inşaat, tarım, " +
-                                                    "lojistik ve diğer işletme aileleri kapsama girer. Telefon/web yalnız kaynakta varsa gösterilir.",
+                                                "81 il • çoklu kaynak • sektör seçimi isteğe bağlı",
                                                 style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                         }
                                         TextButton(
