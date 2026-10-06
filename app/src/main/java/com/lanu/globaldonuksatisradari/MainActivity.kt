@@ -452,6 +452,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 onClick = {
                                     if (selectedCrmCustomer != null) selectedCustomerId = null else goBack()
                                 },
+                                modifier = Modifier.testTag("top_back"),
                             ) {
                                 Text("‹ Geri", maxLines = 1)
                             }
@@ -459,7 +460,10 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                     },
                     actions = {
                         if (forwardStack.isNotEmpty()) {
-                            TextButton(onClick = { goForward() }) {
+                            TextButton(
+                                onClick = { goForward() },
+                                modifier = Modifier.testTag("top_forward"),
+                            ) {
                                 Text("İleri ›", maxLines = 1)
                             }
                         }
