@@ -104,6 +104,11 @@ internal fun scopeCrmCustomersForCitySelection(
 ): List<com.lanu.globaldonuksatisradari.crm.CrmCustomer> {
     val cityScoped = customers.filter { it.city.equals(city.name, ignoreCase = true) }
     if (selectedDistrict != "Tümü") {
+        if (city.name == "İstanbul" &&
+            city.districts.none { it.equals(selectedDistrict, ignoreCase = true) }
+        ) {
+            return emptyList()
+        }
         return cityScoped.filter { it.district.equals(selectedDistrict, ignoreCase = true) }
     }
     if (city.name == "İstanbul") {
@@ -124,6 +129,11 @@ internal fun businessMatchesCitySelection(
 ): Boolean {
     if (!business.city.equals(city.name, ignoreCase = true)) return false
     if (selectedDistrict != "Tümü") {
+        if (city.name == "İstanbul" &&
+            city.districts.none { it.equals(selectedDistrict, ignoreCase = true) }
+        ) {
+            return false
+        }
         return business.district.equals(selectedDistrict, ignoreCase = true)
     }
     if (city.name != "İstanbul") return true
@@ -952,7 +962,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         repository = localCrmRepository,
                         defaultCity = selectedCity.name,
                         cityLabel = selectedCity.label,
-                        districtOptions = selectedCity.districts,
+                        districtOptions = availableDistricts,
                         ownerUserId = activeOwnerUserId,
                     ) { navigateTo(AppSection.ROUTINE) }
                     AppSection.AI_ASSISTANT -> SalesAiScreen(salesAiContext)
