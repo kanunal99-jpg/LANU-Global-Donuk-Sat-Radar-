@@ -44,4 +44,24 @@ class CrmRoutePlannerTest {
         val a = customer("a", "A", 200.0, 29.0200)
         assertTrue(CrmRoutePlanner.plan(listOf(a)).isEmpty())
     }
+
+    @Test
+    fun largeCustomerSetUsesScalableFallbackAndKeepsEveryPoint() {
+        val customers = (0 until 1200).map { index ->
+            customer(
+                id = "large-$index",
+                name = "Nokta $index",
+                lat = 40.80 + (index % 40) * 0.003,
+                lon = 28.70 + (index / 40) * 0.003,
+            )
+        }
+
+        assertTrue(CrmRoutePlanner.usesScalableFallback(customers.size))
+        val route = CrmRoutePlanner.plan(customers, startCustomerId = "large-777")
+
+        assertEquals(customers.size, route.size)
+        assertEquals(customers.size, route.map { it.customer.id }.toSet().size)
+        assertEquals("large-777", route.first().customer.id)
+        assertTrue(route.last().cumulativeDistanceKm > 0.0)
+    }
 }

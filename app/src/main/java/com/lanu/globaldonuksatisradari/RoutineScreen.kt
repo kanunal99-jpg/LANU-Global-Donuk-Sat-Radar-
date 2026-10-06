@@ -26,12 +26,20 @@ import com.lanu.globaldonuksatisradari.crm.MonthlyRoutinePlan
 import com.lanu.globaldonuksatisradari.crm.MonthlyRoutinePlanner
 import com.lanu.globaldonuksatisradari.crm.RoutineDayPlan
 import com.lanu.globaldonuksatisradari.crm.RouteStop
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+private data class RoutineComputation(
+    val route: List<RouteStop>,
+    val automaticPlan: MonthlyRoutinePlan,
+)
 
 @Composable
 fun RoutineScreen(
     customers: List<CrmCustomer>,
     selectedCity: String,
     selectedDistrict: String,
+    displayRegionLabel: String = selectedCity,
 ) {
     var startId by remember(customers) { mutableStateOf<String?>(null) }
     var manualIntervalInput by remember { mutableStateOf("") }
@@ -49,29 +57,51 @@ fun RoutineScreen(
                 longitude in -180.0..180.0
         }
     }
-    val route = remember(routable, startId) {
-        CrmRoutePlanner.plan(routable, startId)
+    var automaticComputation by remember(routable, startId) {
+        mutableStateOf<RoutineComputation?>(null)
     }
-    val automaticPlan = remember(routable, startId) {
-        MonthlyRoutinePlanner.plan(routable, startId)
+    LaunchedEffect(routable, startId) {
+        automaticComputation = withContext(Dispatchers.Default) {
+            RoutineComputation(
+                route = CrmRoutePlanner.plan(routable, startId),
+                automaticPlan = MonthlyRoutinePlanner.plan(routable, startId),
+            )
+        }
     }
+    val route = automaticComputation?.route.orEmpty()
+    val automaticPlan = automaticComputation?.automaticPlan
+
     val manualIntervalDays = manualIntervalInput.trim().toIntOrNull()
         ?.takeIf { it in 1..365 }
-    val manualPlan = remember(routable, startId, manualIntervalDays) {
-        manualIntervalDays?.let { interval ->
-            MonthlyRoutinePlanner.plan(
-                customers = routable,
-                startCustomerId = startId,
-                manualIntervalDays = interval,
-            )
+    var manualPlan by remember(routable, startId, manualIntervalDays) {
+        mutableStateOf<MonthlyRoutinePlan?>(null)
+    }
+    LaunchedEffect(routable, startId, manualIntervalDays) {
+        manualPlan = if (manualIntervalDays == null) {
+            null
+        } else {
+            withContext(Dispatchers.Default) {
+                MonthlyRoutinePlanner.plan(
+                    customers = routable,
+                    startCustomerId = startId,
+                    manualIntervalDays = manualIntervalDays,
+                )
+            }
         }
     }
 
     val missingCoordinates = scopedCustomers.size - routable.size
-    val startName = route.firstOrNull()?.customer?.businessName ?: "Otomatik başlangıç"
+    val planning = automaticComputation == null && routable.isNotEmpty()
+    val startName = when {
+        planning -> "Plan hazırlanıyor…"
+        route.isNotEmpty() -> route.first().customer.businessName
+        else -> "Otomatik başlangıç"
+    }
 
     LazyColumn(
-        modifier = Modifier.padding(16.dp),
+        modifier = Modifier
+            .testTag("routine_screen")
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {
@@ -87,7 +117,7 @@ fun RoutineScreen(
                     modifier = Modifier.padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Text("Alan: " + selectedCity + " / " + selectedDistrict)
+                    Text("Alan: " + displayRegionLabel + " / " + selectedDistrict)
                     Text(
                         "Rota noktası: " + routable.size +
                             " • Eksik/geçersiz koordinat: " + missingCoordinates,
@@ -106,12 +136,31 @@ fun RoutineScreen(
         }
 
         item {
-            RoutinePlanSummaryCard(
-                title = "Otomatik Aylık Ziyaret Planı",
-                plan = automaticPlan,
-                detail = "Aktif müşteri/Sipariş: 7 gün • Teklif/Numune/Görüşme/Ziyaret: 14 gün • Aday: 28 gün • Kayıp: otomatik plan dışında",
-                exportLabel = "Otomatik",
-            )
+            if (automaticPlan == null) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("routine_planning"),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text("Rutin hazırlanıyor", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Büyük CRM listesi arka planda hesaplanıyor; uygulama ve sekmeler kullanılmaya devam edebilir.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            } else {
+                RoutinePlanSummaryCard(
+                    title = "Otomatik Aylık Ziyaret Planı",
+                    plan = automaticPlan,
+                    detail = "Aktif müşteri/Sipariş: 7 gün • Teklif/Numune/Görüşme/Ziyaret: 14 gün • Aday: 28 gün • Kayıp: otomatik plan dışında",
+                    exportLabel = "Otomatik",
+                )
+            }
         }
 
         item {
@@ -160,11 +209,13 @@ fun RoutineScreen(
         item {
             Text("Otomatik plan • 4 haftalık dağılım", style = MaterialTheme.typography.titleMedium)
         }
-        items((1..MonthlyRoutinePlanner.WEEKS).toList(), key = { "auto-week-" + it }) { week ->
-            WeekPlanCard(
-                week = week,
-                days = automaticPlan.days.filter { it.weekNumber == week },
-            )
+        automaticPlan?.let { plan ->
+            items((1..MonthlyRoutinePlanner.WEEKS).toList(), key = { "auto-week-" + it }) { week ->
+                WeekPlanCard(
+                    week = week,
+                    days = plan.days.filter { it.weekNumber == week },
+                )
+            }
         }
 
         manualPlan?.let { plan ->

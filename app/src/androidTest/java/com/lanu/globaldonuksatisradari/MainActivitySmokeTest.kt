@@ -227,16 +227,17 @@ class MainActivitySmokeTest {
         waitForTag("nav_map").assertHasClickAction().performClick()
         waitForText("CRM Haritası").assertIsDisplayed()
 
-        waitForText("← Geri").performClick()
+        waitForTag("top_back").assertHasClickAction().performClick()
         waitForText("Satış & CRM Radarı").assertExists()
 
-        waitForText("İleri →").performClick()
+        waitForTag("top_forward").assertHasClickAction().performClick()
         waitForText("CRM Haritası").assertExists()
 
         waitForTag("nav_crm").assertHasClickAction().performClick()
         waitForTag("crm_today_screen").assertIsDisplayed()
 
         waitForText("Rutin").performClick()
+        waitForTag("routine_screen").assertIsDisplayed()
         waitForText("Yakınlık Bazlı Rutin").assertIsDisplayed()
     }
 

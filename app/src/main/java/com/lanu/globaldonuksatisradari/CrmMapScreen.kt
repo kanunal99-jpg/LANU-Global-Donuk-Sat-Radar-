@@ -44,6 +44,7 @@ fun CrmMapScreen(
     radarBusinesses: List<VerifiedBusiness>,
     selectedCity: String,
     selectedDistrict: String,
+    displayRegionLabel: String = selectedCity,
     onOpenCustomer: (String) -> Unit,
 ) {
     var layer by remember { mutableStateOf(MapLayer.CRM) }
@@ -67,7 +68,9 @@ fun CrmMapScreen(
     }
     val missingCoordinates = stageScopedCustomers.size - routableCustomers.size
     val crmMapBusinesses = remember(routableCustomers) {
-        routableCustomers.map(::crmCustomerAsMapBusiness)
+        routableCustomers
+            .take(MAX_MAP_POINTS)
+            .map(::crmCustomerAsMapBusiness)
     }
 
     val scopedRadar = remember(radarBusinesses, selectedCity, selectedDistrict) {
@@ -82,8 +85,8 @@ fun CrmMapScreen(
     val mapBusinesses = remember(layer, crmMapBusinesses, scopedRadar) {
         when (layer) {
             MapLayer.CRM -> crmMapBusinesses
-            MapLayer.RADAR -> scopedRadar
-            MapLayer.BOTH -> crmMapBusinesses + scopedRadar
+            MapLayer.RADAR -> scopedRadar.take(MAX_MAP_POINTS)
+            MapLayer.BOTH -> (crmMapBusinesses + scopedRadar).take(MAX_MAP_POINTS)
         }
     }
 
@@ -108,7 +111,7 @@ fun CrmMapScreen(
                     Modifier.padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Text("$selectedCity / $selectedDistrict", style = MaterialTheme.typography.titleMedium)
+                    Text("$displayRegionLabel / $selectedDistrict", style = MaterialTheme.typography.titleMedium)
                     Text(
                         "${stageScopedCustomers.size} CRM kaydı • ${routableCustomers.size} haritalanabilir • $missingCoordinates koordinatsız",
                         modifier = Modifier.testTag("crm_map_count"),

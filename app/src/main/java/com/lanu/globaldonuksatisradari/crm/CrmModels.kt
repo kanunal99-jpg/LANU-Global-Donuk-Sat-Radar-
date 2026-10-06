@@ -203,20 +203,43 @@ data class RouteStop(
 )
 
 object CrmRoutePlanner {
+    const val EXACT_NEAREST_NEIGHBOR_LIMIT = 400
+
     fun plan(
         customers: List<CrmCustomer>,
         startCustomerId: String? = null,
     ): List<RouteStop> {
-        val candidates = customers.filter {
-            it.latitude != null && it.longitude != null &&
-                it.latitude in -90.0..90.0 && it.longitude in -180.0..180.0
-        }
+        val candidates = customers.filter(::isRoutable)
         if (candidates.isEmpty()) return emptyList()
+
+        val ordered = if (candidates.size <= EXACT_NEAREST_NEIGHBOR_LIMIT) {
+            exactNearestNeighborOrder(candidates, startCustomerId)
+        } else {
+            scalableSweepOrder(candidates, startCustomerId)
+        }
+        return toRouteStops(ordered)
+    }
+
+    fun usesScalableFallback(customerCount: Int): Boolean =
+        customerCount > EXACT_NEAREST_NEIGHBOR_LIMIT
+
+    private fun exactNearestNeighborOrder(
+        candidates: List<CrmCustomer>,
+        startCustomerId: String?,
+    ): List<CrmCustomer> {
         val remaining = candidates.toMutableList()
-        val ordered = mutableListOf<CrmCustomer>()
+        val ordered = ArrayList<CrmCustomer>(remaining.size)
         var current = startCustomerId?.let { id -> remaining.firstOrNull { it.id == id } }
-            ?: remaining.minWithOrNull(compareBy<CrmCustomer>({ it.latitude }, { it.longitude }, { it.businessName }))
+            ?: remaining.minWithOrNull(
+                compareBy<CrmCustomer>(
+                    { it.latitude },
+                    { it.longitude },
+                    { it.businessName },
+                    { it.id },
+                ),
+            )
             ?: return emptyList()
+
         ordered += current
         remaining.remove(current)
 
@@ -233,12 +256,62 @@ object CrmRoutePlanner {
             remaining.remove(next)
             current = next
         }
+        return ordered
+    }
 
+    /**
+     * Large-list fallback: deterministic latitude bands with alternating longitude direction.
+     * Complexity is O(n log n), so thousands of CRM points do not block screen navigation.
+     */
+    private fun scalableSweepOrder(
+        candidates: List<CrmCustomer>,
+        startCustomerId: String?,
+    ): List<CrmCustomer> {
+        val minLat = candidates.minOf { it.latitude!! }
+        val maxLat = candidates.maxOf { it.latitude!! }
+        val bandCount = kotlin.math.sqrt(candidates.size.toDouble())
+            .toInt()
+            .coerceIn(8, 64)
+        val span = (maxLat - minLat).coerceAtLeast(0.000001)
+
+        fun band(customer: CrmCustomer): Int =
+            (((customer.latitude!! - minLat) / span) * bandCount)
+                .toInt()
+                .coerceIn(0, bandCount - 1)
+
+        val ordered = candidates.sortedWith { a, b ->
+            val aBand = band(a)
+            val bBand = band(b)
+            if (aBand != bBand) {
+                aBand.compareTo(bBand)
+            } else {
+                val lonCompare = a.longitude!!.compareTo(b.longitude!!)
+                val directional = if (aBand % 2 == 0) lonCompare else -lonCompare
+                if (directional != 0) directional else a.id.compareTo(b.id)
+            }
+        }.toMutableList()
+
+        val startIndex = startCustomerId
+            ?.let { id -> ordered.indexOfFirst { it.id == id } }
+            ?.takeIf { it >= 0 }
+            ?: 0
+        if (startIndex > 0) {
+            val rotated = ArrayList<CrmCustomer>(ordered.size)
+            rotated.addAll(ordered.subList(startIndex, ordered.size))
+            rotated.addAll(ordered.subList(0, startIndex))
+            return rotated
+        }
+        return ordered
+    }
+
+    private fun toRouteStops(ordered: List<CrmCustomer>): List<RouteStop> {
         var total = 0.0
         var totalMinutes = 0
         return ordered.mapIndexed { index, customer ->
             val previous = ordered.getOrNull(index - 1)
-            val segment = if (previous == null) 0.0 else {
+            val segment = if (previous == null) {
+                0.0
+            } else {
                 distanceKm(
                     previous.latitude!!,
                     previous.longitude!!,
@@ -259,6 +332,12 @@ object CrmRoutePlanner {
             )
         }
     }
+
+    private fun isRoutable(customer: CrmCustomer): Boolean =
+        customer.latitude != null &&
+            customer.longitude != null &&
+            customer.latitude in -90.0..90.0 &&
+            customer.longitude in -180.0..180.0
 
     fun distanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
         val earthRadiusKm = 6371.0088

@@ -1,5 +1,7 @@
 package com.lanu.globaldonuksatisradari.data
 
+import com.lanu.globaldonuksatisradari.TurkeyDistrictFallback
+
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.CancellationException
@@ -13,6 +15,42 @@ import java.net.URLEncoder
 import java.util.Locale
 
 /** Discovers Turkish district (admin_level=6) names from OSM with real endpoint fallback. */
+internal fun selectVerifiedDistrictCatalog(
+    candidate: List<String>,
+    fallback: List<String>,
+): List<String> {
+    val normalizedFallback = fallback
+        .map(BusinessDeduplication::normalizeForComparison)
+        .filter(String::isNotBlank)
+        .toSet()
+    if (normalizedFallback.isEmpty()) {
+        return candidate
+            .filter(String::isNotBlank)
+            .distinctBy(BusinessDeduplication::normalizeForComparison)
+            .sortedWith(String.CASE_INSENSITIVE_ORDER)
+    }
+
+    val normalizedCandidate = candidate
+        .map(BusinessDeduplication::normalizeForComparison)
+        .filter(String::isNotBlank)
+        .toSet()
+
+    return if (
+        normalizedCandidate.size == normalizedFallback.size &&
+        normalizedCandidate == normalizedFallback
+    ) {
+        candidate
+            .filter(String::isNotBlank)
+            .distinctBy(BusinessDeduplication::normalizeForComparison)
+            .sortedWith(String.CASE_INSENSITIVE_ORDER)
+    } else {
+        fallback
+            .filter(String::isNotBlank)
+            .distinctBy(BusinessDeduplication::normalizeForComparison)
+            .sortedWith(String.CASE_INSENSITIVE_ORDER)
+    }
+}
+
 class DistrictCatalogRepository(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences("district_catalog_cache", Context.MODE_PRIVATE)
     private val primary = TurkiyeAdministrativeApi()
@@ -23,7 +61,8 @@ class DistrictCatalogRepository(context: Context) {
 
     suspend fun getDistricts(city: String, fallback: List<String> = emptyList()): List<String> = withContext(Dispatchers.IO) {
         if (city.isBlank()) return@withContext fallback
-        val key = "districts:v2:" + BusinessDeduplication.normalizeForComparison(city)
+        val completeFallback = fallback.ifEmpty { TurkeyDistrictFallback.forCity(city) }
+        val key = "districts:v3:" + BusinessDeduplication.normalizeForComparison(city)
         readCache(key)?.takeIf { it.isNotEmpty() }?.let { return@withContext it }
 
         try {
@@ -32,8 +71,20 @@ class DistrictCatalogRepository(context: Context) {
                 .distinctBy(BusinessDeduplication::normalizeForComparison)
                 .sortedWith(String.CASE_INSENSITIVE_ORDER)
             if (primaryResult.isNotEmpty()) {
-                writeCache(key, primaryResult)
-                return@withContext primaryResult
+                val accepted = selectVerifiedDistrictCatalog(primaryResult, completeFallback)
+                if (completeFallback.isNotEmpty() && accepted !== primaryResult &&
+                    accepted.map(BusinessDeduplication::normalizeForComparison).toSet() !=
+                    primaryResult.map(BusinessDeduplication::normalizeForComparison).toSet()
+                ) {
+                    Log.w(
+                        "LanuLocation",
+                        "TurkiyeAPI ilçe listesi kanonik fallback ile eşleşmedi: " + city +
+                            " (" + primaryResult.size + "/" + completeFallback.size +
+                            "); doğrulanmış yerel liste kullanılacak.",
+                    )
+                }
+                writeCache(key, accepted)
+                return@withContext accepted
             }
         } catch (error: CancellationException) {
             throw error
@@ -51,12 +102,13 @@ class DistrictCatalogRepository(context: Context) {
                 emptyList()
             }
             if (result.isNotEmpty()) {
-                writeCache(key, result)
-                return@withContext result
+                val accepted = selectVerifiedDistrictCatalog(result, completeFallback)
+                writeCache(key, accepted)
+                return@withContext accepted
             }
         }
 
-        return@withContext fallback
+        return@withContext completeFallback
             .distinctBy(BusinessDeduplication::normalizeForComparison)
             .sortedWith(String.CASE_INSENSITIVE_ORDER)
     }

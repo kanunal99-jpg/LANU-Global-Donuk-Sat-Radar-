@@ -79,13 +79,13 @@ fun LanuBrandLockup(compact: Boolean = false) {
                     letterSpacing = 1.2.sp,
                 )
             }
-            Text(
-                "Donuk Gıda",
-                fontSize = if (compact) 10.sp else 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = LanuNavy,
-            )
             if (!compact) {
+                Text(
+                    "Donuk Gıda",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = LanuNavy,
+                )
                 Spacer(Modifier.height(2.dp))
                 Text(
                     "SALES • CRM • RADAR",

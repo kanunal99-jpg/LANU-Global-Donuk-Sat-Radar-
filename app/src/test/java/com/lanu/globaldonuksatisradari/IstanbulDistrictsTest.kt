@@ -10,6 +10,8 @@ class IstanbulDistrictsTest {
     fun containsExactly39UniqueDistrictsAndSeparatesSides() {
         assertEquals(39, IstanbulDistricts.ALL.size)
         assertEquals(39, IstanbulDistricts.ALL.distinct().size)
+        assertEquals(14, IstanbulDistricts.ANATOLIAN.size)
+        assertEquals(25, IstanbulDistricts.EUROPEAN.size)
         assertTrue(IstanbulDistricts.ANATOLIAN.contains("Kadıköy"))
         assertTrue(IstanbulDistricts.ANATOLIAN.contains("Pendik"))
         assertTrue(IstanbulDistricts.EUROPEAN.contains("Şişli"))
