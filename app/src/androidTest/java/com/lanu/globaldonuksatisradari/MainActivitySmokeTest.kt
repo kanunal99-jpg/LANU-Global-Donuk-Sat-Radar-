@@ -4,6 +4,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasTestTag
@@ -238,6 +239,110 @@ class MainActivitySmokeTest {
 
         waitForText("Rutin").performClick()
         waitForText("Yakınlık Bazlı Rutin").assertIsDisplayed()
+    }
+
+    @Test(timeout = 60_000)
+    fun istanbulSideSelectors_exposeOnlyTheirOwnAcceptanceDistricts() {
+        val prefs = composeRule.activity.getSharedPreferences(
+            "lanu_ui_state",
+            android.content.Context.MODE_PRIVATE,
+        )
+
+        prefs.edit()
+            .putString("selected_city", "İstanbul Avrupa")
+            .putString("selected_district", "Tümü")
+            .apply()
+        composeRule.activityRule.scenario.recreate()
+        waitForTag("city_filter").assertIsDisplayed()
+        waitForText("İstanbul Avrupa").assertIsDisplayed()
+        waitForTag("district_filter").assertHasClickAction().performClick()
+        waitForText("Şişli").assertExists()
+        waitForText("Bakırköy").assertExists()
+        composeRule.onNodeWithText("Kadıköy", useUnmergedTree = true).assertDoesNotExist()
+        waitForText("Şişli").performClick()
+        waitForText("Şişli").assertIsDisplayed()
+
+        prefs.edit()
+            .putString("selected_city", "İstanbul Anadolu")
+            .putString("selected_district", "Tümü")
+            .apply()
+        composeRule.activityRule.scenario.recreate()
+        waitForTag("city_filter").assertIsDisplayed()
+        waitForText("İstanbul Anadolu").assertIsDisplayed()
+        waitForTag("district_filter").assertHasClickAction().performClick()
+        waitForText("Kadıköy").assertExists()
+        waitForText("Pendik").assertExists()
+        composeRule.onNodeWithText("Şişli", useUnmergedTree = true).assertDoesNotExist()
+        waitForText("Kadıköy").performClick()
+        waitForText("Kadıköy").assertIsDisplayed()
+        waitForTag("neighborhood_filter").assertIsDisplayed()
+    }
+
+    @Test(timeout = 60_000)
+    fun duplicateReview_mergesSelectedRecordFromUi() {
+        var targetId = ""
+        var sourceId = ""
+        runBlocking {
+            val context = composeRule.activity
+            val repository = LocalCrmRepository(LanuCrmDatabase.getInstance(context))
+            val suffix = System.nanoTime().toString()
+            targetId = repository.addManualCustomerPoint(
+                businessName = "UI Mükerrer Market $suffix",
+                address = "UI Hedef $suffix",
+                city = "İstanbul",
+                district = "Kadıköy",
+                neighborhood = "Caferağa",
+                latitude = 40.9870,
+                longitude = 29.0280,
+                phone = "05321112233",
+            ).id
+            sourceId = repository.addManualCustomerPoint(
+                businessName = "UI MÜKERRER MARKET $suffix",
+                address = "UI Kaynak $suffix",
+                city = "İstanbul",
+                district = "Kadıköy",
+                neighborhood = "Caferağa",
+                latitude = 40.9871,
+                longitude = 29.0281,
+                phone = "+90 532 111 22 33",
+            ).id
+        }
+
+        composeRule.activity.getSharedPreferences(
+            "lanu_ui_state",
+            android.content.Context.MODE_PRIVATE,
+        ).edit()
+            .putString("selected_city", "İstanbul Anadolu")
+            .putString("selected_district", "Kadıköy")
+            .apply()
+        composeRule.activityRule.scenario.recreate()
+
+        waitForTag("nav_crm").assertHasClickAction().performClick()
+        waitForTag("crm_tab_duplicates").assertHasClickAction().performClick()
+        waitForTag("crm_duplicate_screen").assertIsDisplayed()
+        waitForTag("crm_merge_keep_" + targetId)
+            .performScrollTo()
+            .assertHasClickAction()
+            .performClick()
+        waitForTag("crm_duplicate_confirm")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
+
+        composeRule.waitUntil(30_000) {
+            runBlocking {
+                LocalCrmRepository(LanuCrmDatabase.getInstance(composeRule.activity))
+                    .observeCustomers("İstanbul")
+                    .first()
+                    .none { it.id == sourceId }
+            }
+        }
+        assertTrue(
+            LocalCrmRepository(LanuCrmDatabase.getInstance(composeRule.activity))
+                .observeCustomers("İstanbul")
+                .first()
+                .any { it.id == targetId },
+        )
     }
 
     @Test(timeout = 60_000)
