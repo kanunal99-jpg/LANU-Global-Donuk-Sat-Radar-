@@ -445,6 +445,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         onClick = { selectedCustomerId = null; navigateTo(AppSection.ROUTINE) },
                         icon = { Text("↗") },
                         label = { Text("Rutin") },
+                        modifier = Modifier.testTag("nav_routine"),
                     )
                     NavigationBarItem(
                         selected = section in setOf(
