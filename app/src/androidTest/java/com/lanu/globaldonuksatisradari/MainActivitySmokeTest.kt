@@ -18,6 +18,7 @@ import androidx.compose.ui.test.click
 import androidx.work.WorkManager
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.lanu.globaldonuksatisradari.crm.LanuCrmDatabase
+import com.lanu.globaldonuksatisradari.crm.CrmReminderRecoveryScheduler
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import com.lanu.globaldonuksatisradari.data.DataSourceDescriptor
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
@@ -33,6 +34,26 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 @OptIn(ExperimentalTestApi::class)
 class MainActivitySmokeTest {
+    @Test(timeout = 60_000)
+    fun launch_schedulesCrmReminderRecovery() {
+        val context = composeRule.activity
+        composeRule.waitUntil(30_000) {
+            runCatching {
+                WorkManager.getInstance(context)
+                    .getWorkInfosForUniqueWork(CrmReminderRecoveryScheduler.uniqueWorkName())
+                    .get()
+                    .isNotEmpty()
+            }.getOrDefault(false)
+        }
+        assertTrue(
+            WorkManager.getInstance(context)
+                .getWorkInfosForUniqueWork(CrmReminderRecoveryScheduler.uniqueWorkName())
+                .get()
+                .isNotEmpty(),
+        )
+    }
+
+
 
     private fun waitForText(text: String, timeoutMs: Long = 45_000): SemanticsNodeInteraction {
         val matcher = hasText(text, substring = false)
@@ -258,6 +279,7 @@ class MainActivitySmokeTest {
         composeRule.activityRule.scenario.recreate()
         waitForTag("nav_map").assertHasClickAction().performClick()
         waitForTag("crm_map_screen").assertIsDisplayed()
+        waitForTag("business_map_container").performScrollTo().assertIsDisplayed()
         waitForText("Harita Smoke Nokta").assertExists()
         waitForTag("crm_map_open_" + customerId)
             .performScrollTo()
