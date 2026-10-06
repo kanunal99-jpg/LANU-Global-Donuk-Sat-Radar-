@@ -39,6 +39,7 @@ fun RoutineScreen(
     customers: List<CrmCustomer>,
     selectedCity: String,
     selectedDistrict: String,
+    displayRegionLabel: String = selectedCity,
 ) {
     var startId by remember(customers) { mutableStateOf<String?>(null) }
     var manualIntervalInput by remember { mutableStateOf("") }
@@ -116,7 +117,7 @@ fun RoutineScreen(
                     modifier = Modifier.padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Text("Alan: " + selectedCity + " / " + selectedDistrict)
+                    Text("Alan: " + displayRegionLabel + " / " + selectedDistrict)
                     Text(
                         "Rota noktası: " + routable.size +
                             " • Eksik/geçersiz koordinat: " + missingCoordinates,
