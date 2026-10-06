@@ -78,29 +78,31 @@ class CrmReminderRecoveryWorker(
         val activeOwner = SupabaseAuthClient(applicationContext).session.value?.userId
         val due = database.nextActionDao().due(
             nowEpochMs = System.currentTimeMillis(),
-            limit = MAX_ACTIONS_PER_SCAN,
         )
+        var deliveredThisRun = 0
 
-        due.forEach { action ->
-            val customer = database.customerDao().findById(action.customerId) ?: return@forEach
-            if (!customer.mergedIntoCustomerId.isNullOrBlank()) return@forEach
+        for (action in due) {
+            if (deliveredThisRun >= MAX_ACTIONS_PER_SCAN) break
+            val customer = database.customerDao().findById(action.customerId) ?: continue
+            if (!customer.mergedIntoCustomerId.isNullOrBlank()) continue
 
             val ownerMatches = if (activeOwner.isNullOrBlank()) {
                 customer.ownerUserId.isNullOrBlank()
             } else {
                 customer.ownerUserId == activeOwner
             }
-            if (!ownerMatches) return@forEach
+            if (!ownerMatches) continue
 
             val type = runCatching { CrmNextActionType.valueOf(action.type) }
                 .getOrDefault(CrmNextActionType.NOTE)
-            CrmReminderNotifier.notifyIfNeeded(
+            val notified = CrmReminderNotifier.notifyIfNeeded(
                 context = applicationContext,
                 actionId = action.id,
                 customerName = customer.businessName,
                 actionLabel = CrmReminderNotifier.label(type),
                 dueAtEpochMs = action.dueAtEpochMs,
             )
+            if (notified) deliveredThisRun += 1
         }
         return Result.success()
     }
