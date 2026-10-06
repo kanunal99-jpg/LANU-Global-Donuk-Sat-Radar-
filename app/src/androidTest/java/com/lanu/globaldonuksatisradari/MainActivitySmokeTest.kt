@@ -437,6 +437,64 @@ class MainActivitySmokeTest {
     }
 
     @Test(timeout = 60_000)
+    fun crmTags_saveFromDetailAndPersistAcrossRoomFlow() {
+        var customerId = ""
+        var businessSourceId = ""
+        runBlocking {
+            val context = composeRule.activity
+            val repository = LocalCrmRepository(LanuCrmDatabase.getInstance(context))
+            val customer = repository.addManualCustomerPoint(
+                businessName = "Etiket Smoke Nokta " + System.nanoTime(),
+                address = "Etiket Test Adres",
+                city = "İstanbul",
+                district = "Kadıköy",
+                neighborhood = "Caferağa",
+                latitude = 40.991,
+                longitude = 29.031,
+            )
+            customerId = customer.id
+            businessSourceId = customer.businessSourceId
+        }
+
+        composeRule.activity.getSharedPreferences(
+            "lanu_ui_state",
+            android.content.Context.MODE_PRIVATE,
+        ).edit()
+            .putString("selected_city", "İstanbul Anadolu")
+            .putString("selected_district", "Kadıköy")
+            .apply()
+        composeRule.activityRule.scenario.recreate()
+
+        waitForTag("nav_crm").assertHasClickAction().performClick()
+        waitForTag("crm_tab_customers").assertHasClickAction().performClick()
+        waitForTag("crm_open_" + businessSourceId)
+            .performScrollTo()
+            .assertHasClickAction()
+            .performClick()
+        waitForTag("crm_tags_input")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performTextInput("Sıcak Lead, Otel")
+        waitForTag("crm_tags_save")
+            .assertHasClickAction()
+            .performClick()
+
+        composeRule.waitUntil(30_000) {
+            runBlocking {
+                LocalCrmRepository(LanuCrmDatabase.getInstance(composeRule.activity))
+                    .observeCustomers("İstanbul")
+                    .first()
+                    .firstOrNull { it.id == customerId }
+                    ?.tags
+                    ?.let { tags ->
+                        tags.any { it.equals("Sıcak Lead", ignoreCase = true) } &&
+                            tags.any { it.equals("Otel", ignoreCase = true) }
+                    } == true
+            }
+        }
+    }
+
+    @Test(timeout = 60_000)
     fun crmExcelActions_areAvailableForPersistedPoints() {
         runBlocking {
             val context = composeRule.activity
