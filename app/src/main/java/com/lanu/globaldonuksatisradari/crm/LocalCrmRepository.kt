@@ -191,7 +191,12 @@ class LocalCrmRepository(
 
             val movedActivities = database.activityDao().reassignCustomer(source.id, target.id, syncState)
             val movedNextActions = database.nextActionDao().reassignCustomer(source.id, target.id, syncState)
-            val movedOpportunities = database.opportunityDao().reassignCustomer(source.id, target.id, syncState)
+            val movedOpportunities = database.opportunityDao().reassignCustomer(
+                source.id,
+                target.id,
+                timestamp,
+                syncState,
+            )
             database.stageTransitionDao().reassignCustomer(source.id, target.id)
             val movedContacts = database.contactDao().reassignCustomer(source.id, target.id, timestamp, syncState)
             val movedQuotes = database.quoteDao().reassignCustomer(source.id, target.id, timestamp, syncState)
