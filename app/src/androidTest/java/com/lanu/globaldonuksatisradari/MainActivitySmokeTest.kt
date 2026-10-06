@@ -241,6 +241,110 @@ class MainActivitySmokeTest {
     }
 
     @Test(timeout = 60_000)
+    fun istanbulSideSelectors_exposeOnlyTheirOwnAcceptanceDistricts() {
+        val prefs = composeRule.activity.getSharedPreferences(
+            "lanu_ui_state",
+            android.content.Context.MODE_PRIVATE,
+        )
+
+        prefs.edit()
+            .putString("selected_city", "İstanbul Avrupa")
+            .putString("selected_district", "Tümü")
+            .apply()
+        composeRule.activityRule.scenario.recreate()
+        waitForTag("city_filter").assertIsDisplayed()
+        waitForText("İstanbul Avrupa").assertIsDisplayed()
+        waitForTag("district_filter").assertHasClickAction().performClick()
+        waitForText("Şişli").assertExists()
+        waitForText("Bakırköy").assertExists()
+        waitForText("Şişli").performClick()
+        waitForText("Şişli").assertIsDisplayed()
+
+        prefs.edit()
+            .putString("selected_city", "İstanbul Anadolu")
+            .putString("selected_district", "Tümü")
+            .apply()
+        composeRule.activityRule.scenario.recreate()
+        waitForTag("city_filter").assertIsDisplayed()
+        waitForText("İstanbul Anadolu").assertIsDisplayed()
+        waitForTag("district_filter").assertHasClickAction().performClick()
+        waitForText("Kadıköy").assertExists()
+        waitForText("Pendik").assertExists()
+        waitForText("Kadıköy").performClick()
+        waitForText("Kadıköy").assertIsDisplayed()
+        waitForTag("neighborhood_filter").assertIsDisplayed()
+    }
+
+    @Test(timeout = 60_000)
+    fun duplicateReview_mergesSelectedRecordFromUi() {
+        var targetId = ""
+        var sourceId = ""
+        runBlocking {
+            val context = composeRule.activity
+            val repository = LocalCrmRepository(LanuCrmDatabase.getInstance(context))
+            val suffix = System.nanoTime().toString()
+            targetId = repository.addManualCustomerPoint(
+                businessName = "UI Mükerrer Market $suffix",
+                address = "UI Hedef $suffix",
+                city = "İstanbul",
+                district = "Kadıköy",
+                neighborhood = "Caferağa",
+                latitude = 40.9870,
+                longitude = 29.0280,
+                phone = "05321112233",
+            ).id
+            sourceId = repository.addManualCustomerPoint(
+                businessName = "UI MÜKERRER MARKET $suffix",
+                address = "UI Kaynak $suffix",
+                city = "İstanbul",
+                district = "Kadıköy",
+                neighborhood = "Caferağa",
+                latitude = 40.9871,
+                longitude = 29.0281,
+                phone = "+90 532 111 22 33",
+            ).id
+        }
+
+        composeRule.activity.getSharedPreferences(
+            "lanu_ui_state",
+            android.content.Context.MODE_PRIVATE,
+        ).edit()
+            .putString("selected_city", "İstanbul Anadolu")
+            .putString("selected_district", "Kadıköy")
+            .apply()
+        composeRule.activityRule.scenario.recreate()
+
+        waitForTag("nav_crm").assertHasClickAction().performClick()
+        waitForTag("crm_tab_duplicates").assertHasClickAction().performClick()
+        waitForTag("crm_duplicate_screen").assertIsDisplayed()
+        waitForTag("crm_merge_keep_" + targetId)
+            .performScrollTo()
+            .assertHasClickAction()
+            .performClick()
+        waitForTag("crm_duplicate_confirm")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
+
+        composeRule.waitUntil(30_000) {
+            runBlocking {
+                LocalCrmRepository(LanuCrmDatabase.getInstance(composeRule.activity))
+                    .observeCustomers("İstanbul")
+                    .first()
+                    .none { it.id == sourceId }
+            }
+        }
+        assertTrue(
+            runBlocking {
+                LocalCrmRepository(LanuCrmDatabase.getInstance(composeRule.activity))
+                    .observeCustomers("İstanbul")
+                    .first()
+                    .any { it.id == targetId }
+            },
+        )
+    }
+
+    @Test(timeout = 60_000)
     fun manualPoint_rejectsMissingRequiredFieldsWithoutWriting() {
         waitForTag("nav_more").assertHasClickAction().performClick()
         waitForTag("more_manual_point").assertHasClickAction().performClick()
@@ -329,6 +433,64 @@ class MainActivitySmokeTest {
             .assertHasClickAction()
             .performClick()
         waitForTag("crm_detail_back").assertIsDisplayed()
+    }
+
+    @Test(timeout = 60_000)
+    fun crmTags_saveFromDetailAndPersistAcrossRoomFlow() {
+        var customerId = ""
+        var businessSourceId = ""
+        runBlocking {
+            val context = composeRule.activity
+            val repository = LocalCrmRepository(LanuCrmDatabase.getInstance(context))
+            val customer = repository.addManualCustomerPoint(
+                businessName = "Etiket Smoke Nokta " + System.nanoTime(),
+                address = "Etiket Test Adres",
+                city = "İstanbul",
+                district = "Kadıköy",
+                neighborhood = "Caferağa",
+                latitude = 40.991,
+                longitude = 29.031,
+            )
+            customerId = customer.id
+            businessSourceId = customer.businessSourceId
+        }
+
+        composeRule.activity.getSharedPreferences(
+            "lanu_ui_state",
+            android.content.Context.MODE_PRIVATE,
+        ).edit()
+            .putString("selected_city", "İstanbul Anadolu")
+            .putString("selected_district", "Kadıköy")
+            .apply()
+        composeRule.activityRule.scenario.recreate()
+
+        waitForTag("nav_crm").assertHasClickAction().performClick()
+        waitForTag("crm_tab_customers").assertHasClickAction().performClick()
+        waitForTag("crm_open_" + businessSourceId)
+            .performScrollTo()
+            .assertHasClickAction()
+            .performClick()
+        waitForTag("crm_tags_input")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performTextInput("Sıcak Lead, Otel")
+        waitForTag("crm_tags_save")
+            .assertHasClickAction()
+            .performClick()
+
+        composeRule.waitUntil(30_000) {
+            runBlocking {
+                LocalCrmRepository(LanuCrmDatabase.getInstance(composeRule.activity))
+                    .observeCustomers("İstanbul")
+                    .first()
+                    .firstOrNull { it.id == customerId }
+                    ?.tags
+                    ?.let { tags ->
+                        tags.any { it.equals("Sıcak Lead", ignoreCase = true) } &&
+                            tags.any { it.equals("Otel", ignoreCase = true) }
+                    } == true
+            }
+        }
     }
 
     @Test(timeout = 60_000)
