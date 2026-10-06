@@ -1,5 +1,8 @@
 package com.lanu.globaldonuksatisradari
 
+import java.text.Normalizer
+import java.util.Locale
+
 /**
  * Complete offline district fallback for all 81 Turkish provinces.
  *
@@ -92,14 +95,27 @@ object TurkeyDistrictFallback {
     )
 
     fun forCity(city: String): List<String> {
-        val normalized = com.lanu.globaldonuksatisradari.data.BusinessDeduplication
-            .normalizeForComparison(city)
+        val normalized = normalizeCityName(city)
         return BY_CITY.entries.firstOrNull { (name, _) ->
-            com.lanu.globaldonuksatisradari.data.BusinessDeduplication
-                .normalizeForComparison(name) == normalized
+            normalizeCityName(name) == normalized
         }?.value.orEmpty()
     }
 
+    private fun normalizeCityName(value: String): String =
+        Normalizer.normalize(value.trim(), Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "")
+            .replace('İ', 'I')
+            .lowercase(Locale.ROOT)
+            .replace('ı', 'i')
+            .replace('ğ', 'g')
+            .replace('ü', 'u')
+            .replace('ş', 's')
+            .replace('ö', 'o')
+            .replace('ç', 'c')
+            .replace(Regex("\\s+"), " ")
+
     val provinceCount: Int get() = BY_CITY.size
     val districtCount: Int get() = BY_CITY.values.sumOf(List<String>::size)
+    val centralDistrictCount: Int get() = BY_CITY.values.count { "Merkez" in it }
+    val districtGovernorateCount: Int get() = districtCount - centralDistrictCount
 }
