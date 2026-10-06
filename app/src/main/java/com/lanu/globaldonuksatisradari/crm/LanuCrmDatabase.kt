@@ -183,6 +183,11 @@ abstract class LanuCrmDatabase : RoomDatabase() {
         private val MIGRATION_12_13 = object : Migration(12, 13) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE crm_customer ADD COLUMN tagsCsv TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE crm_customer ADD COLUMN mergedIntoCustomerId TEXT")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_crm_customer_mergedIntoCustomerId " +
+                        "ON crm_customer(mergedIntoCustomerId)",
+                )
             }
         }
 
