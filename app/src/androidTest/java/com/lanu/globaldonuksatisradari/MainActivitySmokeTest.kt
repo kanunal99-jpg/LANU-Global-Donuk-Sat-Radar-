@@ -4,12 +4,12 @@ import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteraction
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodes
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -258,7 +258,10 @@ class MainActivitySmokeTest {
         waitForTag("district_filter").assertHasClickAction().performClick()
         waitForText("Şişli").assertExists()
         waitForText("Bakırköy").assertExists()
-        composeRule.onNodeWithText("Kadıköy", useUnmergedTree = true).assertDoesNotExist()
+        assertFalse(
+            composeRule.onAllNodes(hasText("Kadıköy", substring = false), useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty(),
+        )
         waitForText("Şişli").performClick()
         waitForText("Şişli").assertIsDisplayed()
 
@@ -272,7 +275,10 @@ class MainActivitySmokeTest {
         waitForTag("district_filter").assertHasClickAction().performClick()
         waitForText("Kadıköy").assertExists()
         waitForText("Pendik").assertExists()
-        composeRule.onNodeWithText("Şişli", useUnmergedTree = true).assertDoesNotExist()
+        assertFalse(
+            composeRule.onAllNodes(hasText("Şişli", substring = false), useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty(),
+        )
         waitForText("Kadıköy").performClick()
         waitForText("Kadıköy").assertIsDisplayed()
         waitForTag("neighborhood_filter").assertIsDisplayed()
@@ -338,10 +344,12 @@ class MainActivitySmokeTest {
             }
         }
         assertTrue(
-            LocalCrmRepository(LanuCrmDatabase.getInstance(composeRule.activity))
-                .observeCustomers("İstanbul")
-                .first()
-                .any { it.id == targetId },
+            runBlocking {
+                LocalCrmRepository(LanuCrmDatabase.getInstance(composeRule.activity))
+                    .observeCustomers("İstanbul")
+                    .first()
+                    .any { it.id == targetId }
+            },
         )
     }
 
