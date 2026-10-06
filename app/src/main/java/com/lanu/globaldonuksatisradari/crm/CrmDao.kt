@@ -14,7 +14,10 @@ interface CrmCustomerDao {
     @Query("SELECT * FROM crm_customer WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): CrmCustomerEntity?
 
-    @Query("SELECT * FROM crm_customer WHERE businessSourceId = :businessSourceId LIMIT 1")
+    @Query(
+        "SELECT * FROM crm_customer WHERE businessSourceId = :businessSourceId " +
+            "AND mergedIntoCustomerId IS NULL LIMIT 1",
+    )
     suspend fun findByBusinessSourceId(businessSourceId: String): CrmCustomerEntity?
 
     @Query(
@@ -77,6 +80,17 @@ interface CrmContactDao {
 
     @Query("UPDATE crm_contact SET syncState = :state WHERE id = :id")
     suspend fun updateSyncState(id: String, state: String): Int
+
+    @Query(
+        "UPDATE crm_contact SET customerId = :targetCustomerId, updatedAtEpochMs = :updatedAtEpochMs, " +
+            "version = version + 1, syncState = :state WHERE customerId = :sourceCustomerId",
+    )
+    suspend fun reassignCustomer(
+        sourceCustomerId: String,
+        targetCustomerId: String,
+        updatedAtEpochMs: Long,
+        state: String,
+    ): Int
 }
 
 @Dao
@@ -90,11 +104,25 @@ interface CrmQuoteDao {
     @Query("SELECT * FROM crm_quote WHERE customerId = :customerId ORDER BY updatedAtEpochMs DESC")
     fun observeForCustomer(customerId: String): Flow<List<CrmQuoteEntity>>
 
+    @Query("SELECT * FROM crm_quote WHERE customerId = :customerId ORDER BY updatedAtEpochMs DESC")
+    suspend fun listForCustomer(customerId: String): List<CrmQuoteEntity>
+
     @Query("UPDATE crm_quote SET status = :status, updatedAtEpochMs = :updatedAtEpochMs, version = version + 1, syncState = :syncState WHERE id = :id")
     suspend fun updateStatus(id: String, status: String, updatedAtEpochMs: Long, syncState: String): Int
 
     @Query("UPDATE crm_quote SET syncState = :state WHERE id = :id")
     suspend fun updateSyncState(id: String, state: String): Int
+
+    @Query(
+        "UPDATE crm_quote SET customerId = :targetCustomerId, updatedAtEpochMs = :updatedAtEpochMs, " +
+            "version = version + 1, syncState = :state WHERE customerId = :sourceCustomerId",
+    )
+    suspend fun reassignCustomer(
+        sourceCustomerId: String,
+        targetCustomerId: String,
+        updatedAtEpochMs: Long,
+        state: String,
+    ): Int
 }
 
 @Dao
@@ -108,11 +136,25 @@ interface CrmOrderDao {
     @Query("SELECT * FROM crm_order WHERE customerId = :customerId ORDER BY updatedAtEpochMs DESC")
     fun observeForCustomer(customerId: String): Flow<List<CrmOrderEntity>>
 
+    @Query("SELECT * FROM crm_order WHERE customerId = :customerId ORDER BY updatedAtEpochMs DESC")
+    suspend fun listForCustomer(customerId: String): List<CrmOrderEntity>
+
     @Query("UPDATE crm_order SET status = :status, updatedAtEpochMs = :updatedAtEpochMs, version = version + 1, syncState = :syncState WHERE id = :id")
     suspend fun updateStatus(id: String, status: String, updatedAtEpochMs: Long, syncState: String): Int
 
     @Query("UPDATE crm_order SET syncState = :state WHERE id = :id")
     suspend fun updateSyncState(id: String, state: String): Int
+
+    @Query(
+        "UPDATE crm_order SET customerId = :targetCustomerId, updatedAtEpochMs = :updatedAtEpochMs, " +
+            "version = version + 1, syncState = :state WHERE customerId = :sourceCustomerId",
+    )
+    suspend fun reassignCustomer(
+        sourceCustomerId: String,
+        targetCustomerId: String,
+        updatedAtEpochMs: Long,
+        state: String,
+    ): Int
 }
 
 @Dao
@@ -131,6 +173,16 @@ interface CrmActivityDao {
 
     @Query("UPDATE crm_activity SET syncState = :state WHERE id = :id")
     suspend fun updateSyncState(id: String, state: String)
+
+    @Query(
+        "UPDATE crm_activity SET customerId = :targetCustomerId, version = version + 1, syncState = :state " +
+            "WHERE customerId = :sourceCustomerId",
+    )
+    suspend fun reassignCustomer(
+        sourceCustomerId: String,
+        targetCustomerId: String,
+        state: String,
+    ): Int
 
     @Query(
         "SELECT a.* FROM crm_activity a " +
@@ -193,6 +245,19 @@ interface CrmNextActionDao {
     @Query("SELECT * FROM crm_next_action WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): CrmNextActionEntity?
 
+    @Query("SELECT * FROM crm_next_action WHERE customerId = :customerId ORDER BY dueAtEpochMs ASC")
+    suspend fun listForCustomer(customerId: String): List<CrmNextActionEntity>
+
+    @Query(
+        "UPDATE crm_next_action SET customerId = :targetCustomerId, version = version + 1, syncState = :state " +
+            "WHERE customerId = :sourceCustomerId",
+    )
+    suspend fun reassignCustomer(
+        sourceCustomerId: String,
+        targetCustomerId: String,
+        state: String,
+    ): Int
+
     @Query("UPDATE crm_next_action SET syncState = :state WHERE id = :id")
     suspend fun updateSyncState(id: String, state: String): Int
 
@@ -219,6 +284,20 @@ interface CrmOpportunityDao {
 
     @Query("SELECT * FROM crm_opportunity WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): CrmOpportunityEntity?
+
+    @Query("SELECT * FROM crm_opportunity WHERE customerId = :customerId ORDER BY updatedAtEpochMs DESC")
+    suspend fun listForCustomer(customerId: String): List<CrmOpportunityEntity>
+
+    @Query(
+        "UPDATE crm_opportunity SET customerId = :targetCustomerId, updatedAtEpochMs = :updatedAtEpochMs, " +
+            "version = version + 1, syncState = :state WHERE customerId = :sourceCustomerId",
+    )
+    suspend fun reassignCustomer(
+        sourceCustomerId: String,
+        targetCustomerId: String,
+        updatedAtEpochMs: Long,
+        state: String,
+    ): Int
 
     @Query(
         "SELECT o.* FROM crm_opportunity o " +
@@ -251,6 +330,14 @@ interface CrmStageTransitionDao {
 
     @Query("SELECT * FROM crm_stage_transition WHERE customerId = :customerId ORDER BY changedAtEpochMs DESC")
     fun observeForCustomer(customerId: String): Flow<List<CrmStageTransitionEntity>>
+
+    @Query(
+        "UPDATE crm_stage_transition SET customerId = :targetCustomerId WHERE customerId = :sourceCustomerId",
+    )
+    suspend fun reassignCustomer(
+        sourceCustomerId: String,
+        targetCustomerId: String,
+    ): Int
 }
 
 @Dao

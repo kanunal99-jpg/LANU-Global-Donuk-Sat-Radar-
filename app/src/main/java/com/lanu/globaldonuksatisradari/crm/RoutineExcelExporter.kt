@@ -188,7 +188,8 @@ object RoutineExcelExporter {
     <col min="29" max="30" width="16" customWidth="1"/>
     <col min="31" max="31" width="48" customWidth="1"/>
     <col min="32" max="33" width="24" customWidth="1"/>
-    <col min="34" max="39" width="20" customWidth="1"/>
+    <col min="34" max="34" width="32" customWidth="1"/>
+    <col min="35" max="40" width="20" customWidth="1"/>
   </cols>
   <sheetData>$rows</sheetData>
   $merges

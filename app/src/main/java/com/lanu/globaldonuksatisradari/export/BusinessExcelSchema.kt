@@ -287,6 +287,7 @@ object BusinessExcelSchema {
         "Konum Bilgileri",
         "Kayıt Kaynağı",
         "Veri Kalitesi",
+        "Etiketler",
     )
 
     fun customerValues(
@@ -342,6 +343,7 @@ object BusinessExcelSchema {
             mapLink,
             sourceOriginLabel(customer.businessSourceId),
             dataQualityLabel(customer.dataQuality),
+            customer.tags.joinToString(" | "),
         )
     }
 

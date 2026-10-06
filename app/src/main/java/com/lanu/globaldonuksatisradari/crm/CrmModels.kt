@@ -82,10 +82,45 @@ data class CrmCustomer(
     val registryStatus: CrmRegistryStatus = CrmRegistryStatus.UNVERIFIED,
     val registrySource: String? = null,
     val registryNumber: String? = null,
+    val tags: Set<String> = emptySet(),
+    val mergedIntoCustomerId: String? = null,
     val createdAtEpochMs: Long,
     val updatedAtEpochMs: Long,
     val version: Long = 0L,
     val syncState: SyncState = SyncState.LOCAL_ONLY,
+)
+
+object CrmTagCodec {
+    private const val SEPARATOR = "|"
+
+    fun normalize(tags: Collection<String>): Set<String> =
+        tags.asSequence()
+            .map { it.trim().replace(Regex("\\s+"), " ") }
+            .map { it.replace(SEPARATOR, " ") }
+            .filter { it.isNotBlank() }
+            .map { it.take(40) }
+            .distinctBy { it.lowercase(java.util.Locale.forLanguageTag("tr-TR")) }
+            .sortedWith(String.CASE_INSENSITIVE_ORDER)
+            .take(20)
+            .toCollection(linkedSetOf())
+
+    fun encode(tags: Collection<String>): String =
+        normalize(tags).joinToString(SEPARATOR)
+
+    fun decode(value: String?): Set<String> =
+        if (value.isNullOrBlank()) emptySet()
+        else normalize(value.split(SEPARATOR))
+}
+
+data class CrmMergeResult(
+    val targetCustomerId: String,
+    val sourceCustomerId: String,
+    val movedActivities: Int,
+    val movedNextActions: Int,
+    val movedOpportunities: Int,
+    val movedContacts: Int,
+    val movedQuotes: Int,
+    val movedOrders: Int,
 )
 
 data class BulkCrmSaveResult(

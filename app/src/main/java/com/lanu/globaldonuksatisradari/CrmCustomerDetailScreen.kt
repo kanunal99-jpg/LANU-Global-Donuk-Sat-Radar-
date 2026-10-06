@@ -60,7 +60,9 @@ fun CrmCustomerDetailScreen(
     onCreateOpportunity: (String, String?, Long?, String?) -> Unit,
     onTransitionOpportunity: (String, CrmOpportunityStatus) -> Unit,
     onSaveNotes: (String?) -> Unit,
+    onSaveTags: (Set<String>) -> Unit,
     onWorkspaceMessage: (String) -> Unit = {},
+    commercialContent: @Composable () -> Unit = {},
     message: String? = null,
 ) {
     var stageMenu by remember(customer.id, customer.stage) { mutableStateOf(false) }
@@ -71,6 +73,9 @@ fun CrmCustomerDetailScreen(
     var activityNote by remember { mutableStateOf("") }
     var actionNote by remember { mutableStateOf("") }
     var notes by remember(customer.id, customer.notes) { mutableStateOf(customer.notes.orEmpty()) }
+    var tagsText by remember(customer.id, customer.tags) {
+        mutableStateOf(customer.tags.joinToString(", "))
+    }
     var dueAt by remember(customer.id) { mutableStateOf(defaultTomorrowNine()) }
     var opportunityTitle by remember { mutableStateOf("") }
     var opportunityNotes by remember { mutableStateOf("") }
@@ -177,6 +182,35 @@ fun CrmCustomerDetailScreen(
             customer = customer,
             onMessage = onWorkspaceMessage,
         )
+
+        commercialContent()
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Etiketler / Segmentler", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Örn: Sıcak Lead, Zincir, Otel, Pizza, Yüksek Potansiyel",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                OutlinedTextField(
+                    value = tagsText,
+                    onValueChange = { tagsText = it },
+                    modifier = Modifier.fillMaxWidth().testTag("crm_tags_input"),
+                    label = { Text("Virgülle ayırın") },
+                    singleLine = true,
+                )
+                Button(
+                    onClick = {
+                        onSaveTags(
+                            tagsText.split(",").map(String::trim).filter(String::isNotBlank).toSet(),
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth().testTag("crm_tags_save"),
+                ) {
+                    Text("Etiketleri kaydet")
+                }
+            }
+        }
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

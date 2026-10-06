@@ -87,7 +87,7 @@ class SupabaseCommercialRemoteDataSource(
                         database.contactDao().upsert(
                             CrmContactEntity(
                                 id = id,
-                                customerId = p.getString("customer_id"),
+                                customerId = resolveMergedCustomerId(database, p.getString("customer_id")),
                                 fullName = p.getString("full_name"),
                                 role = p.nullableString("role"),
                                 phone = p.nullableString("phone"),
@@ -110,7 +110,7 @@ class SupabaseCommercialRemoteDataSource(
                         database.quoteDao().upsert(
                             CrmQuoteEntity(
                                 id = id,
-                                customerId = p.getString("customer_id"),
+                                customerId = resolveMergedCustomerId(database, p.getString("customer_id")),
                                 opportunityId = p.nullableString("opportunity_id"),
                                 quoteNumber = p.getString("quote_number"),
                                 status = p.getString("status"),
@@ -160,7 +160,7 @@ class SupabaseCommercialRemoteDataSource(
                         database.orderDao().upsert(
                             CrmOrderEntity(
                                 id = id,
-                                customerId = p.getString("customer_id"),
+                                customerId = resolveMergedCustomerId(database, p.getString("customer_id")),
                                 quoteId = p.nullableString("quote_id"),
                                 orderNumber = p.getString("order_number"),
                                 status = p.getString("status"),
@@ -205,6 +205,21 @@ class SupabaseCommercialRemoteDataSource(
         }.getOrElse { error ->
             RemotePullResult.RetryableFailure(error.message ?: "Ticari CRM verisi alınamadı.")
         }
+    }
+
+    private suspend fun resolveMergedCustomerId(
+        database: LanuCrmDatabase,
+        customerId: String,
+    ): String {
+        var currentId = customerId
+        val seen = mutableSetOf<String>()
+        repeat(8) {
+            if (!seen.add(currentId)) return currentId
+            val row = database.customerDao().findById(currentId) ?: return currentId
+            val next = row.mergedIntoCustomerId?.takeIf(String::isNotBlank) ?: return currentId
+            currentId = next
+        }
+        return currentId
     }
 
     private fun tableFor(entityType: String): String = when (entityType) {

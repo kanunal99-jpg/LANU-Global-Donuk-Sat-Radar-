@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -21,6 +23,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.lanu.globaldonuksatisradari.crm.CrmCommercialLine
 import com.lanu.globaldonuksatisradari.crm.CrmOrder
+import com.lanu.globaldonuksatisradari.crm.CrmOrderStatus
 import com.lanu.globaldonuksatisradari.crm.CrmQuote
 import com.lanu.globaldonuksatisradari.crm.CrmQuoteStatus
 import java.math.RoundingMode
@@ -36,15 +39,26 @@ fun CrmCommercialSection(
     orders: List<CrmOrder>,
     quoteLines: Map<String, List<CrmCommercialLine>>,
     orderLines: Map<String, List<CrmCommercialLine>>,
+    products: List<CatalogProduct>,
     onCreateQuote: (quoteNumber: String, currency: String) -> Unit,
-    onAddQuoteLine: (quoteId: String, productName: String, unit: String, quantityMilli: Long, unitPriceMinor: Long) -> Unit,
+    onAddQuoteLine: (
+        quoteId: String,
+        productId: String?,
+        productName: String,
+        unit: String,
+        quantityMilli: Long,
+        unitPriceMinor: Long,
+    ) -> Unit,
     onSendQuote: (String) -> Unit,
     onAcceptQuote: (String) -> Unit,
     onCreateOrder: (quoteId: String, orderNumber: String) -> Unit,
+    onAdvanceOrder: (orderId: String, target: CrmOrderStatus) -> Unit,
 ) {
     var quoteNumber by remember { mutableStateOf("") }
     var currency by remember { mutableStateOf("TRY") }
     var productName by remember { mutableStateOf("") }
+    var selectedProductId by remember { mutableStateOf<String?>(null) }
+    var productMenu by remember { mutableStateOf(false) }
     var unit by remember { mutableStateOf("adet") }
     var quantity by remember { mutableStateOf("1") }
     var price by remember { mutableStateOf("") }
@@ -92,6 +106,48 @@ fun CrmCommercialSection(
                         Text("${quote.quoteNumber} • ${quote.status.name} • ${quote.currency}")
                         lines.forEach { line -> Text("• ${line.productName} — ${line.quantityMilli / 1000.0} ${line.unit}") }
                         if (quote.status == CrmQuoteStatus.DRAFT) {
+                            if (products.isNotEmpty()) {
+                                OutlinedButton(
+                                    onClick = { productMenu = true },
+                                    modifier = Modifier.fillMaxWidth().testTag("crm_quote_product_catalog_${quote.id}"),
+                                ) {
+                                    Text(
+                                        selectedProductId
+                                            ?.let { id -> products.firstOrNull { it.id == id }?.name }
+                                            ?.let { "Katalog: $it" }
+                                            ?: "Katalogdan ürün seç",
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = productMenu,
+                                    onDismissRequest = { productMenu = false },
+                                ) {
+                                    products.forEach { product ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    product.name + " • " +
+                                                        ProductPrice.formatMinor(product.priceMinor, product.currency),
+                                                )
+                                            },
+                                            onClick = {
+                                                selectedProductId = product.id
+                                                productName = product.name
+                                                unit = product.unit
+                                                price = (product.priceMinor / 100.0)
+                                                    .toString()
+                                                    .replace(".", ",")
+                                                inputError = if (product.currency != quote.currency) {
+                                                    "Ürün para birimi ${product.currency}; teklif ${quote.currency}. Fiyatı kontrol edin."
+                                                } else {
+                                                    null
+                                                }
+                                                productMenu = false
+                                            },
+                                        )
+                                    }
+                                }
+                            }
                             OutlinedTextField(
                                 productName,
                                 { productName = it },
@@ -114,7 +170,15 @@ fun CrmCommercialSection(
                                         unitPriceMinor == null || unitPriceMinor < 0L -> inputError = "Birim fiyat negatif olamaz ve en fazla 2 ondalık basamak içermelidir."
                                         else -> {
                                             inputError = null
-                                            onAddQuoteLine(quote.id, productName.trim(), unit.trim(), quantityMilli, unitPriceMinor)
+                                            onAddQuoteLine(
+                                                quote.id,
+                                                selectedProductId,
+                                                productName.trim(),
+                                                unit.trim(),
+                                                quantityMilli,
+                                                unitPriceMinor,
+                                            )
+                                            selectedProductId = null
                                             productName = ""
                                             price = ""
                                             quantity = "1"
@@ -161,13 +225,25 @@ fun CrmCommercialSection(
             if (orders.isEmpty()) Text("Henüz sipariş yok.")
             orders.forEach { order ->
                 Card(Modifier.fillMaxWidth().testTag("crm_order_${order.id}")) {
-                    Column(Modifier.padding(12.dp)) {
+                    Column(
+                        Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
                         Text("${order.orderNumber} • ${order.status.name} • ${order.currency}")
-                        orderLines[order.id].orEmpty().forEach { line -> Text("• ${line.productName} — ${line.quantityMilli / 1000.0} ${line.unit}") }
+                        orderLines[order.id].orEmpty().forEach { line ->
+                            Text("• ${line.productName} — ${line.quantityMilli / 1000.0} ${line.unit}")
+                        }
+                        nextOrderStatus(order.status)?.let { target ->
+                            Button(
+                                onClick = { onAdvanceOrder(order.id, target) },
+                                modifier = Modifier.fillMaxWidth().testTag("crm_order_advance_${order.id}"),
+                            ) {
+                                Text("Siparişi ${orderStatusLabel(target)} yap")
+                            }
+                        }
                     }
                 }
-            }
-        }
+            }        }
     }
 }
 
@@ -179,4 +255,23 @@ internal fun parseScaledLong(raw: String, scale: Int): Long? {
         if (value.scale().coerceAtLeast(0) > scale) return null
         value.setScale(scale, RoundingMode.UNNECESSARY).movePointRight(scale).longValueExact()
     }.getOrNull()
+}
+
+private fun nextOrderStatus(status: CrmOrderStatus): CrmOrderStatus? = when (status) {
+    CrmOrderStatus.DRAFT -> CrmOrderStatus.CONFIRMED
+    CrmOrderStatus.CONFIRMED -> CrmOrderStatus.PREPARING
+    CrmOrderStatus.PREPARING -> CrmOrderStatus.DISPATCHED
+    CrmOrderStatus.DISPATCHED -> CrmOrderStatus.DELIVERED
+    CrmOrderStatus.DELIVERED,
+    CrmOrderStatus.CANCELLED,
+    -> null
+}
+
+private fun orderStatusLabel(status: CrmOrderStatus): String = when (status) {
+    CrmOrderStatus.DRAFT -> "Taslak"
+    CrmOrderStatus.CONFIRMED -> "Onaylandı"
+    CrmOrderStatus.PREPARING -> "Hazırlanıyor"
+    CrmOrderStatus.DISPATCHED -> "Sevk edildi"
+    CrmOrderStatus.DELIVERED -> "Teslim edildi"
+    CrmOrderStatus.CANCELLED -> "İptal"
 }

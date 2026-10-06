@@ -29,6 +29,7 @@ class CrmExcelExporterTest {
             registryStatus = CrmRegistryStatus.ACTIVE,
             registrySource = "İTO Resmî Üye/Firma Kaydı",
             registryNumber = "SICIL-123",
+            tags = setOf("Sıcak Lead", "Zincir"),
             createdAtEpochMs = 1L,
             updatedAtEpochMs = 1L,
         )
@@ -114,6 +115,8 @@ class CrmExcelExporterTest {
         assertTrue(sheetXml.contains("29.123456"))
         assertTrue(sheetXml.contains("40.987654"))
         assertTrue(sheetXml.contains("maps.google.com/?q=40.987654,29.123456"))
+        assertTrue(sheetXml.contains("Etiketler"))
+        assertTrue(sheetXml.contains("Sıcak Lead | Zincir"))
     }
 
     @Test

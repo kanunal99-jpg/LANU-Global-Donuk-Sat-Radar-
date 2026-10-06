@@ -1,5 +1,7 @@
 package com.lanu.globaldonuksatisradari
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,15 +32,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 @Composable
@@ -56,8 +63,55 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
     var note by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var imageUrl by remember { mutableStateOf("") }
+    var imageSource by remember { mutableStateOf<ProductImageSource?>(null) }
+    var originalImageUrl by remember { mutableStateOf<String?>(null) }
+    var originalImageSource by remember { mutableStateOf<ProductImageSource?>(null) }
+    var temporaryLocalImage by remember { mutableStateOf<String?>(null) }
     var sourceUrl by remember { mutableStateOf("https://globaldonukgida.com/") }
     var editorError by remember { mutableStateOf<String?>(null) }
+    var cameraTarget by remember { mutableStateOf<CameraImageTarget?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            editorError = runCatching {
+                val persisted = withContext(Dispatchers.IO) {
+                    ProductMediaStore.persistGalleryImage(context, uri)
+                }
+                temporaryLocalImage?.let { previous ->
+                    if (previous != persisted) ProductMediaStore.removeLocalImage(context, previous)
+                }
+                temporaryLocalImage = persisted
+                imageUrl = persisted
+                imageSource = ProductImageSource.GALLERY
+            }.exceptionOrNull()?.message
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture(),
+    ) { success ->
+        val target = cameraTarget
+        cameraTarget = null
+        if (target == null) return@rememberLauncherForActivityResult
+        if (!success) {
+            runCatching { target.file.delete() }
+            return@rememberLauncherForActivityResult
+        }
+        editorError = runCatching {
+            val persisted = ProductMediaStore.finalizeCameraImage(context, target)
+            temporaryLocalImage?.let { previous ->
+                if (previous != persisted) ProductMediaStore.removeLocalImage(context, previous)
+            }
+            temporaryLocalImage = persisted
+            imageUrl = persisted
+            imageSource = ProductImageSource.CAMERA
+        }.exceptionOrNull()?.message
+    }
 
     fun openNew() {
         editingId = null
@@ -68,7 +122,12 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         currency = "TRY"
         note = ""
         description = ""
+        temporaryLocalImage?.let { ProductMediaStore.removeLocalImage(context, it) }
+        temporaryLocalImage = null
+        originalImageUrl = null
+        originalImageSource = null
         imageUrl = ""
+        imageSource = null
         sourceUrl = "https://globaldonukgida.com/"
         editorError = null
         editorOpen = true
@@ -83,7 +142,12 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         currency = product.currency
         note = product.note.orEmpty()
         description = product.description.orEmpty()
+        temporaryLocalImage?.let { ProductMediaStore.removeLocalImage(context, it) }
+        temporaryLocalImage = null
+        originalImageUrl = product.imageUrl
+        originalImageSource = product.imageSource
         imageUrl = product.imageUrl.orEmpty()
+        imageSource = product.imageSource
         sourceUrl = product.sourceUrl ?: "https://globaldonukgida.com/"
         editorError = null
         editorOpen = true
@@ -106,9 +170,13 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                 note = note,
                 description = description,
                 imageUrl = imageUrl,
+                imageSource = imageSource,
                 sourceUrl = sourceUrl,
                 sourceVerifiedAtEpochMs = preservedVerification,
             )
+            temporaryLocalImage = null
+            originalImageUrl = imageUrl.takeIf(String::isNotBlank)
+            originalImageSource = imageSource
             editorOpen = false
         }.exceptionOrNull()?.message
     }
@@ -186,7 +254,13 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
 
     if (editorOpen) {
         AlertDialog(
-            onDismissRequest = { editorOpen = false },
+            onDismissRequest = {
+                temporaryLocalImage?.let { ProductMediaStore.removeLocalImage(context, it) }
+                temporaryLocalImage = null
+                imageUrl = originalImageUrl.orEmpty()
+                imageSource = originalImageSource
+                editorOpen = false
+            },
             modifier = Modifier.testTag("product_editor_dialog").semantics { testTagsAsResourceId = true },
             title = { Text(if (editingId == null) "Yeni Ürün" else "Ürünü Düzenle", modifier = Modifier.testTag("product_editor_open_state")) },
             text = {
@@ -202,14 +276,97 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                     }
                     OutlinedTextField(value = price, onValueChange = { price = it }, modifier = Modifier.fillMaxWidth().testTag("product_price_input"), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), label = { Text("Birim fiyat *") }, placeholder = { Text("Örn. 1250,50") })
                     OutlinedTextField(value = description, onValueChange = { description = it }, modifier = Modifier.fillMaxWidth(), minLines = 3, label = { Text("Ürün açıklaması") })
-                    OutlinedTextField(value = imageUrl, onValueChange = { imageUrl = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Ürün fotoğrafı URL") })
+                    if (imageUrl.isNotBlank()) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().height(180.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            AsyncImage(
+                                model = imageUrl,
+                                contentDescription = "Ürün görseli önizleme",
+                                modifier = Modifier.fillMaxWidth().height(180.dp).testTag("product_image_preview"),
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
+                        Text(
+                            "Görsel kaynağı: " + when (imageSource) {
+                                ProductImageSource.URL -> "URL"
+                                ProductImageSource.GALLERY -> "Galeri"
+                                ProductImageSource.CAMERA -> "Kamera"
+                                null -> "Belirsiz"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    OutlinedTextField(
+                        value = imageUrl.takeIf { it.startsWith("https://") }.orEmpty(),
+                        onValueChange = { value ->
+                            temporaryLocalImage?.let { ProductMediaStore.removeLocalImage(context, it) }
+                            temporaryLocalImage = null
+                            imageUrl = value.trim()
+                            imageSource = value.trim().takeIf(String::isNotBlank)?.let { ProductImageSource.URL }
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("product_image_url_input"),
+                        singleLine = true,
+                        label = { Text("Ürün fotoğrafı HTTPS URL") },
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = { galleryLauncher.launch("image/*") },
+                            modifier = Modifier.weight(1f).testTag("product_image_gallery"),
+                        ) {
+                            Text("Galeriden seç")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                editorError = runCatching {
+                                    ProductMediaStore.createCameraTarget(context)
+                                }.fold(
+                                    onSuccess = { target ->
+                                        cameraTarget = target
+                                        cameraLauncher.launch(target.uri)
+                                        null
+                                    },
+                                    onFailure = { it.message },
+                                )
+                            },
+                            modifier = Modifier.weight(1f).testTag("product_image_camera"),
+                        ) {
+                            Text("Fotoğraf çek")
+                        }
+                    }
+                    if (imageUrl.isNotBlank()) {
+                        TextButton(
+                            onClick = {
+                                temporaryLocalImage?.let { ProductMediaStore.removeLocalImage(context, it) }
+                                temporaryLocalImage = null
+                                imageUrl = ""
+                                imageSource = null
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("product_image_remove"),
+                        ) {
+                            Text("Görseli kaldır")
+                        }
+                    }
                     OutlinedTextField(value = sourceUrl, onValueChange = { sourceUrl = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Kaynak URL (opsiyonel)") })
                     OutlinedTextField(value = note, onValueChange = { note = it }, modifier = Modifier.fillMaxWidth(), minLines = 2, label = { Text("Not") })
                     editorError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                 }
             },
             confirmButton = { Button(onClick = ::save, modifier = Modifier.testTag("product_save_button")) { Text("Kaydet") } },
-            dismissButton = { TextButton(onClick = { editorOpen = false }) { Text("Vazgeç") } },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        temporaryLocalImage?.let { ProductMediaStore.removeLocalImage(context, it) }
+                        temporaryLocalImage = null
+                        imageUrl = originalImageUrl.orEmpty()
+                        editorOpen = false
+                    },
+                ) { Text("Vazgeç") }
+            },
         )
     }
 
@@ -245,6 +402,16 @@ private fun ProductCard(product: CatalogProduct, onEdit: () -> Unit, onDelete: (
             }
             product.description?.let { HorizontalDivider(); Text(it, style = MaterialTheme.typography.bodyMedium) }
             product.note?.let { HorizontalDivider(); Text(it, style = MaterialTheme.typography.bodySmall) }
+            product.imageSource?.let {
+                Text(
+                    "Görsel kaynağı: " + when (it) {
+                        ProductImageSource.URL -> "URL"
+                        ProductImageSource.GALLERY -> "Galeri"
+                        ProductImageSource.CAMERA -> "Kamera"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
             product.sourceUrl?.let { Text("Kaynak URL: $it", style = MaterialTheme.typography.labelSmall) }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 OutlinedButton(onClick = onEdit) { Text("Düzenle") }

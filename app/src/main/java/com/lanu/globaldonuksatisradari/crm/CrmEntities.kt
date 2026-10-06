@@ -12,6 +12,7 @@ import androidx.room.PrimaryKey
         Index(value = ["city", "district"]),
         Index(value = ["stage"]),
         Index(value = ["updatedAtEpochMs"]),
+        Index(value = ["mergedIntoCustomerId"]),
     ],
 )
 data class CrmCustomerEntity(
@@ -37,6 +38,8 @@ data class CrmCustomerEntity(
     val registryStatus: String = CrmRegistryStatus.UNVERIFIED.name,
     val registrySource: String? = null,
     val registryNumber: String? = null,
+    val tagsCsv: String = "",
+    val mergedIntoCustomerId: String? = null,
     val createdAtEpochMs: Long,
     val updatedAtEpochMs: Long,
     val version: Long,
