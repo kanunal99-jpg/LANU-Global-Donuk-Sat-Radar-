@@ -38,6 +38,7 @@ create table if not exists public.lanu_crm_customers (
   registry_status text not null default 'UNVERIFIED',
   registry_source text,
   registry_number text,
+  tags_csv text not null default '',
   sync_version bigint not null default 1,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
