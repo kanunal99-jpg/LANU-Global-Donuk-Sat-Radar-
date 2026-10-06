@@ -22,9 +22,9 @@ import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -433,11 +433,11 @@ private fun CrmDuplicateReviewScreen(
     onOpenCustomer: (String) -> Unit,
     onMergeCustomers: (targetCustomerId: String, sourceCustomerId: String) -> Unit,
 ) {
-    val candidates by produceState<List<com.lanu.globaldonuksatisradari.crm.CrmDuplicateCandidate>?>(
-        initialValue = null,
-        customers,
-    ) {
-        value = withContext(Dispatchers.Default) {
+    var candidates by remember(customers) {
+        mutableStateOf<List<com.lanu.globaldonuksatisradari.crm.CrmDuplicateCandidate>?>(null)
+    }
+    LaunchedEffect(customers) {
+        candidates = withContext(Dispatchers.Default) {
             CrmDuplicateDetector.find(customers)
         }
     }
