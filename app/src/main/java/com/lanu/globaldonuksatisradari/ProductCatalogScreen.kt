@@ -315,7 +315,14 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         OutlinedButton(
-                            onClick = { galleryLauncher.launch("image/*") },
+                            onClick = {
+                                editorError = runCatching {
+                                    galleryLauncher.launch("image/*")
+                                    null
+                                }.getOrElse {
+                                    "Galeri açılamadı. Cihazınızda uygun fotoğraf seçici bulunamadı."
+                                }
+                            },
                             modifier = Modifier.weight(1f).testTag("product_image_gallery"),
                         ) {
                             Text("Galeriden seç")
@@ -323,15 +330,19 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                         OutlinedButton(
                             onClick = {
                                 editorError = runCatching {
-                                    ProductMediaStore.createCameraTarget(context)
-                                }.fold(
-                                    onSuccess = { target ->
-                                        cameraTarget = target
+                                    val target = ProductMediaStore.createCameraTarget(context)
+                                    cameraTarget = target
+                                    try {
                                         cameraLauncher.launch(target.uri)
                                         null
-                                    },
-                                    onFailure = { it.message },
-                                )
+                                    } catch (error: Throwable) {
+                                        cameraTarget = null
+                                        runCatching { target.file.delete() }
+                                        throw error
+                                    }
+                                }.getOrElse {
+                                    "Kamera açılamadı. Cihazda kullanılabilir kamera uygulaması bulunamadı."
+                                }
                             },
                             modifier = Modifier.weight(1f).testTag("product_image_camera"),
                         ) {
