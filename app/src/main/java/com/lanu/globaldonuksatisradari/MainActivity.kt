@@ -419,7 +419,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         scanDelta,
     ) {
         SalesAiContext(
-            city = selectedCity.name,
+            city = selectedCity.label,
             district = selectedDistrict,
             crmCount = filteredCrmCustomers.size,
             prospectCount = filteredCrmCustomers.count { it.stage == CrmStage.PROSPECT },
@@ -842,13 +842,14 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         radarBusinesses = visibleResults,
                         selectedCity = selectedCity.name,
                         selectedDistrict = selectedDistrict,
+                        displayRegionLabel = selectedCity.label,
                         onOpenCustomer = { selectedCustomerId = it },
                     )
                     AppSection.CRM -> CrmWorkspaceScreen(
                         customers = filteredCrmCustomers,
                         openActions = regionNextActions,
                         metrics = dashboardMetrics,
-                        selectedCity = selectedCity.name,
+                        selectedCity = selectedCity.label,
                         selectedDistrict = selectedDistrict,
                         pendingSyncCount = pendingSyncCount,
                         onOpenCustomer = { selectedCustomerId = it },
@@ -882,7 +883,12 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             }
                         },
                     )
-                    AppSection.ROUTINE -> RoutineScreen(filteredCrmCustomers, selectedCity.name, selectedDistrict)
+                    AppSection.ROUTINE -> RoutineScreen(
+                        customers = filteredCrmCustomers,
+                        selectedCity = selectedCity.name,
+                        selectedDistrict = selectedDistrict,
+                        displayRegionLabel = selectedCity.label,
+                    )
                     AppSection.MORE -> LazyColumn(
                         modifier = Modifier
                             .testTag("more_screen")
