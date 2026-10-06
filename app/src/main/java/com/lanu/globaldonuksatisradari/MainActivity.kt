@@ -97,7 +97,7 @@ private fun normalizeNeighborhoodLabel(value: String?): String {
     return normalized
 }
 
-private fun scopeCrmCustomersForCitySelection(
+internal fun scopeCrmCustomersForCitySelection(
     customers: List<com.lanu.globaldonuksatisradari.crm.CrmCustomer>,
     city: City,
     selectedDistrict: String,
@@ -117,7 +117,7 @@ private fun scopeCrmCustomersForCitySelection(
     return cityScoped
 }
 
-private fun businessMatchesCitySelection(
+internal fun businessMatchesCitySelection(
     business: VerifiedBusiness,
     city: City,
     selectedDistrict: String,
@@ -204,6 +204,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var coordinateFilter by remember { mutableStateOf("Tümü") }
     var menuFilter by remember { mutableStateOf("Tümü") }
     var openingHoursFilter by remember { mutableStateOf("Tümü") }
+    var showFilterDetails by rememberSaveable { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<VerifiedBusiness>>(emptyList()) }
     var selectedBusiness by remember { mutableStateOf<VerifiedBusiness?>(null) }
@@ -447,10 +448,22 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     LanuGlobalTheme {
         Scaffold(
             topBar = {
-                TopAppBar(
+                CenterAlignedTopAppBar(
                     title = { LanuBrandLockup(compact = true) },
-                    navigationIcon = { TextButton(onClick = { if (selectedCrmCustomer != null) selectedCustomerId = null else goBack() }, enabled = selectedCrmCustomer != null || backStack.isNotEmpty()) { Text("← Geri") } },
-                    actions = { TextButton(onClick = { goForward() }, enabled = forwardStack.isNotEmpty()) { Text("İleri →") } },
+                    navigationIcon = {
+                        if (selectedCrmCustomer != null || backStack.isNotEmpty()) {
+                            TextButton(
+                                onClick = {
+                                    if (selectedCrmCustomer != null) selectedCustomerId = null else goBack()
+                                },
+                            ) { Text("← Geri") }
+                        }
+                    },
+                    actions = {
+                        if (forwardStack.isNotEmpty()) {
+                            TextButton(onClick = { goForward() }) { Text("İleri →") }
+                        }
+                    },
                 )
             },
             bottomBar = {
@@ -597,26 +610,37 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Column(Modifier.weight(1f)) {
-                                            Text("Hızlı filtreler", style = MaterialTheme.typography.titleMedium)
+                                            Text("Filtreler", style = MaterialTheme.typography.titleMedium)
                                             Text(
-                                                "81 il destekli. İl / ilçe / mahalle seçimi doğrudan kaynak taramasına uygulanır. " +
-                                                    "Kategori “Tümü” ise sektör sınırlaması olmadan Overture Türkiye işletme dizini, " +
-                                                    "OpenStreetMap ve içe aktarılan resmî sicil kayıtları birlikte kullanılır; mağaza, ofis/şirket, " +
-                                                    "üretici, toptancı, sanayi, konaklama, sağlık, eğitim, otomotiv, finans, inşaat, tarım, " +
-                                                    "lojistik ve diğer işletme aileleri kapsama girer. Telefon/web yalnız kaynakta varsa gösterilir.",
+                                                "81 il • 973 ilçe • çoklu işletme kaynağı",
                                                 style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                         }
-                                        TextButton(
-                                            onClick = {
-                                                invalidateSearch()
-                                                resetFilters()
-                                                results = emptyList()
-                                                selectedBusiness = null
-                                                scanDelta = null
-                                                newBusinessKeys = emptySet()
-                                            },
-                                        ) { Text("Temizle") }
+                                        Row {
+                                            TextButton(onClick = { showFilterDetails = !showFilterDetails }) {
+                                                Text(if (showFilterDetails) "Detayı gizle" else "Kapsam")
+                                            }
+                                            TextButton(
+                                                onClick = {
+                                                    invalidateSearch()
+                                                    resetFilters()
+                                                    results = emptyList()
+                                                    selectedBusiness = null
+                                                    scanDelta = null
+                                                    newBusinessKeys = emptySet()
+                                                },
+                                            ) { Text("Temizle") }
+                                        }
+                                    }
+                                    if (showFilterDetails) {
+                                        Text(
+                                            "İl / ilçe / mahalle doğrudan kaynak taramasına uygulanır. Kategori Tümü iken sektör sınırlaması yapılmaz; " +
+                                                "Overture, OpenStreetMap ve içe aktarılan resmî sicil verileri birlikte değerlendirilir. " +
+                                                "Telefon, web, menü ve çalışma saati yalnız kaynakta mevcutsa gösterilir.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
                                     }
                                     InventoryFilterMenu(
                                         "Kategori",
