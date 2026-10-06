@@ -329,7 +329,8 @@ class LocalCrmRepository(
             ownerUserId = ownerUserId,
         )
         if (existing != null) {
-            return@withTransaction CrmMappings.toDomain(enrichBusinessMetadata(existing, business))
+            val active = resolveActiveCustomer(existing)
+            return@withTransaction CrmMappings.toDomain(enrichBusinessMetadata(active, business))
         }
         insertBusinessAsCustomer(business, ownerUserId)
     }
@@ -346,7 +347,7 @@ class LocalCrmRepository(
                 ownerUserId = ownerUserId,
             )
             if (existing != null) {
-                enrichBusinessMetadata(existing, business)
+                enrichBusinessMetadata(resolveActiveCustomer(existing), business)
                 alreadyExisting++
             } else {
                 insertBusinessAsCustomer(business, ownerUserId)
@@ -354,6 +355,18 @@ class LocalCrmRepository(
             }
         }
         BulkCrmSaveResult(inserted = inserted, alreadyExisting = alreadyExisting)
+    }
+
+    private suspend fun resolveActiveCustomer(customer: CrmCustomerEntity): CrmCustomerEntity {
+        var current = customer
+        val seen = mutableSetOf<String>()
+        repeat(8) {
+            val nextId = current.mergedIntoCustomerId?.takeIf(String::isNotBlank) ?: return current
+            check(seen.add(current.id)) { "CRM birleştirme zincirinde döngü algılandı." }
+            current = database.customerDao().findById(nextId)
+                ?: error("Birleştirilen CRM ana kaydı bulunamadı: $nextId")
+        }
+        error("CRM birleştirme zinciri güvenli sınırı aştı.")
     }
 
     suspend fun enrichCustomersFromOfficialRegistry(
