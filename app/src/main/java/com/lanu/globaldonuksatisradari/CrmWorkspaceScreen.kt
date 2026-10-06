@@ -1,20 +1,25 @@
 package com.lanu.globaldonuksatisradari
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,6 +30,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.lanu.globaldonuksatisradari.crm.CrmCustomer
 import com.lanu.globaldonuksatisradari.crm.CrmDashboardMetrics
+import com.lanu.globaldonuksatisradari.crm.CrmDuplicateDetector
 import com.lanu.globaldonuksatisradari.crm.CrmNextAction
 import com.lanu.globaldonuksatisradari.crm.CrmNextActionType
 import java.time.Instant
@@ -32,7 +38,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private enum class CrmWorkspaceTab { TODAY, CUSTOMERS, DASHBOARD }
+private enum class CrmWorkspaceTab { TODAY, CUSTOMERS, DUPLICATES, DASHBOARD }
 
 data class CrmTodayBuckets(
     val overdue: List<CrmNextAction>,
@@ -68,6 +74,7 @@ fun CrmWorkspaceScreen(
     pendingSyncCount: Int,
     onOpenCustomer: (String) -> Unit,
     onCompleteAction: (String) -> Unit,
+    onMergeCustomers: (targetCustomerId: String, sourceCustomerId: String) -> Unit,
 ) {
     var tab by remember { mutableStateOf(CrmWorkspaceTab.TODAY) }
 
@@ -87,6 +94,12 @@ fun CrmWorkspaceScreen(
                 onClick = { tab = CrmWorkspaceTab.CUSTOMERS },
                 text = { Text("Müşteriler") },
                 modifier = Modifier.testTag("crm_tab_customers"),
+            )
+            Tab(
+                selected = tab == CrmWorkspaceTab.DUPLICATES,
+                onClick = { tab = CrmWorkspaceTab.DUPLICATES },
+                text = { Text("Mükerrer") },
+                modifier = Modifier.testTag("crm_tab_duplicates"),
             )
             Tab(
                 selected = tab == CrmWorkspaceTab.DASHBOARD,
@@ -111,6 +124,11 @@ fun CrmWorkspaceScreen(
                 selectedCity = selectedCity,
                 selectedDistrict = selectedDistrict,
                 onOpenCustomer = onOpenCustomer,
+            )
+            CrmWorkspaceTab.DUPLICATES -> CrmDuplicateReviewScreen(
+                customers = customers,
+                onOpenCustomer = onOpenCustomer,
+                onMergeCustomers = onMergeCustomers,
             )
             CrmWorkspaceTab.DASHBOARD -> {
                 LazyColumn(
@@ -292,21 +310,26 @@ private fun CrmCustomerListScreen(
     onOpenCustomer: (String) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
+    var selectedTag by remember { mutableStateOf<String?>(null) }
     val normalized = query.trim().lowercase(Locale.forLanguageTag("tr-TR"))
-    val filtered = remember(customers, normalized) {
-        if (normalized.isBlank()) {
-            customers
-        } else {
-            customers.filter { customer ->
-                listOf(
-                    customer.businessName,
-                    customer.signboardName.orEmpty(),
-                    customer.contactName.orEmpty(),
-                    customer.phone.orEmpty(),
-                    customer.district,
-                    customer.neighborhood.orEmpty(),
-                ).any { it.lowercase(Locale.forLanguageTag("tr-TR")).contains(normalized) }
+    val allTags = remember(customers) {
+        customers.flatMap { it.tags }.distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
+    }
+    val filtered = remember(customers, normalized, selectedTag) {
+        customers.filter { customer ->
+            val matchesTag = selectedTag == null || customer.tags.any {
+                it.equals(selectedTag, ignoreCase = true)
             }
+            val matchesQuery = normalized.isBlank() || listOf(
+                customer.businessName,
+                customer.signboardName.orEmpty(),
+                customer.contactName.orEmpty(),
+                customer.phone.orEmpty(),
+                customer.district,
+                customer.neighborhood.orEmpty(),
+                customer.tags.joinToString(" "),
+            ).any { it.lowercase(Locale.forLanguageTag("tr-TR")).contains(normalized) }
+            matchesTag && matchesQuery
         }
     }
 
@@ -320,6 +343,29 @@ private fun CrmCustomerListScreen(
         item {
             Text("CRM Müşterileri", style = MaterialTheme.typography.headlineSmall)
             Text("$selectedCity / $selectedDistrict • ${customers.size} kayıt")
+        }
+        if (allTags.isNotEmpty()) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilterChip(
+                        selected = selectedTag == null,
+                        onClick = { selectedTag = null },
+                        label = { Text("Tüm etiketler") },
+                    )
+                    allTags.forEach { tag ->
+                        FilterChip(
+                            selected = selectedTag == tag,
+                            onClick = { selectedTag = tag },
+                            label = { Text(tag) },
+                        )
+                    }
+                }
+            }
         }
         item {
             OutlinedTextField(
@@ -354,6 +400,12 @@ private fun CrmCustomerListScreen(
                         "${customer.city} • ${customer.district} • ${stageLabelForMap(customer.stage)}",
                         style = MaterialTheme.typography.bodySmall,
                     )
+                    if (customer.tags.isNotEmpty()) {
+                        Text(
+                            "Etiketler: " + customer.tags.joinToString(" • "),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                     OutlinedButton(
                         onClick = { onOpenCustomer(customer.id) },
                         modifier = Modifier
@@ -361,6 +413,106 @@ private fun CrmCustomerListScreen(
                             .testTag("crm_open_${customer.businessSourceId}"),
                     ) {
                         Text("Aç")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CrmDuplicateReviewScreen(
+    customers: List<CrmCustomer>,
+    onOpenCustomer: (String) -> Unit,
+    onMergeCustomers: (targetCustomerId: String, sourceCustomerId: String) -> Unit,
+) {
+    val candidates = remember(customers) { CrmDuplicateDetector.find(customers) }
+    var pendingMerge by remember { mutableStateOf<Pair<CrmCustomer, CrmCustomer>?>(null) }
+
+    pendingMerge?.let { (target, source) ->
+        AlertDialog(
+            onDismissRequest = { pendingMerge = null },
+            title = { Text("Kayıtları birleştir") },
+            text = {
+                Text(
+                    "'${source.businessName}' kaydı '${target.businessName}' içine birleştirilecek. " +
+                        "Alt CRM kayıtları taşınacak; kaynak kayıt denetim izi olarak gizli tombstone kalacak.",
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onMergeCustomers(target.id, source.id)
+                        pendingMerge = null
+                    },
+                    modifier = Modifier.testTag("crm_duplicate_confirm"),
+                ) {
+                    Text("Birleştir")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingMerge = null }) { Text("Vazgeç") }
+            },
+        )
+    }
+
+    LazyColumn(
+        modifier = Modifier
+            .testTag("crm_duplicate_screen")
+            .padding(horizontal = 16.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        item {
+            Text("Muhtemel Mükerrerler", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "Sicil/VKN, telefon, işletme adı, adres ve yakın koordinat kanıtları birlikte değerlendirilir.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text("${candidates.size} aday çift", modifier = Modifier.testTag("crm_duplicate_count"))
+        }
+        if (candidates.isEmpty()) {
+            item {
+                Card(Modifier.fillMaxWidth()) {
+                    Text("Güçlü mükerrer adayı bulunmadı.", Modifier.padding(14.dp))
+                }
+            }
+        }
+        items(candidates, key = { it.first.id + "|" + it.second.id }) { candidate ->
+            Card(Modifier.fillMaxWidth()) {
+                Column(
+                    Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text("Skor: ${candidate.score}", style = MaterialTheme.typography.titleMedium)
+                    Text(candidate.reasons.joinToString(" • "), style = MaterialTheme.typography.bodySmall)
+                    Text("A: ${candidate.first.businessName} — ${candidate.first.district}")
+                    Text("B: ${candidate.second.businessName} — ${candidate.second.district}")
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = { onOpenCustomer(candidate.first.id) },
+                            modifier = Modifier.weight(1f),
+                        ) { Text("A'yı aç") }
+                        OutlinedButton(
+                            onClick = { onOpenCustomer(candidate.second.id) },
+                            modifier = Modifier.weight(1f),
+                        ) { Text("B'yi aç") }
+                    }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Button(
+                            onClick = { pendingMerge = candidate.first to candidate.second },
+                            modifier = Modifier.weight(1f).testTag("crm_merge_keep_${candidate.first.id}"),
+                        ) { Text("A ana kalsın") }
+                        Button(
+                            onClick = { pendingMerge = candidate.second to candidate.first },
+                            modifier = Modifier.weight(1f).testTag("crm_merge_keep_${candidate.second.id}"),
+                        ) { Text("B ana kalsın") }
                     }
                 }
             }
