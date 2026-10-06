@@ -312,12 +312,19 @@ class MainActivitySmokeTest {
             ).id
         }
 
+        composeRule.activity.getSharedPreferences("lanu_ui_state", android.content.Context.MODE_PRIVATE)
+            .edit()
+            .putString("selected_city", "İstanbul Anadolu")
+            .putString("selected_district", "Tümü")
+            .apply()
         composeRule.activityRule.scenario.recreate()
         waitForTag("nav_map").assertHasClickAction().performClick()
         waitForTag("crm_map_screen").assertIsDisplayed()
-        waitForText("Harita Smoke Nokta").assertExists()
+        composeRule.onNodeWithTag("crm_map_screen")
+            .performScrollToNode(hasTestTag("crm_map_open_" + customerId))
+        composeRule.waitForIdle()
+        waitForText("Harita Smoke Nokta").assertIsDisplayed()
         waitForTag("crm_map_open_" + customerId)
-            .performScrollTo()
             .assertIsDisplayed()
             .assertHasClickAction()
             .performClick()
