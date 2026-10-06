@@ -162,6 +162,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var websiteFilter by remember { mutableStateOf("Tümü") }
     var addressFilter by remember { mutableStateOf("Tümü") }
     var coordinateFilter by remember { mutableStateOf("Tümü") }
+    var menuFilter by remember { mutableStateOf("Tümü") }
+    var openingHoursFilter by remember { mutableStateOf("Tümü") }
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<VerifiedBusiness>>(emptyList()) }
     var selectedBusiness by remember { mutableStateOf<VerifiedBusiness?>(null) }
@@ -337,6 +339,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         websiteFilter,
         addressFilter,
         coordinateFilter,
+        menuFilter,
+        openingHoursFilter,
     ) {
         results.filter { business ->
             (selectedDistrict == "Tümü" || business.district.equals(selectedDistrict, true)) &&
@@ -348,6 +352,11 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                 matchesInventoryPresence(business.phone, phoneFilter) &&
                 matchesInventoryPresence(business.website, websiteFilter) &&
                 matchesInventoryPresence(business.address, addressFilter) &&
+                matchesInventoryPresence(business.openingHours, openingHoursFilter) &&
+                matchesInventoryPresence(
+                    business.menuUrl?.takeIf(String::isNotBlank) ?: business.menuText,
+                    menuFilter,
+                ) &&
                 when (coordinateFilter) {
                     "Var" -> business.latitude != null && business.longitude != null
                     "Yok" -> business.latitude == null || business.longitude == null
@@ -390,6 +399,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         websiteFilter = "Tümü"
         addressFilter = "Tümü"
         coordinateFilter = "Tümü"
+        menuFilter = "Tümü"
+        openingHoursFilter = "Tümü"
         query = ""
     }
 
@@ -586,6 +597,8 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     InventoryFilterMenu("Web sitesi", websiteFilter, presenceOptions, { websiteFilter = it })
                                     InventoryFilterMenu("Adres", addressFilter, presenceOptions, { addressFilter = it })
                                     InventoryFilterMenu("Koordinat", coordinateFilter, presenceOptions, { coordinateFilter = it })
+                                    InventoryFilterMenu("Menü", menuFilter, presenceOptions, { menuFilter = it })
+                                    InventoryFilterMenu("Çalışma saati", openingHoursFilter, presenceOptions, { openingHoursFilter = it })
                                     Text("${visibleResults.size} sonuç", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                                 }
                             }
