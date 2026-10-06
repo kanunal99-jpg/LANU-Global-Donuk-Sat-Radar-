@@ -14,13 +14,17 @@ interface CrmCustomerDao {
     @Query("SELECT * FROM crm_customer WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): CrmCustomerEntity?
 
-    @Query("SELECT * FROM crm_customer WHERE businessSourceId = :businessSourceId LIMIT 1")
+    @Query(
+        "SELECT * FROM crm_customer WHERE businessSourceId = :businessSourceId " +
+            "AND mergedIntoCustomerId IS NULL LIMIT 1",
+    )
     suspend fun findByBusinessSourceId(businessSourceId: String): CrmCustomerEntity?
 
     @Query(
         """
         SELECT * FROM crm_customer
         WHERE businessSourceId = :businessSourceId
+          AND mergedIntoCustomerId IS NULL
           AND ((ownerUserId = :ownerUserId) OR (ownerUserId IS NULL AND :ownerUserId IS NULL))
         LIMIT 1
         """,
