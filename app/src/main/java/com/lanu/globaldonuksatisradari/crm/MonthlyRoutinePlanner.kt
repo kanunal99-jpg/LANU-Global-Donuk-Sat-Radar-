@@ -202,6 +202,28 @@ object MonthlyRoutinePlanner {
     ): List<RoutineDayPlan> {
         if (candidates.isEmpty()) return emptyDayPlans()
 
+        if (CrmRoutePlanner.usesScalableFallback(candidates.size)) {
+            val ordered = CrmRoutePlanner.plan(candidates, startCustomerId)
+                .map(RouteStop::customer)
+            val basePerDay = ordered.size / WORK_DAYS
+            val remainder = ordered.size % WORK_DAYS
+            var cursor = 0
+            return List(WORK_DAYS) { dayIndex ->
+                val quota = basePerDay + if (dayIndex < remainder) 1 else 0
+                val dayCustomers = if (quota == 0) {
+                    emptyList()
+                } else {
+                    ordered.subList(cursor, cursor + quota).also { cursor += quota }
+                }
+                RoutineDayPlan(
+                    weekNumber = dayIndex / 5 + 1,
+                    weekday = WEEKDAYS[dayIndex % 5],
+                    dayIndex = dayIndex,
+                    stops = toRouteStops(dayCustomers),
+                )
+            }
+        }
+
         val start = startCustomerId
             ?.let { id -> candidates.firstOrNull { it.id == id } }
             ?: candidates.minWithOrNull(
