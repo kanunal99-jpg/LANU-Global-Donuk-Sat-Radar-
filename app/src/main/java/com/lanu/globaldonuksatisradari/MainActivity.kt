@@ -87,7 +87,7 @@ private fun matchesInventoryPresence(value: String?, filter: String): Boolean = 
     else -> true
 }
 
-private fun scopeCrmCustomersForSelection(
+internal fun scopeCrmCustomersForSelection(
     customers: List<com.lanu.globaldonuksatisradari.crm.CrmCustomer>,
     city: City,
     selectedDistrict: String,
@@ -103,7 +103,7 @@ private fun scopeCrmCustomersForSelection(
     }
 }
 
-private fun districtMatchesSelection(
+internal fun districtMatchesSelection(
     city: City,
     selectedDistrict: String,
     businessDistrict: String,
