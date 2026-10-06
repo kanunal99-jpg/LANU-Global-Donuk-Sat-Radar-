@@ -123,6 +123,196 @@ class LocalCrmRepository(
         return CrmMappings.toDomain(updated)
     }
 
+    suspend fun mergeCustomers(
+        targetCustomerId: String,
+        sourceCustomerId: String,
+    ): CrmMergeResult {
+        require(targetCustomerId != sourceCustomerId) { "Aynı CRM kaydı kendi içine birleştirilemez." }
+        val timestamp = now()
+        return database.withTransaction {
+            val target = database.customerDao().findById(targetCustomerId)
+                ?: error("Ana CRM müşterisi bulunamadı: $targetCustomerId")
+            val source = database.customerDao().findById(sourceCustomerId)
+                ?: error("Birleştirilecek CRM müşterisi bulunamadı: $sourceCustomerId")
+            require(target.mergedIntoCustomerId.isNullOrBlank()) { "Ana kayıt başka bir müşteriye birleştirilmiş." }
+            require(source.mergedIntoCustomerId.isNullOrBlank()) { "Kaynak kayıt zaten başka bir müşteriye birleştirilmiş." }
+            require(target.ownerUserId == source.ownerUserId) {
+                "Farklı kullanıcı sahipliğindeki CRM kayıtları birleştirilemez."
+            }
+
+            val syncState = syncStateFor(target.ownerUserId).name
+            val mergedNotes = listOfNotNull(
+                target.notes?.trim()?.takeIf(String::isNotBlank),
+                source.notes?.trim()?.takeIf(String::isNotBlank),
+            ).distinct().joinToString("\n\n--- Birleştirilen kayıt ---\n\n").takeIf(String::isNotBlank)
+            val mergedRegistryStatus = when {
+                target.registryStatus != CrmRegistryStatus.UNVERIFIED.name -> target.registryStatus
+                source.registryStatus != CrmRegistryStatus.UNVERIFIED.name -> source.registryStatus
+                else -> CrmRegistryStatus.UNVERIFIED.name
+            }
+            val mergedTarget = target.copy(
+                signboardName = target.signboardName ?: source.signboardName,
+                neighborhood = target.neighborhood ?: source.neighborhood,
+                address = target.address ?: source.address,
+                latitude = target.latitude ?: source.latitude,
+                longitude = target.longitude ?: source.longitude,
+                dataQuality = if (target.dataQuality == DataQuality.UNKNOWN.name) source.dataQuality else target.dataQuality,
+                notes = mergedNotes,
+                contactName = target.contactName ?: source.contactName,
+                businessType = target.businessType ?: source.businessType,
+                taxOrNationalId = target.taxOrNationalId ?: source.taxOrNationalId,
+                phone = target.phone ?: source.phone,
+                website = target.website ?: source.website,
+                registryStatus = mergedRegistryStatus,
+                registrySource = target.registrySource ?: source.registrySource,
+                registryNumber = target.registryNumber ?: source.registryNumber,
+                tagsCsv = CrmTagCodec.encode(
+                    CrmTagCodec.decode(target.tagsCsv) + CrmTagCodec.decode(source.tagsCsv),
+                ),
+                updatedAtEpochMs = timestamp,
+                version = target.version + 1L,
+                syncState = syncState,
+            )
+            val tombstone = source.copy(
+                mergedIntoCustomerId = target.id,
+                updatedAtEpochMs = timestamp,
+                version = source.version + 1L,
+                syncState = syncState,
+            )
+            database.customerDao().upsert(mergedTarget)
+            database.customerDao().upsert(tombstone)
+
+            val movedActivities = database.activityDao().reassignCustomer(source.id, target.id, syncState)
+            val movedNextActions = database.nextActionDao().reassignCustomer(source.id, target.id, syncState)
+            val movedOpportunities = database.opportunityDao().reassignCustomer(source.id, target.id, syncState)
+            database.stageTransitionDao().reassignCustomer(source.id, target.id)
+            val movedContacts = database.contactDao().reassignCustomer(source.id, target.id, timestamp, syncState)
+            val movedQuotes = database.quoteDao().reassignCustomer(source.id, target.id, timestamp, syncState)
+            val movedOrders = database.orderDao().reassignCustomer(source.id, target.id, timestamp, syncState)
+
+            enqueueIfCloudOwned(
+                target.ownerUserId,
+                SyncOperationEntity(
+                    id = idGenerator(),
+                    entityType = ENTITY_CUSTOMER,
+                    entityId = mergedTarget.id,
+                    operation = OP_UPDATE,
+                    payloadVersion = mergedTarget.version,
+                    payloadJson = CrmPayloads.customer(CrmMappings.toDomain(mergedTarget)),
+                    createdAtEpochMs = timestamp,
+                    attemptCount = 0,
+                    lastError = null,
+                ),
+            )
+            enqueueIfCloudOwned(
+                source.ownerUserId,
+                SyncOperationEntity(
+                    id = idGenerator(),
+                    entityType = ENTITY_CUSTOMER,
+                    entityId = tombstone.id,
+                    operation = OP_UPDATE,
+                    payloadVersion = tombstone.version,
+                    payloadJson = CrmPayloads.customer(CrmMappings.toDomain(tombstone)),
+                    createdAtEpochMs = timestamp,
+                    attemptCount = 0,
+                    lastError = null,
+                ),
+            )
+
+            if (!target.ownerUserId.isNullOrBlank()) {
+                database.activityDao().findForCustomer(target.id)
+                    .filter { it.updatedByMergeCandidate(timestamp, source.id, target.id) }
+                    .forEach { entity ->
+                        enqueueIfCloudOwned(
+                            target.ownerUserId,
+                            SyncOperationEntity(
+                                id = idGenerator(),
+                                entityType = ENTITY_ACTIVITY,
+                                entityId = entity.id,
+                                operation = OP_UPDATE,
+                                payloadVersion = entity.version,
+                                payloadJson = CrmPayloads.activity(CrmMappings.toDomain(entity)),
+                                createdAtEpochMs = timestamp,
+                                attemptCount = 0,
+                                lastError = null,
+                            ),
+                        )
+                    }
+                database.nextActionDao().listForCustomer(target.id)
+                    .filter { it.syncState == syncState }
+                    .forEach { entity ->
+                        enqueueIfCloudOwned(
+                            target.ownerUserId,
+                            SyncOperationEntity(
+                                id = idGenerator(),
+                                entityType = ENTITY_NEXT_ACTION,
+                                entityId = entity.id,
+                                operation = OP_UPDATE,
+                                payloadVersion = entity.version,
+                                payloadJson = CrmPayloads.nextAction(CrmMappings.toDomain(entity)),
+                                createdAtEpochMs = timestamp,
+                                attemptCount = 0,
+                                lastError = null,
+                            ),
+                        )
+                    }
+                database.opportunityDao().listForCustomer(target.id)
+                    .filter { it.syncState == syncState }
+                    .forEach { entity ->
+                        enqueueIfCloudOwned(
+                            target.ownerUserId,
+                            SyncOperationEntity(
+                                id = idGenerator(),
+                                entityType = ENTITY_OPPORTUNITY,
+                                entityId = entity.id,
+                                operation = OP_UPDATE,
+                                payloadVersion = entity.version,
+                                payloadJson = CrmPayloads.opportunity(CrmMappings.toDomain(entity)),
+                                createdAtEpochMs = timestamp,
+                                attemptCount = 0,
+                                lastError = null,
+                            ),
+                        )
+                    }
+                database.contactDao().listForCustomer(target.id)
+                    .filter { it.syncState == syncState }
+                    .forEach { entity ->
+                        CommercialCrmSync.enqueue(
+                            database, idGenerator(), CommercialCrmSync.ENTITY_CONTACT, entity.id,
+                            OP_UPDATE, entity.version, CommercialCrmSync.contactPayload(entity), timestamp,
+                        )
+                    }
+                database.quoteDao().listForCustomer(target.id)
+                    .filter { it.syncState == syncState }
+                    .forEach { entity ->
+                        CommercialCrmSync.enqueue(
+                            database, idGenerator(), CommercialCrmSync.ENTITY_QUOTE, entity.id,
+                            OP_UPDATE, entity.version, CommercialCrmSync.quotePayload(entity), timestamp,
+                        )
+                    }
+                database.orderDao().listForCustomer(target.id)
+                    .filter { it.syncState == syncState }
+                    .forEach { entity ->
+                        CommercialCrmSync.enqueue(
+                            database, idGenerator(), CommercialCrmSync.ENTITY_ORDER, entity.id,
+                            OP_UPDATE, entity.version, CommercialCrmSync.orderPayload(entity), timestamp,
+                        )
+                    }
+            }
+
+            CrmMergeResult(
+                targetCustomerId = target.id,
+                sourceCustomerId = source.id,
+                movedActivities = movedActivities,
+                movedNextActions = movedNextActions,
+                movedOpportunities = movedOpportunities,
+                movedContacts = movedContacts,
+                movedQuotes = movedQuotes,
+                movedOrders = movedOrders,
+            )
+        }
+    }
+
     suspend fun addBusinessAsCustomer(
         business: VerifiedBusiness,
         ownerUserId: String? = null,
