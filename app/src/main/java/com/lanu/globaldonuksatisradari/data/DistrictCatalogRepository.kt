@@ -15,6 +15,42 @@ import java.net.URLEncoder
 import java.util.Locale
 
 /** Discovers Turkish district (admin_level=6) names from OSM with real endpoint fallback. */
+internal fun selectVerifiedDistrictCatalog(
+    candidate: List<String>,
+    fallback: List<String>,
+): List<String> {
+    val normalizedFallback = fallback
+        .map(BusinessDeduplication::normalizeForComparison)
+        .filter(String::isNotBlank)
+        .toSet()
+    if (normalizedFallback.isEmpty()) {
+        return candidate
+            .filter(String::isNotBlank)
+            .distinctBy(BusinessDeduplication::normalizeForComparison)
+            .sortedWith(String.CASE_INSENSITIVE_ORDER)
+    }
+
+    val normalizedCandidate = candidate
+        .map(BusinessDeduplication::normalizeForComparison)
+        .filter(String::isNotBlank)
+        .toSet()
+
+    return if (
+        normalizedCandidate.size == normalizedFallback.size &&
+        normalizedCandidate == normalizedFallback
+    ) {
+        candidate
+            .filter(String::isNotBlank)
+            .distinctBy(BusinessDeduplication::normalizeForComparison)
+            .sortedWith(String.CASE_INSENSITIVE_ORDER)
+    } else {
+        fallback
+            .filter(String::isNotBlank)
+            .distinctBy(BusinessDeduplication::normalizeForComparison)
+            .sortedWith(String.CASE_INSENSITIVE_ORDER)
+    }
+}
+
 class DistrictCatalogRepository(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences("district_catalog_cache", Context.MODE_PRIVATE)
     private val primary = TurkiyeAdministrativeApi()
@@ -35,19 +71,17 @@ class DistrictCatalogRepository(context: Context) {
                 .distinctBy(BusinessDeduplication::normalizeForComparison)
                 .sortedWith(String.CASE_INSENSITIVE_ORDER)
             if (primaryResult.isNotEmpty()) {
-                val accepted = if (
-                    completeFallback.isNotEmpty() &&
-                    primaryResult.size < completeFallback.size
+                val accepted = selectVerifiedDistrictCatalog(primaryResult, completeFallback)
+                if (completeFallback.isNotEmpty() && accepted !== primaryResult &&
+                    accepted.map(BusinessDeduplication::normalizeForComparison).toSet() !=
+                    primaryResult.map(BusinessDeduplication::normalizeForComparison).toSet()
                 ) {
                     Log.w(
                         "LanuLocation",
-                        "TurkiyeAPI eksik ilçe listesi döndürdü: " + city +
+                        "TurkiyeAPI ilçe listesi kanonik fallback ile eşleşmedi: " + city +
                             " (" + primaryResult.size + "/" + completeFallback.size +
-                            "); yerel tam fallback kullanılacak.",
+                            "); doğrulanmış yerel liste kullanılacak.",
                     )
-                    completeFallback
-                } else {
-                    primaryResult
                 }
                 writeCache(key, accepted)
                 return@withContext accepted
@@ -68,14 +102,7 @@ class DistrictCatalogRepository(context: Context) {
                 emptyList()
             }
             if (result.isNotEmpty()) {
-                val accepted = if (
-                    completeFallback.isNotEmpty() &&
-                    result.size < completeFallback.size
-                ) {
-                    completeFallback
-                } else {
-                    result
-                }
+                val accepted = selectVerifiedDistrictCatalog(result, completeFallback)
                 writeCache(key, accepted)
                 return@withContext accepted
             }
