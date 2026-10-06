@@ -39,6 +39,7 @@ create table if not exists public.lanu_crm_customers (
   registry_source text,
   registry_number text,
   tags_csv text not null default '',
+  merged_into_customer_id uuid references public.lanu_crm_customers(id) on delete set null,
   sync_version bigint not null default 1,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -47,6 +48,8 @@ create table if not exists public.lanu_crm_customers (
 create index if not exists lanu_crm_customers_owner_idx on public.lanu_crm_customers(owner_user_id);
 create index if not exists lanu_crm_customers_region_idx on public.lanu_crm_customers(owner_user_id, city, district);
 create index if not exists lanu_crm_customers_source_idx on public.lanu_crm_customers(owner_user_id, source_id);
+create index if not exists lanu_crm_customers_merged_idx
+  on public.lanu_crm_customers(owner_user_id, merged_into_customer_id);
 drop trigger if exists lanu_crm_customers_touch on public.lanu_crm_customers;
 create trigger lanu_crm_customers_touch before update on public.lanu_crm_customers
 for each row execute function public.lanu_touch_updated_at();
