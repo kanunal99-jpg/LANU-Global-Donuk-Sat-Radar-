@@ -35,6 +35,40 @@ import org.junit.runner.RunWith
 @OptIn(ExperimentalTestApi::class)
 class MainActivitySmokeTest {
     @Test(timeout = 60_000)
+    fun mapFallback_rendersWithoutNetworkReadiness() {
+        val source = DataSourceDescriptor(
+            id = "map-fallback-smoke",
+            name = "Smoke Source",
+            publisher = "LANU",
+            licenseOrTerms = "Test",
+            sourceUrl = "https://example.com/",
+            lastVerifiedAtEpochMs = 1L,
+        )
+        val business = VerifiedBusiness(
+            id = "map-fallback-point",
+            name = "Fallback Nokta",
+            city = "İstanbul",
+            district = "Kadıköy",
+            neighborhood = "Moda",
+            source = source,
+            verifiedAtEpochMs = 1L,
+            latitude = 40.987,
+            longitude = 29.028,
+        )
+
+        composeRule.activity.runOnUiThread {
+            composeRule.activity.setContent {
+                MaterialTheme {
+                    BusinessMapPreview(listOf(business))
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        waitForTag("business_map_container").assertIsDisplayed()
+        waitForTag("business_map_fallback").assertIsDisplayed()
+    }
+
+    @Test(timeout = 60_000)
     fun launch_schedulesCrmReminderRecovery() {
         val context = composeRule.activity
         composeRule.waitUntil(30_000) {
@@ -279,10 +313,6 @@ class MainActivitySmokeTest {
         composeRule.activityRule.scenario.recreate()
         waitForTag("nav_map").assertHasClickAction().performClick()
         waitForTag("crm_map_screen").assertIsDisplayed()
-        composeRule.onNodeWithTag("crm_map_screen")
-            .performScrollToNode(hasTestTag("business_map_container"))
-        composeRule.waitForIdle()
-        waitForTag("business_map_container").assertIsDisplayed()
         waitForText("Harita Smoke Nokta").assertExists()
         waitForTag("crm_map_open_" + customerId)
             .performScrollTo()
