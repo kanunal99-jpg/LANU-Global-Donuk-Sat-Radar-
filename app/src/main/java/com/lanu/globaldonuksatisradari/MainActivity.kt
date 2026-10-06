@@ -792,6 +792,20 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                 }
                             }
                         },
+                        onMergeCustomers = { targetId, sourceId ->
+                            scope.launch {
+                                runCatching { localCrmRepository.mergeCustomers(targetId, sourceId) }
+                                    .onSuccess { merged ->
+                                        crmMessage = "Mükerrer kayıt birleştirildi: " +
+                                            (merged.movedActivities + merged.movedNextActions + merged.movedOpportunities +
+                                                merged.movedContacts + merged.movedQuotes + merged.movedOrders) +
+                                            " alt kayıt ana müşteriye taşındı."
+                                    }
+                                    .onFailure { error ->
+                                        crmMessage = "Mükerrer kayıt birleştirilemedi: " + error.message.orEmpty()
+                                    }
+                            }
+                        },
                     )
                     AppSection.ROUTINE -> RoutineScreen(crmCustomers, selectedCity.name, selectedDistrict)
                     AppSection.MORE -> LazyColumn(
