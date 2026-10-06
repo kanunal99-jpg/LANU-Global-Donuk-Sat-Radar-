@@ -127,6 +127,8 @@ fun BusinessMapPreview(
                 if (webView.tag != htmlKey) {
                     mapReady = false
                     timedOut = false
+                    webView.removeJavascriptInterface("AndroidMapBridge")
+                    webView.addJavascriptInterface(bridge, "AndroidMapBridge")
                     webView.tag = htmlKey
                     webView.loadDataWithBaseURL(
                         "https://lanumap.local/",
