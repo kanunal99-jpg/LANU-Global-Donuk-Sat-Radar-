@@ -1,5 +1,7 @@
 package com.lanu.globaldonuksatisradari.data
 
+import com.lanu.globaldonuksatisradari.TurkeyDistrictFallback
+
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.CancellationException
@@ -23,7 +25,8 @@ class DistrictCatalogRepository(context: Context) {
 
     suspend fun getDistricts(city: String, fallback: List<String> = emptyList()): List<String> = withContext(Dispatchers.IO) {
         if (city.isBlank()) return@withContext fallback
-        val key = "districts:v2:" + BusinessDeduplication.normalizeForComparison(city)
+        val completeFallback = fallback.ifEmpty { TurkeyDistrictFallback.forCity(city) }
+        val key = "districts:v3:" + BusinessDeduplication.normalizeForComparison(city)
         readCache(key)?.takeIf { it.isNotEmpty() }?.let { return@withContext it }
 
         try {
@@ -32,8 +35,22 @@ class DistrictCatalogRepository(context: Context) {
                 .distinctBy(BusinessDeduplication::normalizeForComparison)
                 .sortedWith(String.CASE_INSENSITIVE_ORDER)
             if (primaryResult.isNotEmpty()) {
-                writeCache(key, primaryResult)
-                return@withContext primaryResult
+                val accepted = if (
+                    completeFallback.isNotEmpty() &&
+                    primaryResult.size < completeFallback.size
+                ) {
+                    Log.w(
+                        "LanuLocation",
+                        "TurkiyeAPI eksik ilçe listesi döndürdü: " + city +
+                            " (" + primaryResult.size + "/" + completeFallback.size +
+                            "); yerel tam fallback kullanılacak.",
+                    )
+                    completeFallback
+                } else {
+                    primaryResult
+                }
+                writeCache(key, accepted)
+                return@withContext accepted
             }
         } catch (error: CancellationException) {
             throw error
@@ -51,12 +68,20 @@ class DistrictCatalogRepository(context: Context) {
                 emptyList()
             }
             if (result.isNotEmpty()) {
-                writeCache(key, result)
-                return@withContext result
+                val accepted = if (
+                    completeFallback.isNotEmpty() &&
+                    result.size < completeFallback.size
+                ) {
+                    completeFallback
+                } else {
+                    result
+                }
+                writeCache(key, accepted)
+                return@withContext accepted
             }
         }
 
-        return@withContext fallback
+        return@withContext completeFallback
             .distinctBy(BusinessDeduplication::normalizeForComparison)
             .sortedWith(String.CASE_INSENSITIVE_ORDER)
     }
