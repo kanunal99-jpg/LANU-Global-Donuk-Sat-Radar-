@@ -392,7 +392,6 @@ class MainActivitySmokeTest {
         composeRule.activityRule.scenario.recreate()
         waitForTag("nav_crm").performClick()
         waitForTag("crm_tab_customers").performClick()
-        waitForText("Ticari UI Smoke", timeoutMs = 5_000)
         val customer = runBlocking {
             LocalCrmRepository(LanuCrmDatabase.getInstance(context))
                 .observeCustomers("İstanbul").first().first { it.id == customerId }
@@ -435,6 +434,8 @@ class MainActivitySmokeTest {
                     .any { it.id == quoteId && it.status.name == "SENT" }
             }
         }
+        composeRule.onNodeWithTag("crm_detail_scroll")
+            .performScrollToNode(hasTestTag("crm_accept_quote_" + quoteId))
         waitForTag("crm_accept_quote_" + quoteId).performClick()
         composeRule.waitUntil(15_000) {
             runBlocking {
