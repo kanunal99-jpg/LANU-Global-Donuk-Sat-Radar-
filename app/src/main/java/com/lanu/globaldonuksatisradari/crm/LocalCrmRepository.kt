@@ -26,7 +26,11 @@ class LocalCrmRepository(
 ) {
     fun observeCustomers(city: String? = null): Flow<List<CrmCustomer>> {
         val source = city?.let(database.customerDao()::observeByCity) ?: database.customerDao().observeAll()
-        return source.map { entities -> entities.map(CrmMappings::toDomain) }
+        return source.map { entities ->
+            entities
+                .filter { it.mergedIntoCustomerId.isNullOrBlank() }
+                .map(CrmMappings::toDomain)
+        }
     }
 
     fun observeActivities(customerId: String): Flow<List<CrmActivity>> =
@@ -865,6 +869,7 @@ private object CrmMappings {
         registrySource = model.registrySource,
         registryNumber = model.registryNumber,
         tagsCsv = CrmTagCodec.encode(model.tags),
+        mergedIntoCustomerId = model.mergedIntoCustomerId,
         createdAtEpochMs = model.createdAtEpochMs,
         updatedAtEpochMs = model.updatedAtEpochMs,
         version = model.version,
@@ -897,6 +902,7 @@ private object CrmMappings {
         registrySource = entity.registrySource,
         registryNumber = entity.registryNumber,
         tags = CrmTagCodec.decode(entity.tagsCsv),
+        mergedIntoCustomerId = entity.mergedIntoCustomerId,
         createdAtEpochMs = entity.createdAtEpochMs,
         updatedAtEpochMs = entity.updatedAtEpochMs,
         version = entity.version,
@@ -1052,6 +1058,7 @@ private object CrmPayloads {
         put("registrySource", customer.registrySource)
         put("registryNumber", customer.registryNumber)
         put("tagsCsv", CrmTagCodec.encode(customer.tags))
+        put("mergedIntoCustomerId", customer.mergedIntoCustomerId)
         put("createdAtEpochMs", customer.createdAtEpochMs)
         put("updatedAtEpochMs", customer.updatedAtEpochMs)
         put("version", customer.version)
