@@ -48,12 +48,19 @@ fun CrmMapScreen(
 ) {
     var layer by remember { mutableStateOf(MapLayer.CRM) }
     var stageFilter by remember { mutableStateOf<CrmStage?>(null) }
+    var tagFilter by remember { mutableStateOf<String?>(null) }
 
     val scopedCustomers = remember(customers, selectedCity, selectedDistrict) {
         scopeCrmCustomers(customers, selectedCity, selectedDistrict)
     }
-    val stageScopedCustomers = remember(scopedCustomers, stageFilter) {
-        scopedCustomers.filter { stageFilter == null || it.stage == stageFilter }
+    val allTags = remember(scopedCustomers) {
+        scopedCustomers.flatMap { it.tags }.distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
+    }
+    val stageScopedCustomers = remember(scopedCustomers, stageFilter, tagFilter) {
+        scopedCustomers.filter { customer ->
+            (stageFilter == null || customer.stage == stageFilter) &&
+                (tagFilter == null || customer.tags.any { it.equals(tagFilter, ignoreCase = true) })
+        }
     }
     val routableCustomers = remember(stageScopedCustomers) {
         stageScopedCustomers.filter(::hasValidCoordinates)
@@ -168,6 +175,30 @@ fun CrmMapScreen(
             }
         }
 
+        if (layer != MapLayer.RADAR && allTags.isNotEmpty()) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilterChip(
+                        selected = tagFilter == null,
+                        onClick = { tagFilter = null },
+                        label = { Text("Tüm etiketler") },
+                    )
+                    allTags.forEach { tag ->
+                        FilterChip(
+                            selected = tagFilter == tag,
+                            onClick = { tagFilter = tag },
+                            label = { Text(tag) },
+                        )
+                    }
+                }
+            }
+        }
+
         item {
             if (mapBusinesses.isEmpty()) {
                 Card(Modifier.fillMaxWidth()) {
@@ -212,6 +243,12 @@ fun CrmMapScreen(
                                 if (hasValidCoordinates(customer)) "" else " • Koordinat eksik",
                             style = MaterialTheme.typography.bodySmall,
                         )
+                        if (customer.tags.isNotEmpty()) {
+                            Text(
+                                "Etiketler: " + customer.tags.joinToString(" • "),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
                         OutlinedButton(
                             onClick = { onOpenCustomer(customer.id) },
                             modifier = Modifier
