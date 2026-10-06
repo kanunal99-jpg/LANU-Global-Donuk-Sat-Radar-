@@ -259,5 +259,5 @@ object CrmReminderRecoveryScheduler {
         )
     }
 
-    internal fun uniqueWorkName(): String = UNIQUE_WORK
+    fun uniqueWorkName(): String = UNIQUE_WORK
 }
