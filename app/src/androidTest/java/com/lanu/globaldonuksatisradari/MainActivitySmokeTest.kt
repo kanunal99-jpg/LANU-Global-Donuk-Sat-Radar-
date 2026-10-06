@@ -1,5 +1,7 @@
 package com.lanu.globaldonuksatisradari
 
+import androidx.activity.compose.setContent
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertHasClickAction
