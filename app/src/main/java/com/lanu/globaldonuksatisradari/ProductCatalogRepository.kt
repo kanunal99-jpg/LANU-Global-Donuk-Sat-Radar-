@@ -13,6 +13,12 @@ import java.text.DecimalFormatSymbols
 import java.util.Locale
 import java.util.UUID
 
+enum class ProductImageSource {
+    URL,
+    GALLERY,
+    CAMERA,
+}
+
 data class CatalogProduct(
     val id: String,
     val name: String,
@@ -23,12 +29,27 @@ data class CatalogProduct(
     val note: String?,
     val description: String?,
     val imageUrl: String?,
+    val imageSource: ProductImageSource? = null,
     val sourceUrl: String?,
     val sourceVerifiedAtEpochMs: Long?,
     val updatedAtEpochMs: Long,
 )
 
 object ProductMediaValidation {
+    fun normalizeImageReference(value: String?): String? {
+        val raw = value?.trim()?.takeIf(String::isNotEmpty) ?: return null
+        if (raw.startsWith("file:")) return raw
+        val normalized = when {
+            raw.startsWith("https://", ignoreCase = true) -> "https://" + raw.substringAfter("://")
+            raw.startsWith("http://", ignoreCase = true) -> "https://" + raw.substringAfter("://")
+            else -> throw IllegalArgumentException("Ürün fotoğrafı yalnızca HTTP(S) URL veya güvenli yerel görsel olabilir.")
+        }
+        val uri = runCatching { java.net.URI(normalized) }.getOrNull()
+            ?: throw IllegalArgumentException("Ürün fotoğrafı URL biçimi geçersiz.")
+        require(!uri.host.isNullOrBlank()) { "Ürün fotoğrafı URL alan adı geçersiz." }
+        return normalized
+    }
+
     fun requireHttpsUrl(value: String?, field: String) {
         value?.trim()?.takeIf { it.isNotEmpty() }?.let {
             require(it.startsWith("https://")) { "$field yalnızca HTTPS olmalıdır." }
@@ -88,6 +109,7 @@ class ProductCatalogRepository(context: Context) {
         note: String?,
         description: String? = null,
         imageUrl: String? = null,
+        imageSource: ProductImageSource? = null,
         sourceUrl: String? = null,
         sourceVerifiedAtEpochMs: Long? = null,
     ): CatalogProduct {
@@ -95,7 +117,8 @@ class ProductCatalogRepository(context: Context) {
         require(normalizedName.isNotEmpty()) { "Ürün adı boş olamaz." }
         require(priceMinor >= 0L) { "Fiyat negatif olamaz." }
 
-        ProductMediaStore.validateReference(appContext, imageUrl)
+        val normalizedImageUrl = ProductMediaValidation.normalizeImageReference(imageUrl)
+        ProductMediaStore.validateReference(appContext, normalizedImageUrl)
         ProductMediaValidation.requireHttpsUrl(sourceUrl, "Kaynak URL")
 
         val normalizedCurrency = currency.trim().uppercase(Locale.ROOT)
@@ -110,7 +133,10 @@ class ProductCatalogRepository(context: Context) {
             currency = normalizedCurrency,
             note = note?.trim()?.takeIf { it.isNotEmpty() },
             description = description?.trim()?.takeIf { it.isNotEmpty() },
-            imageUrl = imageUrl?.trim()?.takeIf { it.isNotEmpty() },
+            imageUrl = normalizedImageUrl,
+            imageSource = normalizedImageUrl?.let {
+                imageSource ?: if (it.startsWith("https://")) ProductImageSource.URL else ProductImageSource.GALLERY
+            },
             sourceUrl = sourceUrl?.trim()?.takeIf { it.isNotEmpty() },
             sourceVerifiedAtEpochMs = sourceVerifiedAtEpochMs,
             updatedAtEpochMs = System.currentTimeMillis(),
@@ -162,6 +188,11 @@ class ProductCatalogRepository(context: Context) {
                             note = item.optString("note").takeIf { it.isNotBlank() },
                             description = item.optString("description").takeIf { it.isNotBlank() },
                             imageUrl = item.optString("imageUrl").takeIf { it.isNotBlank() },
+                            imageSource = item.optString("imageSource").takeIf(String::isNotBlank)?.let {
+                                runCatching { ProductImageSource.valueOf(it) }.getOrNull()
+                            } ?: item.optString("imageUrl").takeIf { it.isNotBlank() }?.let {
+                                if (it.startsWith("http")) ProductImageSource.URL else ProductImageSource.GALLERY
+                            },
                             sourceUrl = item.optString("sourceUrl").takeIf { it.isNotBlank() },
                             sourceVerifiedAtEpochMs = item.optLong("sourceVerifiedAtEpochMs", 0L).takeIf { it > 0L },
                             updatedAtEpochMs = item.optLong("updatedAtEpochMs", 0L),
@@ -186,6 +217,7 @@ class ProductCatalogRepository(context: Context) {
                     put("note", product.note)
                     put("description", product.description)
                     put("imageUrl", product.imageUrl)
+                    put("imageSource", product.imageSource?.name)
                     put("sourceUrl", product.sourceUrl)
                     put("sourceVerifiedAtEpochMs", product.sourceVerifiedAtEpochMs)
                     put("updatedAtEpochMs", product.updatedAtEpochMs)
