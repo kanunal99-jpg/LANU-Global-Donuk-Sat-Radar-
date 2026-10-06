@@ -16,14 +16,14 @@ object TurkeyCityCatalog {
         "Nevşehir", "Niğde", "Ordu", "Osmaniye", "Rize", "Sakarya", "Samsun",
         "Siirt", "Sinop", "Sivas", "Şanlıurfa", "Şırnak", "Tekirdağ", "Tokat",
         "Trabzon", "Tunceli", "Uşak", "Van", "Yalova", "Yozgat", "Zonguldak",
-    ).map {
-        when (it) {
-            "İstanbul" -> CityCatalogEntry(it, IstanbulDistricts.ALL)
-            "Ankara" -> CityCatalogEntry(it, listOf("Çankaya", "Keçiören", "Yenimahalle"))
-            "İzmir" -> CityCatalogEntry(it, listOf("Konak", "Karşıyaka", "Bornova"))
-            "Bursa" -> CityCatalogEntry(it, listOf("Nilüfer", "Osmangazi"))
-            "Antalya" -> CityCatalogEntry(it, listOf("Muratpaşa", "Konyaaltı"))
-            else -> CityCatalogEntry(it)
-        }
+    ).map { city ->
+        CityCatalogEntry(
+            name = city,
+            fallbackDistricts = if (city == "İstanbul") {
+                IstanbulDistricts.ALL
+            } else {
+                TurkeyDistrictFallback.forCity(city)
+            },
+        )
     }
 }
