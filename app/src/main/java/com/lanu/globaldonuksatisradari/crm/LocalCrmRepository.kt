@@ -182,6 +182,13 @@ class LocalCrmRepository(
             database.customerDao().upsert(mergedTarget)
             database.customerDao().upsert(tombstone)
 
+            val sourceActivityIds = database.activityDao().findForCustomer(source.id).map { it.id }.toSet()
+            val sourceActionIds = database.nextActionDao().listForCustomer(source.id).map { it.id }.toSet()
+            val sourceOpportunityIds = database.opportunityDao().listForCustomer(source.id).map { it.id }.toSet()
+            val sourceContactIds = database.contactDao().listForCustomer(source.id).map { it.id }.toSet()
+            val sourceQuoteIds = database.quoteDao().listForCustomer(source.id).map { it.id }.toSet()
+            val sourceOrderIds = database.orderDao().listForCustomer(source.id).map { it.id }.toSet()
+
             val movedActivities = database.activityDao().reassignCustomer(source.id, target.id, syncState)
             val movedNextActions = database.nextActionDao().reassignCustomer(source.id, target.id, syncState)
             val movedOpportunities = database.opportunityDao().reassignCustomer(source.id, target.id, syncState)
@@ -221,7 +228,7 @@ class LocalCrmRepository(
 
             if (!target.ownerUserId.isNullOrBlank()) {
                 database.activityDao().findForCustomer(target.id)
-                    .filter { it.updatedByMergeCandidate(timestamp, source.id, target.id) }
+                    .filter { it.id in sourceActivityIds }
                     .forEach { entity ->
                         enqueueIfCloudOwned(
                             target.ownerUserId,
@@ -239,7 +246,7 @@ class LocalCrmRepository(
                         )
                     }
                 database.nextActionDao().listForCustomer(target.id)
-                    .filter { it.syncState == syncState }
+                    .filter { it.id in sourceActionIds }
                     .forEach { entity ->
                         enqueueIfCloudOwned(
                             target.ownerUserId,
@@ -257,7 +264,7 @@ class LocalCrmRepository(
                         )
                     }
                 database.opportunityDao().listForCustomer(target.id)
-                    .filter { it.syncState == syncState }
+                    .filter { it.id in sourceOpportunityIds }
                     .forEach { entity ->
                         enqueueIfCloudOwned(
                             target.ownerUserId,
@@ -275,7 +282,7 @@ class LocalCrmRepository(
                         )
                     }
                 database.contactDao().listForCustomer(target.id)
-                    .filter { it.syncState == syncState }
+                    .filter { it.id in sourceContactIds }
                     .forEach { entity ->
                         CommercialCrmSync.enqueue(
                             database, idGenerator(), CommercialCrmSync.ENTITY_CONTACT, entity.id,
@@ -283,7 +290,7 @@ class LocalCrmRepository(
                         )
                     }
                 database.quoteDao().listForCustomer(target.id)
-                    .filter { it.syncState == syncState }
+                    .filter { it.id in sourceQuoteIds }
                     .forEach { entity ->
                         CommercialCrmSync.enqueue(
                             database, idGenerator(), CommercialCrmSync.ENTITY_QUOTE, entity.id,
@@ -291,7 +298,7 @@ class LocalCrmRepository(
                         )
                     }
                 database.orderDao().listForCustomer(target.id)
-                    .filter { it.syncState == syncState }
+                    .filter { it.id in sourceOrderIds }
                     .forEach { entity ->
                         CommercialCrmSync.enqueue(
                             database, idGenerator(), CommercialCrmSync.ENTITY_ORDER, entity.id,
