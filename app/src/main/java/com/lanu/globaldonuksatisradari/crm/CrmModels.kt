@@ -99,7 +99,7 @@ object CrmTagCodec {
             .map { it.replace(SEPARATOR, " ") }
             .filter { it.isNotBlank() }
             .map { it.take(40) }
-            .distinctBy { it.lowercase(java.util.Locale.forLanguageTag("tr-TR")) }
+            .distinctBy { it.lowercase(java.util.Locale.ROOT) }
             .sortedWith(String.CASE_INSENSITIVE_ORDER)
             .take(20)
             .toCollection(linkedSetOf())
