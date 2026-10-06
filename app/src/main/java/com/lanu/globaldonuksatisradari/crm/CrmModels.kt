@@ -112,6 +112,17 @@ object CrmTagCodec {
         else normalize(value.split(SEPARATOR))
 }
 
+data class CrmMergeResult(
+    val targetCustomerId: String,
+    val sourceCustomerId: String,
+    val movedActivities: Int,
+    val movedNextActions: Int,
+    val movedOpportunities: Int,
+    val movedContacts: Int,
+    val movedQuotes: Int,
+    val movedOrders: Int,
+)
+
 data class BulkCrmSaveResult(
     val inserted: Int,
     val alreadyExisting: Int,
