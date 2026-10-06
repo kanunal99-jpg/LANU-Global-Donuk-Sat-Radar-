@@ -12,6 +12,7 @@ import androidx.room.PrimaryKey
         Index(value = ["city", "district"]),
         Index(value = ["stage"]),
         Index(value = ["updatedAtEpochMs"]),
+        Index(value = ["mergedIntoCustomerId"]),
     ],
 )
 data class CrmCustomerEntity(
