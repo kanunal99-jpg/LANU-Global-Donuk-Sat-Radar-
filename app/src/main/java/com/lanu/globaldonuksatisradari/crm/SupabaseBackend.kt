@@ -352,6 +352,9 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                                     ?: local?.registryNumber,
                                 tagsCsv = p.optString("tags_csv").takeIf(String::isNotBlank)
                                     ?: local?.tagsCsv.orEmpty(),
+                                mergedIntoCustomerId = p.optString("merged_into_customer_id")
+                                    .takeIf(String::isNotBlank)
+                                    ?: local?.mergedIntoCustomerId,
                                 createdAtEpochMs = parseInstant(p.optString("created_at")),
                                 updatedAtEpochMs = parseInstant(p.optString("updated_at")),
                                 version = remoteVersion,
@@ -510,6 +513,10 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
         put("registry_source", p.optString("registrySource").takeIf(String::isNotBlank) ?: JSONObject.NULL)
         put("registry_number", p.optString("registryNumber").takeIf(String::isNotBlank) ?: JSONObject.NULL)
         put("tags_csv", p.optString("tagsCsv").takeIf(String::isNotBlank) ?: "")
+        put(
+            "merged_into_customer_id",
+            p.optString("mergedIntoCustomerId").takeIf(String::isNotBlank) ?: JSONObject.NULL,
+        )
         put("sync_version", p.optLong("version", 1L))
     }
 
