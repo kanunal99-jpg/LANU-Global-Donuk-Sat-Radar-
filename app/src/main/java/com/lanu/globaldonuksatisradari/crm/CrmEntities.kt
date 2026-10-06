@@ -38,6 +38,7 @@ data class CrmCustomerEntity(
     val registrySource: String? = null,
     val registryNumber: String? = null,
     val tagsCsv: String = "",
+    val mergedIntoCustomerId: String? = null,
     val createdAtEpochMs: Long,
     val updatedAtEpochMs: Long,
     val version: Long,
