@@ -918,7 +918,14 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         createdByUserId = activeOwnerUserId,
                                     ) }.onSuccess { crmMessage = "Satış fırsatı kaydedildi." }.onFailure { crmMessage = "Fırsat kaydedilemedi: ${it.message.orEmpty()}" } } },
                         onTransitionOpportunity = { opportunityId, status -> scope.launch { runCatching { localCrmRepository.transitionOpportunity(opportunityId, status) }.onSuccess { crmMessage = "Fırsat durumu güncellendi." }.onFailure { crmMessage = "Fırsat durumu güncellenemedi: ${it.message.orEmpty()}" } } },
-                        onSaveNotes = { notes -> scope.launch { runCatching { localCrmRepository.updateCustomerNotes(customer.id, notes) }.onSuccess { crmMessage = "Müşteri notu kaydedildi." }.onFailure { crmMessage = "Müşteri notu kaydedilemedi: ${it.message.orEmpty()}" } } },
+                        onSaveNotes = { notes -> scope.launch { runCatching { localCrmRepository.updateCustomerNotes(customer.id, notes) }.onSuccess { crmMessage = "Müşteri notu kaydedildi." }.onFailure { crmMessage = "Müşteri notu kaydedilemedi: " + it.message.orEmpty() } } },
+                        onSaveTags = { tags ->
+                            scope.launch {
+                                runCatching { localCrmRepository.updateCustomerTags(customer.id, tags) }
+                                    .onSuccess { crmMessage = "Etiketler kaydedildi." }
+                                    .onFailure { error -> crmMessage = "Etiketler kaydedilemedi: " + error.message.orEmpty() }
+                            }
+                        },
                         onWorkspaceMessage = { crmMessage = it },
                         commercialContent = {
                             CrmCommercialWorkspace(
