@@ -63,7 +63,9 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
     var note by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var imageUrl by remember { mutableStateOf("") }
+    var imageSource by remember { mutableStateOf<ProductImageSource?>(null) }
     var originalImageUrl by remember { mutableStateOf<String?>(null) }
+    var originalImageSource by remember { mutableStateOf<ProductImageSource?>(null) }
     var temporaryLocalImage by remember { mutableStateOf<String?>(null) }
     var sourceUrl by remember { mutableStateOf("https://globaldonukgida.com/") }
     var editorError by remember { mutableStateOf<String?>(null) }
@@ -85,6 +87,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                 }
                 temporaryLocalImage = persisted
                 imageUrl = persisted
+                imageSource = ProductImageSource.GALLERY
             }.exceptionOrNull()?.message
         }
     }
@@ -106,6 +109,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
             }
             temporaryLocalImage = persisted
             imageUrl = persisted
+            imageSource = ProductImageSource.CAMERA
         }.exceptionOrNull()?.message
     }
 
@@ -121,7 +125,9 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         temporaryLocalImage?.let { ProductMediaStore.removeLocalImage(context, it) }
         temporaryLocalImage = null
         originalImageUrl = null
+        originalImageSource = null
         imageUrl = ""
+        imageSource = null
         sourceUrl = "https://globaldonukgida.com/"
         editorError = null
         editorOpen = true
@@ -139,7 +145,9 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
         temporaryLocalImage?.let { ProductMediaStore.removeLocalImage(context, it) }
         temporaryLocalImage = null
         originalImageUrl = product.imageUrl
+        originalImageSource = product.imageSource
         imageUrl = product.imageUrl.orEmpty()
+        imageSource = product.imageSource
         sourceUrl = product.sourceUrl ?: "https://globaldonukgida.com/"
         editorError = null
         editorOpen = true
@@ -162,11 +170,13 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                 note = note,
                 description = description,
                 imageUrl = imageUrl,
+                imageSource = imageSource,
                 sourceUrl = sourceUrl,
                 sourceVerifiedAtEpochMs = preservedVerification,
             )
             temporaryLocalImage = null
             originalImageUrl = imageUrl.takeIf(String::isNotBlank)
+            originalImageSource = imageSource
             editorOpen = false
         }.exceptionOrNull()?.message
     }
@@ -248,6 +258,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                 temporaryLocalImage?.let { ProductMediaStore.removeLocalImage(context, it) }
                 temporaryLocalImage = null
                 imageUrl = originalImageUrl.orEmpty()
+                imageSource = originalImageSource
                 editorOpen = false
             },
             modifier = Modifier.testTag("product_editor_dialog").semantics { testTagsAsResourceId = true },
@@ -278,8 +289,12 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                             )
                         }
                         Text(
-                            if (imageUrl.startsWith("https://")) "Görsel kaynağı: URL"
-                            else "Görsel kaynağı: Galeri/Kamera",
+                            "Görsel kaynağı: " + when (imageSource) {
+                                ProductImageSource.URL -> "URL"
+                                ProductImageSource.GALLERY -> "Galeri"
+                                ProductImageSource.CAMERA -> "Kamera"
+                                null -> "Belirsiz"
+                            },
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -289,6 +304,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                             temporaryLocalImage?.let { ProductMediaStore.removeLocalImage(context, it) }
                             temporaryLocalImage = null
                             imageUrl = value.trim()
+                            imageSource = value.trim().takeIf(String::isNotBlank)?.let { ProductImageSource.URL }
                         },
                         modifier = Modifier.fillMaxWidth().testTag("product_image_url_input"),
                         singleLine = true,
@@ -328,6 +344,7 @@ fun ProductCatalogScreen(repository: ProductCatalogRepository) {
                                 temporaryLocalImage?.let { ProductMediaStore.removeLocalImage(context, it) }
                                 temporaryLocalImage = null
                                 imageUrl = ""
+                                imageSource = null
                             },
                             modifier = Modifier.fillMaxWidth().testTag("product_image_remove"),
                         ) {
@@ -385,6 +402,16 @@ private fun ProductCard(product: CatalogProduct, onEdit: () -> Unit, onDelete: (
             }
             product.description?.let { HorizontalDivider(); Text(it, style = MaterialTheme.typography.bodyMedium) }
             product.note?.let { HorizontalDivider(); Text(it, style = MaterialTheme.typography.bodySmall) }
+            product.imageSource?.let {
+                Text(
+                    "Görsel kaynağı: " + when (it) {
+                        ProductImageSource.URL -> "URL"
+                        ProductImageSource.GALLERY -> "Galeri"
+                        ProductImageSource.CAMERA -> "Kamera"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
             product.sourceUrl?.let { Text("Kaynak URL: $it", style = MaterialTheme.typography.labelSmall) }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 OutlinedButton(onClick = onEdit) { Text("Düzenle") }
