@@ -1,7 +1,7 @@
 package com.lanu.globaldonuksatisradari.crm
 
 import java.util.Locale
-import kotlin.math.min
+import kotlin.math.floor
 
 data class CrmDuplicateCandidate(
     val first: CrmCustomer,
@@ -11,30 +11,81 @@ data class CrmDuplicateCandidate(
 )
 
 object CrmDuplicateDetector {
+    private const val MAX_WEAK_BLOCK_SIZE = 40
+    private const val MAX_CANDIDATE_PAIRS = 30_000
+    private const val GRID_SIZE_DEGREES = 0.0025
+
     fun find(customers: List<CrmCustomer>, limit: Int = 100): List<CrmDuplicateCandidate> {
         if (customers.size < 2) return emptyList()
 
         val active = customers.filter { it.mergedIntoCustomerId.isNullOrBlank() }
+        if (active.size < 2) return emptyList()
+
         val byId = active.associateBy { it.id }
         val candidatePairs = linkedSetOf<Pair<String, String>>()
-        val blocks = mutableMapOf<String, MutableList<String>>()
+
+        val registryBlocks = mutableMapOf<String, MutableList<String>>()
+        val taxBlocks = mutableMapOf<String, MutableList<String>>()
+        val phoneBlocks = mutableMapOf<String, MutableList<String>>()
+        val exactNameBlocks = mutableMapOf<String, MutableList<String>>()
+        val prefixBlocks = mutableMapOf<String, MutableList<String>>()
+        val gridBlocks = mutableMapOf<String, MutableList<String>>()
 
         active.forEach { customer ->
-            blockingKeys(customer).forEach { key ->
-                blocks.getOrPut(key) { mutableListOf() }.add(customer.id)
-            }
-        }
+            identity(customer.registryNumber)?.let { registryBlocks.add(it, customer.id) }
+            digits(customer.taxOrNationalId)?.let { taxBlocks.add(it, customer.id) }
+            phone(customer.phone)?.let { phoneBlocks.add(it, customer.id) }
 
-        blocks.values.forEach { ids ->
-            val unique = ids.distinct().take(100)
-            for (i in 0 until unique.size) {
-                for (j in i + 1 until unique.size) {
-                    val a = unique[i]
-                    val b = unique[j]
-                    candidatePairs += if (a < b) a to b else b to a
+            val city = normalize(customer.city)
+            val district = normalize(customer.district)
+            val name = normalize(customer.signboardName ?: customer.businessName)
+            if (name.length >= 4) {
+                exactNameBlocks.add("$city|$district|$name", customer.id)
+                prefixBlocks.add("$city|$district|${name.take(12)}", customer.id)
+            }
+
+            val lat = customer.latitude
+            val lon = customer.longitude
+            if (lat != null && lon != null && lat in -90.0..90.0 && lon in -180.0..180.0) {
+                val latCell = floor(lat / GRID_SIZE_DEGREES).toInt()
+                val lonCell = floor(lon / GRID_SIZE_DEGREES).toInt()
+                for (latOffset in -1..1) {
+                    for (lonOffset in -1..1) {
+                        gridBlocks.add(
+                            "$city|$district|${latCell + latOffset}|${lonCell + lonOffset}",
+                            customer.id,
+                        )
+                    }
                 }
             }
         }
+
+        fun consume(blocks: Map<String, List<String>>, weak: Boolean) {
+            for (ids in blocks.values) {
+                if (candidatePairs.size >= MAX_CANDIDATE_PAIRS) return
+                val unique = ids.distinct()
+                if (unique.size < 2) continue
+                if (weak && unique.size > MAX_WEAK_BLOCK_SIZE) continue
+
+                val capped = if (weak) unique else unique.take(100)
+                for (i in 0 until capped.lastIndex) {
+                    for (j in i + 1 until capped.size) {
+                        val a = capped[i]
+                        val b = capped[j]
+                        candidatePairs += if (a < b) a to b else b to a
+                        if (candidatePairs.size >= MAX_CANDIDATE_PAIRS) return
+                    }
+                }
+            }
+        }
+
+        // Güçlü kimlikler önce işlenir; yeni kayıtlar kalabalık isim blokları yüzünden kaybolmaz.
+        consume(registryBlocks, weak = false)
+        consume(taxBlocks, weak = false)
+        consume(phoneBlocks, weak = false)
+        consume(exactNameBlocks, weak = true)
+        consume(prefixBlocks, weak = true)
+        consume(gridBlocks, weak = true)
 
         return candidatePairs.asSequence()
             .mapNotNull { (aId, bId) ->
@@ -51,6 +102,10 @@ object CrmDuplicateDetector {
             )
             .take(limit)
             .toList()
+    }
+
+    private fun <K> MutableMap<K, MutableList<String>>.add(key: K, customerId: String) {
+        getOrPut(key) { mutableListOf() }.add(customerId)
     }
 
     private fun score(a: CrmCustomer, b: CrmCustomer): CrmDuplicateCandidate? {
@@ -128,19 +183,6 @@ object CrmDuplicateDetector {
         return if (reasons.isEmpty()) null else CrmDuplicateCandidate(a, b, score, reasons)
     }
 
-    private fun blockingKeys(customer: CrmCustomer): Set<String> = buildSet {
-        identity(customer.registryNumber)?.let { add("r:$it") }
-        digits(customer.taxOrNationalId)?.let { add("t:$it") }
-        phone(customer.phone)?.let { add("p:$it") }
-        val name = normalize(customer.signboardName ?: customer.businessName)
-        if (name.isNotBlank()) {
-            add("n:${normalize(customer.city)}:${normalize(customer.district)}:${name.take(24)}")
-            name.split(' ').filter { it.length >= 4 }.take(3).forEach {
-                add("w:${normalize(customer.city)}:${normalize(customer.district)}:$it")
-            }
-        }
-    }
-
     private fun tokenSimilarity(a: String, b: String): Double {
         if (a.isBlank() || b.isBlank()) return 0.0
         val aa = a.split(' ').filter(String::isNotBlank).toSet()
@@ -160,7 +202,7 @@ object CrmDuplicateDetector {
     private fun phone(value: String?): String? {
         val digits = value?.filter(Char::isDigit).orEmpty()
         if (digits.length < 10) return null
-        return digits.takeLast(min(10, digits.length))
+        return digits.takeLast(10)
     }
 
     private fun normalize(value: String): String =
