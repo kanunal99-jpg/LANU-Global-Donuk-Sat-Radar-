@@ -116,9 +116,8 @@ class FinalUiAcceptanceInstrumentationTest {
         waitForTag("neighborhood_filter").assertIsEnabled().performClick()
         waitForText("Caferağa").assertExists().performClick()
 
-        scrollMainToTag("city_filter")
-        waitForTag("city_filter").performClick()
-        waitForText("İstanbul Avrupa").assertExists().performClick()
+        scrollMainToTag("istanbul_side_european")
+        waitForTag("istanbul_side_european").assertIsDisplayed().performClick()
 
         scrollMainToTag("district_filter")
         waitForTag("district_filter").performClick()
@@ -280,13 +279,15 @@ class FinalUiAcceptanceInstrumentationTest {
         }
 
         composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_send_quote_" + quoteId))
-        waitForEnabledTag("crm_send_quote_" + quoteId).performClick()
+        composeRule.waitForIdle()
+        waitForEnabledTag("crm_send_quote_" + quoteId).assertIsDisplayed().performClick()
         waitForStep("teklifi SENT durumuna geçirme") {
             runBlocking { commercialRepository.observeQuotes(customerId).first().any { it.id == quoteId && it.status.name == "SENT" } }
         }
 
         composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_accept_quote_" + quoteId))
-        waitForEnabledTag("crm_accept_quote_" + quoteId).performClick()
+        composeRule.waitForIdle()
+        waitForEnabledTag("crm_accept_quote_" + quoteId).assertIsDisplayed().performClick()
         waitForStep("teklifi ACCEPTED durumuna geçirme") {
             runBlocking { commercialRepository.observeQuotes(customerId).first().any { it.id == quoteId && it.status.name == "ACCEPTED" } }
         }
