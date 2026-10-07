@@ -1,5 +1,6 @@
 package com.lanu.globaldonuksatisradari
 
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -69,8 +70,14 @@ fun CrmCommercialWorkspace(
         onSendQuote = { quoteId ->
             scope.launch {
                 runCatching { repository.transitionQuoteStatus(quoteId, CrmQuoteStatus.SENT) }
-                    .onSuccess { onMessage("Teklif gönderildi olarak işaretlendi.") }
-                    .onFailure { onMessage("Teklif güncellenemedi: " + it.message.orEmpty()) }
+                    .onSuccess {
+                        Log.i("LanuCommercial", "Teklif SENT durumuna geçti: $quoteId")
+                        onMessage("Teklif gönderildi olarak işaretlendi.")
+                    }
+                    .onFailure { error ->
+                        Log.e("LanuCommercial", "Teklif SENT durumuna geçirilemedi: $quoteId", error)
+                        onMessage("Teklif güncellenemedi: " + error.message.orEmpty())
+                    }
             }
         },
         onAcceptQuote = { quoteId ->
