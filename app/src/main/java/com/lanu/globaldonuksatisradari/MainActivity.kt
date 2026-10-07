@@ -452,6 +452,23 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         query = ""
     }
 
+    fun selectCityScope(city: City) {
+        invalidateSearch()
+        selectedCity = city
+        selectedDistrict = "Tümü"
+        selectedNeighborhood = "Tümü"
+        availableDistricts = city.districts
+        availableNeighborhoods = emptyList()
+        districtLoading = false
+        neighborhoodLoading = false
+        districtMenu = false
+        neighborhoodMenu = false
+        results = emptyList()
+        selectedBusiness = null
+        resetFilters()
+        cityMenu = false
+    }
+
     LanuGlobalTheme {
         Scaffold(
             topBar = {
@@ -574,21 +591,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                     OutlinedButton(onClick = { cityMenu = true }, modifier = Modifier.fillMaxWidth().testTag("city_filter")) { Text(selectedCity.label) }
                                     DropdownMenu(cityMenu, { cityMenu = false }) { cities.forEach { city -> DropdownMenuItem(
                                         { Text(city.label) },
-                                        onClick = {
-                                            invalidateSearch()
-                                            selectedCity = city
-                                            selectedDistrict = "Tümü"
-                                            selectedNeighborhood = "Tümü"
-                                            availableDistricts = city.districts
-                                            availableNeighborhoods = emptyList()
-                                            districtLoading = false
-                                            neighborhoodLoading = false
-                                            districtMenu = false
-                                            neighborhoodMenu = false
-                                            results = emptyList()
-                                            resetFilters()
-                                            cityMenu = false
-                                        },
+                                        onClick = { selectCityScope(city) },
                                     ) } }
                                 }
                                 Box(Modifier.weight(1f)) {
@@ -597,6 +600,29 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         DropdownMenuItem({ Text("Tümü") }, onClick = { invalidateSearch(); selectedDistrict = "Tümü"; results = emptyList(); resetFilters(); districtMenu = false })
                                         availableDistricts.forEach { district -> DropdownMenuItem({ Text(district) }, onClick = { invalidateSearch(); selectedDistrict = district; results = emptyList(); resetFilters(); districtMenu = false }) }
                                     }
+                                }
+                            }
+                        }
+                        if (selectedCity.name == "İstanbul") {
+                            item {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    val anatolian = cities.first { it.label == "İstanbul Anadolu" }
+                                    val european = cities.first { it.label == "İstanbul Avrupa" }
+                                    FilterChip(
+                                        selected = selectedCity.label == anatolian.label,
+                                        onClick = { selectCityScope(anatolian) },
+                                        label = { Text("Anadolu Yakası", maxLines = 1) },
+                                        modifier = Modifier.weight(1f).testTag("istanbul_side_anatolian"),
+                                    )
+                                    FilterChip(
+                                        selected = selectedCity.label == european.label,
+                                        onClick = { selectCityScope(european) },
+                                        label = { Text("Avrupa Yakası", maxLines = 1) },
+                                        modifier = Modifier.weight(1f).testTag("istanbul_side_european"),
+                                    )
                                 }
                             }
                         }
