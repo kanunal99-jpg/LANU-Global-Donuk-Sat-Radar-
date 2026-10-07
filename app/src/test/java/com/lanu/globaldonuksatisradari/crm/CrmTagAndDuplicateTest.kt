@@ -50,6 +50,44 @@ class CrmTagAndDuplicateTest {
         assertTrue(CrmDuplicateDetector.find(listOf(a, b)).isEmpty())
     }
 
+    @Test(timeout = 10_000)
+    fun largeProspectPoolKeepsDuplicateDetectionBounded() {
+        val bulk = (0 until 6_574).map { index ->
+            customer(
+                id = "bulk-$index",
+                name = "Global Market Nokta $index",
+                city = "İstanbul",
+                district = if (index % 2 == 0) "Sultanbeyli" else "Kadıköy",
+            )
+        }
+        val target = customer(
+            id = "target",
+            name = "Özel Donuk Satış Merkezi",
+            phone = "0532 111 22 33",
+            city = "İstanbul",
+            district = "Sultanbeyli",
+            latitude = 40.9700,
+            longitude = 29.2700,
+        )
+        val source = customer(
+            id = "source",
+            name = "ÖZEL DONUK SATIŞ MERKEZİ",
+            phone = "+90 532 111 22 33",
+            city = "İstanbul",
+            district = "Sultanbeyli",
+            latitude = 40.9702,
+            longitude = 29.2702,
+        )
+
+        val candidates = CrmDuplicateDetector.find(bulk + target + source)
+
+        assertTrue(
+            candidates.any {
+                setOf(it.first.id, it.second.id) == setOf("target", "source")
+            },
+        )
+    }
+
     private fun customer(
         id: String,
         name: String,
