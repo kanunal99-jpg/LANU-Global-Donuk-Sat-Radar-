@@ -104,4 +104,12 @@ object ProductMediaStore {
         "image/gif" -> "gif"
         else -> "jpg"
     }
+
+    private val SUPPORTED_IMAGE_MIME_TYPES = setOf(
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/webp",
+        "image/gif",
+    )
 }
