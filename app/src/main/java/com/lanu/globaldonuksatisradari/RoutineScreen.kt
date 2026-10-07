@@ -28,6 +28,7 @@ import com.lanu.globaldonuksatisradari.crm.RoutineDayPlan
 import com.lanu.globaldonuksatisradari.crm.RouteStop
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 
 private data class RoutineComputation(
     val route: List<RouteStop>,
@@ -61,6 +62,8 @@ fun RoutineScreen(
         mutableStateOf<RoutineComputation?>(null)
     }
     LaunchedEffect(routable, startId) {
+        // Önce Rutin ekranının ilk karesini çiz; büyük rota hesabı sekme geçişini geciktirmesin.
+        yield()
         automaticComputation = withContext(Dispatchers.Default) {
             RoutineComputation(
                 route = CrmRoutePlanner.plan(routable, startId),
@@ -77,6 +80,7 @@ fun RoutineScreen(
         mutableStateOf<MonthlyRoutinePlan?>(null)
     }
     LaunchedEffect(routable, startId, manualIntervalDays) {
+        yield()
         manualPlan = if (manualIntervalDays == null) {
             null
         } else {
