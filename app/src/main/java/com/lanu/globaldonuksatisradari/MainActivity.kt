@@ -208,6 +208,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var coordinateFilter by remember { mutableStateOf("Tümü") }
     var menuFilter by remember { mutableStateOf("Tümü") }
     var openingHoursFilter by remember { mutableStateOf("Tümü") }
+    var advancedFiltersExpanded by rememberSaveable { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<VerifiedBusiness>>(emptyList()) }
     var selectedBusiness by remember { mutableStateOf<VerifiedBusiness?>(null) }
@@ -329,6 +330,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     }
     LaunchedEffect(crmRegistryCities, activeOwnerUserId) {
         if (crmRegistryCities.isEmpty()) return@LaunchedEffect
+        kotlinx.coroutines.delay(400)
         runCatching {
             val records = withContext(Dispatchers.IO) {
                 crmRegistryCities.flatMap { city -> officialRegistryStore.recordsFor(city, null) }
@@ -539,6 +541,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                         onClick = { selectedCustomerId = null; navigateTo(AppSection.ROUTINE) },
                         icon = { Text("↗") },
                         label = { Text("Rutin") },
+                        modifier = Modifier.testTag("nav_routine"),
                     )
                     NavigationBarItem(
                         selected = section in setOf(
@@ -716,12 +719,20 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                             }
                                         },
                                     )
-                                    InventoryFilterMenu("Telefon", phoneFilter, presenceOptions, { phoneFilter = it })
-                                    InventoryFilterMenu("Web sitesi", websiteFilter, presenceOptions, { websiteFilter = it })
-                                    InventoryFilterMenu("Adres", addressFilter, presenceOptions, { addressFilter = it })
-                                    InventoryFilterMenu("Koordinat", coordinateFilter, presenceOptions, { coordinateFilter = it })
-                                    InventoryFilterMenu("Menü", menuFilter, presenceOptions, { menuFilter = it })
-                                    InventoryFilterMenu("Çalışma saati", openingHoursFilter, presenceOptions, { openingHoursFilter = it })
+                                    OutlinedButton(
+                                        onClick = { advancedFiltersExpanded = !advancedFiltersExpanded },
+                                        modifier = Modifier.fillMaxWidth().testTag("advanced_filters_toggle"),
+                                    ) {
+                                        Text(if (advancedFiltersExpanded) "Gelişmiş filtreleri kapat" else "Gelişmiş filtreler")
+                                    }
+                                    if (advancedFiltersExpanded) {
+                                        InventoryFilterMenu("Telefon", phoneFilter, presenceOptions, { phoneFilter = it })
+                                        InventoryFilterMenu("Web sitesi", websiteFilter, presenceOptions, { websiteFilter = it })
+                                        InventoryFilterMenu("Adres", addressFilter, presenceOptions, { addressFilter = it })
+                                        InventoryFilterMenu("Koordinat", coordinateFilter, presenceOptions, { coordinateFilter = it })
+                                        InventoryFilterMenu("Menü", menuFilter, presenceOptions, { menuFilter = it })
+                                        InventoryFilterMenu("Çalışma saati", openingHoursFilter, presenceOptions, { openingHoursFilter = it })
+                                    }
                                     Text("${visibleResults.size} sonuç", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                                 }
                             }

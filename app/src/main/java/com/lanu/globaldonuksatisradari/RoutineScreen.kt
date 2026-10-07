@@ -30,11 +30,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 
-private data class RoutineComputation(
-    val route: List<RouteStop>,
-    val automaticPlan: MonthlyRoutinePlan,
-)
-
 @Composable
 fun RoutineScreen(
     customers: List<CrmCustomer>,
@@ -58,21 +53,35 @@ fun RoutineScreen(
                 longitude in -180.0..180.0
         }
     }
-    var automaticComputation by remember(routable, startId) {
-        mutableStateOf<RoutineComputation?>(null)
+    var automaticPlan by remember(routable, startId) {
+        mutableStateOf<MonthlyRoutinePlan?>(null)
     }
     LaunchedEffect(routable, startId) {
-        // Önce Rutin ekranının ilk karesini çiz; büyük rota hesabı sekme geçişini geciktirmesin.
+        automaticPlan = null
+        // Sekme önce anında çizilir; ağır aylık plan ilk frame sonrasında arka planda hazırlanır.
         yield()
-        automaticComputation = withContext(Dispatchers.Default) {
-            RoutineComputation(
-                route = CrmRoutePlanner.plan(routable, startId),
-                automaticPlan = MonthlyRoutinePlanner.plan(routable, startId),
-            )
+        automaticPlan = withContext(Dispatchers.Default) {
+            MonthlyRoutinePlanner.plan(routable, startId)
         }
     }
-    val route = automaticComputation?.route.orEmpty()
-    val automaticPlan = automaticComputation?.automaticPlan
+
+    var routeRequestVersion by remember(routable) { mutableIntStateOf(0) }
+    val routeRequested = routeRequestVersion > 0
+    var routePlanning by remember(routable, startId) { mutableStateOf(false) }
+    var route by remember(routable, startId) { mutableStateOf<List<RouteStop>>(emptyList()) }
+    LaunchedEffect(routable, startId, routeRequestVersion) {
+        if (!routeRequested) {
+            route = emptyList()
+            routePlanning = false
+            return@LaunchedEffect
+        }
+        routePlanning = true
+        yield()
+        route = withContext(Dispatchers.Default) {
+            CrmRoutePlanner.plan(routable, startId)
+        }
+        routePlanning = false
+    }
 
     val manualIntervalDays = manualIntervalInput.trim().toIntOrNull()
         ?.takeIf { it in 1..365 }
@@ -95,10 +104,9 @@ fun RoutineScreen(
     }
 
     val missingCoordinates = scopedCustomers.size - routable.size
-    val planning = automaticComputation == null && routable.isNotEmpty()
+    val planning = automaticPlan == null && routable.isNotEmpty()
     val startName = when {
-        planning -> "Plan hazırlanıyor…"
-        route.isNotEmpty() -> route.first().customer.businessName
+        startId != null -> routable.firstOrNull { it.id == startId }?.businessName ?: "Seçili başlangıç"
         else -> "Otomatik başlangıç"
     }
 
@@ -139,6 +147,36 @@ fun RoutineScreen(
             }
         }
 
+        if (routable.isNotEmpty()) {
+            item {
+                Card(Modifier.fillMaxWidth().testTag("route_detail_control")) {
+                    Column(
+                        Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text("Rota detayı", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Aylık plan arka planda hazırlanır. Tek tek rota sırası yalnızca istediğinizde hesaplanır; böylece binlerce CRM kaydı sekme geçişini yavaşlatmaz.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        OutlinedButton(
+                            onClick = { routeRequestVersion++ },
+                            enabled = !routePlanning,
+                            modifier = Modifier.fillMaxWidth().testTag("routine_prepare_route"),
+                        ) {
+                            Text(
+                                when {
+                                    routePlanning -> "Rota hazırlanıyor…"
+                                    routeRequested && route.isNotEmpty() -> "Rotayı yeniden hesapla"
+                                    else -> "Rota detayını hazırla"
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         item {
             if (automaticPlan == null) {
                 Card(
@@ -158,12 +196,14 @@ fun RoutineScreen(
                     }
                 }
             } else {
-                RoutinePlanSummaryCard(
-                    title = "Otomatik Aylık Ziyaret Planı",
-                    plan = automaticPlan,
-                    detail = "Aktif müşteri/Sipariş: 7 gün • Teklif/Numune/Görüşme/Ziyaret: 14 gün • Aday: 28 gün • Kayıp: otomatik plan dışında",
-                    exportLabel = "Otomatik",
-                )
+                automaticPlan?.let { plan ->
+                    RoutinePlanSummaryCard(
+                        title = "Otomatik Aylık Ziyaret Planı",
+                        plan = plan,
+                        detail = "Aktif müşteri/Sipariş: 7 gün • Teklif/Numune/Görüşme/Ziyaret: 14 gün • Aday: 28 gün • Kayıp: otomatik plan dışında",
+                        exportLabel = "Otomatik",
+                    )
+                }
             }
         }
 
@@ -237,36 +277,42 @@ fun RoutineScreen(
             }
         }
 
-        if (routable.size >= 2) {
-            item {
-                Text("Başlangıç noktası seçimi", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Aşağıdaki listeden başlangıç seçildiğinde tek rota, otomatik aylık plan ve manuel tekrar planı birlikte yeniden hesaplanır.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
-
-        items(route, key = { it.customer.id }) { stop ->
-            RouteStopCard(stop = stop, onChooseStart = { startId = stop.customer.id })
-        }
-
-        if (route.isNotEmpty()) {
-            item {
-                val last = route.last()
-                Text(
-                    "Kümülatif rota: " + "%.2f".format(last.cumulativeDistanceKm) + " km • " +
-                        formatMinutes(last.cumulativeEstimatedMinutes) + " tahmini yol",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    "Mesafe koordinatlar arası Haversine hesabıdır. Süre; yol sapması için 1,25 katsayı ve 30 km/s ortalama şehir hızıyla hesaplanan offline fallback tahminidir; canlı trafik değildir.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        } else {
+        if (routable.isEmpty()) {
             item {
                 Text("Rutin oluşturmak için en az bir müşterinin geçerli X/Y koordinatı olmalı.")
+            }
+        } else {
+            if (routeRequested && !routePlanning && route.isNotEmpty()) {
+                item {
+                    Text("Başlangıç noktası seçimi", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Başlangıç değiştiğinde rota ve aylık plan yeniden hesaplanır.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                items(route.take(ROUTE_PREVIEW_LIMIT), key = { it.customer.id }) { stop ->
+                    RouteStopCard(stop = stop, onChooseStart = { startId = stop.customer.id })
+                }
+                if (route.size > ROUTE_PREVIEW_LIMIT) {
+                    item {
+                        Text(
+                            "Performans için ekranda ilk $ROUTE_PREVIEW_LIMIT rota noktası gösteriliyor. Tam plan Excel çıktısında korunur.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+                item {
+                    val last = route.last()
+                    Text(
+                        "Kümülatif rota: " + "%.2f".format(last.cumulativeDistanceKm) + " km • " +
+                            formatMinutes(last.cumulativeEstimatedMinutes) + " tahmini yol",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        "Mesafe koordinatlar arası Haversine hesabıdır. Süre; yol sapması için 1,25 katsayı ve 30 km/s ortalama şehir hızıyla hesaplanan offline fallback tahminidir; canlı trafik değildir.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
         }
     }
@@ -415,3 +461,5 @@ internal fun openExternalNavigation(
         context.startActivity(fallback)
     }
 }
+
+private const val ROUTE_PREVIEW_LIMIT = 200

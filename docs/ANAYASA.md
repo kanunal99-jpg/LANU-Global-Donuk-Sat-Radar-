@@ -1,10 +1,16 @@
 # LANU Global Donuk Satış Radarı — ANAYASA
 
 ## 1. Amaç
-Bu proje, HORECA satış ekiplerinin gerçek ve kaynaklandırılmış işletme verileri üzerinden şehir/ilçe/mahalle bazında müşteri keşfi, saha planlama, satış fırsatı analizi ve CRM takibi yapmasını sağlar.
+Bu proje; Türkiye genelindeki sektör bağımsız işletmeleri ve potansiyel satış noktalarını gerçek, kaynaklandırılmış ve izlenebilir verilerle keşfetmek; şehir/ilçe/mahalle/nokta düzeyinde analiz etmek; saha planlama, harita, CRM, teklif, sipariş ve satış takibini tek üründe yürütmek için geliştirilir. HORECA, FMCG, bayi, distribütör, market, restoran ve benzeri gruplar ana sistemin alt segmentleridir; ürün yalnızca HORECA ile sınırlandırılamaz.
 
 ## 2. Coğrafya
-Mimari İstanbul'a sabitlenemez. Hiyerarşi: ülke → şehir → ilçe → mahalle → işletme. İlk aktif şehir İstanbul'dur. Yeni şehir eklemek kod değişikliği gerektirmemelidir.
+Mimari İstanbul'a sabitlenemez. Hiyerarşi: ülke → il → ilçe → mahalle → işletme/nokta.
+- Türkiye'nin 81 ili yerel kanonik katalogda bulunmalıdır.
+- İlçe kataloğu 973 idari ilçe kapsamını korur; 922 kaymakamlık + 51 "Merkez" ilçe ayrımı testle doğrulanır.
+- İstanbul 39 ilçedir: Anadolu Yakası 14, Avrupa Yakası 25; listeler kesişemez.
+- Çevrimiçi idari kaynak yerel kanonik listeyle tam eşleşmiyorsa kullanıcıya karışık/eksik liste gösterilmez; doğrulanmış yerel fallback kullanılır.
+- İl/ilçe kataloğunun tam olması, işletme arama sonucunun o bölgedeki bütün işletmeleri kapsadığı anlamına gelmez. Kaynak kapsamı ayrıca belirtilir.
+- Yeni il veya veri kaynağı desteği, ana navigasyon ve veri modelini yeniden tasarlamayı gerektirmemelidir.
 
 ## 3. Veri doğruluğu
 - Gerçek, tahmini ve kullanıcı tarafından girilmiş veri birbirinden ayrılır.
@@ -112,3 +118,60 @@ Aşağıdaki eksikler denetimde tespit edilmiş olup tamamlanmadan ürün tamaml
 `kaynak/lisans → veri modeli → veri doğrulama → repository/backend → güvenlik → UI → hata/fallback → test → CI → gerçek cihaz → release → durum güncellemesi`
 
 Bu sırayı atlayarak üst katmanda geliştirme yapmak, sonraki aşamalarda hatayı büyütme riski taşıdığı için kabul edilmez.
+
+
+## 21. KATMANLI DAYANIKLILIK — DEĞİŞMEZ PROJE STANDARDI
+Her kritik zincir şu sırayı uygular:
+
+`ANA SERVİS → ALTERNATİF → GERÇEK FALLBACK → HATA YÖNETİMİ → GÜVENLİ VARSAYILAN → LOG/İZLEME → SMOKE TEST`
+
+Bu kural özellikle AI/LLM, harici API, veritabanı, ödeme/kota, görsel analiz, dosya/storage, authentication, backend↔frontend, APK↔backend ve deploy/production zincirlerinde zorunludur. Fallback yalnız teorik kod yolu değil, test edilmiş çalışan yol olmalıdır.
+
+## 22. Maliyet kontrolü — ZORUNLU
+- Öncelik ücretsiz, açık kaynak ve yerel çözümlerdedir; ardından uygun free-tier kullanılır.
+- Kullanıcının açık onayı olmadan ücret doğuran abonelik, API, altyapı, veri paketi veya servis başlatılamaz.
+- Ücretsiz çözüm daha düşük kapsam sağlıyorsa fark açıkça raporlanır; kapsam uydurulmaz.
+- Ücretli seçenek yalnız maliyet, kapsam, kullanım hakkı ve teknik gereksinimler doğrulandıktan sonra önerilebilir.
+
+## 23. Girdi güvenliği ve veri sözleşmesi
+Tüm kullanıcı, dosya, API ve dış kaynak girdilerinde uygun seviyede:
+`validate → sanitize → normalize → log`
+uygulanır.
+- İl/ilçe, koordinat, telefon, VKN/TCKN, URL, fiyat, para birimi, dosya MIME/boyut ve kimlik alanları doğrulanır.
+- Hatalı veri sessizce kalıcı kayda alınmaz.
+- Tabela/nokta adı ile ticari unvan aynı alan kabul edilemez.
+- İlan olayı ile şirketin bugünkü durumu ayrı tutulur.
+- Ticaret Sicili ilan sayısı işletme sayısı olarak kullanılamaz.
+
+## 24. Performans ve kullanıcı deneyimi kapısı — ZORUNLU
+- Ana sekme değişimi ağır veri analizi, rota hesabı, duplicate taraması, ağ çağrısı veya dosya işlemini UI thread üzerinde bekleyemez.
+- Ekran önce çizilir; büyük hesaplar arka planda, lazy/on-demand veya parça parça yapılır.
+- Binlerce kayıt için O(n²) yaklaşım varsa ölçeklenebilir algoritma/fallback zorunludur.
+- Büyük listeler LazyColumn/LazyRow veya eşdeğer sanallaştırılmış bileşen kullanır.
+- Harita binlerce marker'ı doğrudan yükleyemez; clustering/chunking ve görünür alan stratejisi kullanılır.
+- Kullanıcının ana navigasyon tuşuna basması sonucu görünür ekran makul cihaz/emülatör kabul testinde gecikmeden açılmalıdır; performans regresyonu release engelidir.
+- Yükleme gerekiyorsa boş/donmuş ekran yerine açık durum mesajı gösterilir.
+- Kullanıcı başka sekmeye geçtiğinde artık gerekli olmayan ağır iş iptal edilebilir olmalıdır.
+
+## 25. Kurumsal UI/UX standardı
+- Alt navigasyon ve ana CRM sekmeleri tek satır, kısa ve tutarlı isimler kullanır; kritik etiketler dar ekranda anlamsız şekilde bölünemez.
+- Gereksiz büyük boşluk, gereksiz kart/padding ve ekranda değer üretmeyen dikey alan bırakılmaz.
+- Birincil görevler ilk ekranda görünür; ikincil/gelişmiş filtreler gerektiğinde açılır.
+- Formlar mantıksal gruplara ayrılır, zorunlu/opsiyonel alanlar açıkça belirtilir.
+- Renk, tipografi, köşe, boşluk ve buton hiyerarşisi LANU kurumsal temasına bağlı kalır.
+- Erişilebilirlik ve büyük yazı ölçeği korunur; bunun için kritik navigasyon etiketleri kısaltılır, bilgi kaybettirecek zorla küçültme yapılmaz.
+- UI değişiklikleri ekran görüntüsü/Compose smoke ile kontrol edilir.
+
+## 26. Yayın disiplini — HER ÖNEMLİ SÜRÜM
+- Bitirilen özellik önce test edilir; test doğruysa main'e alınır.
+- Main CI tamamen yeşil olmadan release güncellenmez.
+- Android içeren her önemli yayınlanabilir sürümün APK'sı GitHub Releases/Yayınlar altında cihazdan doğrudan indirilebilir olmalıdır.
+- APK'nın yalnız build edilmiş olması yeterli değildir: release'e eklenmiş, indirilebilir ve SHA/build-info ile doğrulanmış olmalıdır.
+- Başarısız yeni build eski çalışan release'i bozamaz.
+- Release commit'i ile APK build-info commit'i aynı olmalıdır.
+
+## 27. Tamamlama tanımı
+Bir iş yalnız kod yazıldığı için bitmiş sayılmaz. Tamamlama döngüsü:
+`Araştır → kök nedeni bul → düzelt → uygula → build → test → doğrula → deploy → production/smoke test → kanıtla`
+
+Kritik hata görülürse bir sonraki özelliğe geçmeden önce kök neden giderilir. Ürün çıktısı hazır olana kadar bu döngü sürdürülür.

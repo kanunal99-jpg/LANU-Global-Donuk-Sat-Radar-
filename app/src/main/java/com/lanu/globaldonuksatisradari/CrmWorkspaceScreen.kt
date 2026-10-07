@@ -94,25 +94,25 @@ fun CrmWorkspaceScreen(
             Tab(
                 selected = tab == CrmWorkspaceTab.TODAY,
                 onClick = { tab = CrmWorkspaceTab.TODAY },
-                text = { Text("Bugün", maxLines = 1) },
+                text = { Text("Bugün", maxLines = 1, style = MaterialTheme.typography.labelLarge) },
                 modifier = Modifier.testTag("crm_tab_today"),
             )
             Tab(
                 selected = tab == CrmWorkspaceTab.CUSTOMERS,
                 onClick = { tab = CrmWorkspaceTab.CUSTOMERS },
-                text = { Text("Müşteriler", maxLines = 1) },
+                text = { Text("Müşteri", maxLines = 1, style = MaterialTheme.typography.labelLarge) },
                 modifier = Modifier.testTag("crm_tab_customers"),
             )
             Tab(
                 selected = tab == CrmWorkspaceTab.DUPLICATES,
                 onClick = { tab = CrmWorkspaceTab.DUPLICATES },
-                text = { Text("Mükerrer", maxLines = 1) },
+                text = { Text("Mükerrer", maxLines = 1, style = MaterialTheme.typography.labelLarge) },
                 modifier = Modifier.testTag("crm_tab_duplicates"),
             )
             Tab(
                 selected = tab == CrmWorkspaceTab.DASHBOARD,
                 onClick = { tab = CrmWorkspaceTab.DASHBOARD },
-                text = { Text("Dashboard", maxLines = 1) },
+                text = { Text("Panel", maxLines = 1, style = MaterialTheme.typography.labelLarge) },
                 modifier = Modifier.testTag("crm_tab_dashboard"),
             )
         }
