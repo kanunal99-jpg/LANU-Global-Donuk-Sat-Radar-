@@ -140,9 +140,9 @@ class FinalUiAcceptanceInstrumentationTest {
             val customer = repository.addManualCustomerPoint(
                 businessName = "Etiket Smoke Nokta " + System.nanoTime(),
                 address = "Etiket Test Adres",
-                city = "Ardahan",
-                district = "Merkez",
-                neighborhood = "Kaptanpaşa",
+                city = "İstanbul",
+                district = "Kadıköy",
+                neighborhood = "Caferağa",
                 latitude = 40.991,
                 longitude = 29.031,
             )
@@ -217,7 +217,7 @@ class FinalUiAcceptanceInstrumentationTest {
         composeRule.waitUntil(30_000) {
             runBlocking {
                 LocalCrmRepository(LanuCrmDatabase.getInstance(composeRule.activity))
-                    .observeCustomers("İstanbul").first().none { it.id == sourceId }
+                    .observeCustomers("Ardahan").first().none { it.id == sourceId }
             }
         }
     }
@@ -230,9 +230,9 @@ class FinalUiAcceptanceInstrumentationTest {
             customerId = LocalCrmRepository(LanuCrmDatabase.getInstance(context)).addManualCustomerPoint(
                 businessName = "Ticari UI Smoke " + System.nanoTime(),
                 address = "Test Ticari Adres",
-                city = "Ardahan",
-                district = "Merkez",
-                neighborhood = "Kaptanpaşa",
+                city = "İstanbul",
+                district = "Kadıköy",
+                neighborhood = "Caferağa",
                 latitude = 40.99,
                 longitude = 29.03,
             ).id
