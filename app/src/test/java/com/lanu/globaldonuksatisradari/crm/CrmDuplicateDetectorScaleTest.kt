@@ -33,4 +33,16 @@ class CrmDuplicateDetectorScaleTest {
             },
         )
     }
+    @Test(timeout = 2_000)
+    fun interruptedAnalysisReturnsPromptly() {
+        val customers = (0 until 10_000).map(::customer)
+        Thread.currentThread().interrupt()
+        try {
+            assertTrue(CrmDuplicateDetector.find(customers).isEmpty())
+        } finally {
+            // JUnit worker thread must not leak the interrupt flag into later tests.
+            Thread.interrupted()
+        }
+    }
+
 }
