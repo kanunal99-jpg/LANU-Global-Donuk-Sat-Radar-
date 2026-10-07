@@ -95,6 +95,16 @@ class ProductCatalogRepository(context: Context) {
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val state = MutableStateFlow(load())
+    private val preferenceListener =
+        android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_PRODUCTS) {
+                state.value = load()
+            }
+        }
+
+    init {
+        preferences.registerOnSharedPreferenceChangeListener(preferenceListener)
+    }
 
     val products: StateFlow<List<CatalogProduct>> = state.asStateFlow()
 
