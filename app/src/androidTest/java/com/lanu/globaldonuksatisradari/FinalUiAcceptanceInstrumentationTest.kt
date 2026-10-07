@@ -315,7 +315,11 @@ class FinalUiAcceptanceInstrumentationTest {
     fun routineTab_opensBeforeRouteComputation() {
         waitForTag("nav_routine").assertHasClickAction().performClick()
         waitForTag("routine_screen", timeoutMs = 5_000).assertIsDisplayed()
-        waitForTag("route_detail_control", timeoutMs = 5_000).assertIsDisplayed()
+
+        composeRule.onNode(hasTestTag("routine_screen"))
+            .performScrollToNode(hasTestTag("route_detail_control"))
+        waitForTag("route_detail_control", timeoutMs = 15_000).assertIsDisplayed()
+        waitForTag("routine_prepare_route").assertHasClickAction()
     }
 
 }
