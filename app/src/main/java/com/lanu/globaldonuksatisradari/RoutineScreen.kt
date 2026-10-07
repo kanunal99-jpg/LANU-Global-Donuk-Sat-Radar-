@@ -165,12 +165,14 @@ fun RoutineScreen(
                     }
                 }
             } else {
-                RoutinePlanSummaryCard(
-                    title = "Otomatik Aylık Ziyaret Planı",
-                    plan = automaticPlan,
-                    detail = "Aktif müşteri/Sipariş: 7 gün • Teklif/Numune/Görüşme/Ziyaret: 14 gün • Aday: 28 gün • Kayıp: otomatik plan dışında",
-                    exportLabel = "Otomatik",
-                )
+                automaticPlan?.let { plan ->
+                    RoutinePlanSummaryCard(
+                        title = "Otomatik Aylık Ziyaret Planı",
+                        plan = plan,
+                        detail = "Aktif müşteri/Sipariş: 7 gün • Teklif/Numune/Görüşme/Ziyaret: 14 gün • Aday: 28 gün • Kayıp: otomatik plan dışında",
+                        exportLabel = "Otomatik",
+                    )
+                }
             }
         }
 
