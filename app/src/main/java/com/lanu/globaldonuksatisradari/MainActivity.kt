@@ -561,7 +561,19 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                 Box(Modifier.weight(1f)) {
                                     OutlinedButton(onClick = { cityMenu = true }, modifier = Modifier.fillMaxWidth().testTag("city_filter")) { Text(selectedCity.label) }
-                                    DropdownMenu(cityMenu, { cityMenu = false }) { cities.forEach { city -> DropdownMenuItem({ Text(city.label) }, onClick = { invalidateSearch(); selectedCity = city; selectedDistrict = "Tümü"; results = emptyList(); resetFilters(); cityMenu = false }) } }
+                                    DropdownMenu(cityMenu, { cityMenu = false }) { cities.forEach { city -> DropdownMenuItem(
+                                        { Text(city.label) },
+                                        onClick = {
+                                            invalidateSearch()
+                                            selectedCity = city
+                                            selectedDistrict = "Tümü"
+                                            availableDistricts = city.districts
+                                            districtLoading = true
+                                            results = emptyList()
+                                            resetFilters()
+                                            cityMenu = false
+                                        },
+                                    ) } }
                                 }
                                 Box(Modifier.weight(1f)) {
                                     OutlinedButton(onClick = { districtMenu = true }, modifier = Modifier.fillMaxWidth().testTag("district_filter")) { Text(if (districtLoading) "Yükleniyor…" else selectedDistrict) }
