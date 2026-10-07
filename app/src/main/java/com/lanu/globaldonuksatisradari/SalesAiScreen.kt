@@ -24,7 +24,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 
 @Composable
 fun SalesAiScreen(context: SalesAiContext) {
@@ -41,7 +44,11 @@ fun SalesAiScreen(context: SalesAiContext) {
     }
 
     LaunchedEffect(engine) {
-        availability = engine.availability()
+        // Ekranı anında göster; cihaz AI sağlayıcısı kontrolü ilk kareden sonra çalışsın.
+        yield()
+        availability = withContext(Dispatchers.Default) {
+            engine.availability()
+        }
     }
 
     Column(
