@@ -16,8 +16,7 @@ object ProductMediaStore {
 
     fun persistGalleryImage(context: Context, uri: Uri): String {
         val resolver = context.contentResolver
-        val mime = resolver.getType(uri).orEmpty()
-        require(mime.startsWith("image/")) { "Seçilen dosya desteklenen bir görsel değil." }
+        val mime = requireSupportedImageMime(resolver.getType(uri).orEmpty())
 
         val target = createPermanentImageFile(context, extensionForMime(mime))
         resolver.openInputStream(uri)?.use { input ->
@@ -35,6 +34,14 @@ object ProductMediaStore {
         } ?: error("Seçilen görsel açılamadı.")
         require(target.length() > 0L) { "Seçilen görsel boş." }
         return target.toURI().toString()
+    }
+
+    internal fun requireSupportedImageMime(value: String): String {
+        val mime = value.trim().lowercase()
+        require(mime in SUPPORTED_IMAGE_MIME_TYPES) {
+            "Desteklenen ürün görselleri: JPEG, PNG, WebP veya GIF."
+        }
+        return mime
     }
 
     fun createCameraTarget(context: Context): CameraImageTarget {
@@ -91,7 +98,7 @@ object ProductMediaStore {
     private fun imageDirectory(context: Context): File =
         File(context.filesDir, "product_images").apply { mkdirs() }
 
-    private fun extensionForMime(mime: String): String = when (mime.lowercase()) {
+    private fun extensionForMime(mime: String): String = when (requireSupportedImageMime(mime)) {
         "image/png" -> "png"
         "image/webp" -> "webp"
         "image/gif" -> "gif"
