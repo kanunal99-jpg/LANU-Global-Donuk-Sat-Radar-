@@ -65,10 +65,11 @@ fun RoutineScreen(
         }
     }
 
-    var routeRequested by remember(routable) { mutableStateOf(false) }
+    var routeRequestVersion by remember(routable) { mutableIntStateOf(0) }
+    val routeRequested = routeRequestVersion > 0
     var routePlanning by remember(routable, startId) { mutableStateOf(false) }
     var route by remember(routable, startId) { mutableStateOf<List<RouteStop>>(emptyList()) }
-    LaunchedEffect(routable, startId, routeRequested) {
+    LaunchedEffect(routable, startId, routeRequestVersion) {
         if (!routeRequested) {
             route = emptyList()
             routePlanning = false
@@ -140,6 +141,36 @@ fun RoutineScreen(
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text("Başlangıcı otomatiğe al")
+                        }
+                    }
+                }
+            }
+        }
+
+        if (routable.isNotEmpty()) {
+            item {
+                Card(Modifier.fillMaxWidth().testTag("route_detail_control")) {
+                    Column(
+                        Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text("Rota detayı", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Aylık plan arka planda hazırlanır. Tek tek rota sırası yalnızca istediğinizde hesaplanır; böylece binlerce CRM kaydı sekme geçişini yavaşlatmaz.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        OutlinedButton(
+                            onClick = { routeRequestVersion++ },
+                            enabled = !routePlanning,
+                            modifier = Modifier.fillMaxWidth().testTag("routine_prepare_route"),
+                        ) {
+                            Text(
+                                when {
+                                    routePlanning -> "Rota hazırlanıyor…"
+                                    routeRequested && route.isNotEmpty() -> "Rotayı yeniden hesapla"
+                                    else -> "Rota detayını hazırla"
+                                },
+                            )
                         }
                     }
                 }
@@ -251,34 +282,6 @@ fun RoutineScreen(
                 Text("Rutin oluşturmak için en az bir müşterinin geçerli X/Y koordinatı olmalı.")
             }
         } else {
-            item {
-                Card(Modifier.fillMaxWidth().testTag("route_detail_control")) {
-                    Column(
-                        Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Text("Rota detayı", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Aylık plan arka planda otomatik hazırlanır. Tek tek rota sırası yalnızca istediğinizde hesaplanır; böylece binlerce CRM kaydı sekme geçişini yavaşlatmaz.",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        OutlinedButton(
-                            onClick = { routeRequested = true },
-                            enabled = !routePlanning,
-                            modifier = Modifier.fillMaxWidth().testTag("routine_prepare_route"),
-                        ) {
-                            Text(
-                                when {
-                                    routePlanning -> "Rota hazırlanıyor…"
-                                    routeRequested && route.isNotEmpty() -> "Rotayı yeniden hesapla"
-                                    else -> "Rota detayını hazırla"
-                                },
-                            )
-                        }
-                    }
-                }
-            }
-
             if (routeRequested && !routePlanning && route.isNotEmpty()) {
                 item {
                     Text("Başlangıç noktası seçimi", style = MaterialTheme.typography.titleMedium)
