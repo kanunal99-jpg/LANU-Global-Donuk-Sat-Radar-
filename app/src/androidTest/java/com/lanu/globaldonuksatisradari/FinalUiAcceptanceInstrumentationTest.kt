@@ -140,9 +140,9 @@ class FinalUiAcceptanceInstrumentationTest {
             val customer = repository.addManualCustomerPoint(
                 businessName = "Etiket Smoke Nokta " + System.nanoTime(),
                 address = "Etiket Test Adres",
-                city = "İstanbul",
-                district = "Kadıköy",
-                neighborhood = "Caferağa",
+                city = "Ardahan",
+                district = "Merkez",
+                neighborhood = "Kaptanpaşa",
                 latitude = 40.991,
                 longitude = 29.031,
             )
@@ -181,27 +181,29 @@ class FinalUiAcceptanceInstrumentationTest {
             targetId = repository.addManualCustomerPoint(
                 businessName = "UI Mükerrer Market $suffix",
                 address = "UI Hedef $suffix",
-                city = "İstanbul",
-                district = "Kadıköy",
-                neighborhood = "Caferağa",
+                city = "Ardahan",
+                district = "Merkez",
+                neighborhood = "Kaptanpaşa",
                 latitude = 40.9870,
                 longitude = 29.0280,
                 phone = "05321112233",
+                taxOrNationalId = "9876543210",
             ).id
             sourceId = repository.addManualCustomerPoint(
                 businessName = "UI MÜKERRER MARKET $suffix",
                 address = "UI Kaynak $suffix",
-                city = "İstanbul",
-                district = "Kadıköy",
-                neighborhood = "Caferağa",
+                city = "Ardahan",
+                district = "Merkez",
+                neighborhood = "Kaptanpaşa",
                 latitude = 40.9871,
                 longitude = 29.0281,
                 phone = "+90 532 111 22 33",
+                taxOrNationalId = "9876543210",
             ).id
         }
 
         composeRule.activity.getSharedPreferences("lanu_ui_state", android.content.Context.MODE_PRIVATE)
-            .edit().putString("selected_city", "İstanbul Anadolu").putString("selected_district", "Kadıköy").apply()
+            .edit().putString("selected_city", "Ardahan").putString("selected_district", "Merkez").apply()
         composeRule.activityRule.scenario.recreate()
 
         waitForTag("nav_crm").performClick()
@@ -228,9 +230,9 @@ class FinalUiAcceptanceInstrumentationTest {
             customerId = LocalCrmRepository(LanuCrmDatabase.getInstance(context)).addManualCustomerPoint(
                 businessName = "Ticari UI Smoke " + System.nanoTime(),
                 address = "Test Ticari Adres",
-                city = "İstanbul",
-                district = "Kadıköy",
-                neighborhood = "Caferağa",
+                city = "Ardahan",
+                district = "Merkez",
+                neighborhood = "Kaptanpaşa",
                 latitude = 40.99,
                 longitude = 29.03,
             ).id
@@ -308,4 +310,12 @@ class FinalUiAcceptanceInstrumentationTest {
             runBlocking { commercialRepository.observeOrders(customerId).first().any { it.id == orderId && it.status.name == "CONFIRMED" } }
         }
     }
+
+    @Test(timeout = 30_000)
+    fun routineTab_opensBeforeRouteComputation() {
+        waitForTag("nav_routine").assertHasClickAction().performClick()
+        waitForTag("routine_screen", timeoutMs = 5_000).assertIsDisplayed()
+        waitForTag("route_detail_control", timeoutMs = 5_000).assertIsDisplayed()
+    }
+
 }
