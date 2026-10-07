@@ -46,6 +46,27 @@ class CrmRoutePlannerTest {
     }
 
     @Test
+    fun mediumGroupsUseScalableFallbackToAvoidDeviceNavigationStalls() {
+        assertTrue(CrmRoutePlanner.usesScalableFallback(97))
+        assertTrue(CrmRoutePlanner.usesScalableFallback(328))
+    }
+
+    @Test(timeout = 10_000)
+    fun largeMonthlyScaleRouteKeepsEveryPointWithoutQuadraticFallback() {
+        val customers = (0 until 6576).map { index ->
+            customer(
+                id = "device-$index",
+                name = "Nokta $index",
+                lat = 40.80 + (index % 96) * 0.001,
+                lon = 28.70 + (index / 96) * 0.001,
+            )
+        }
+        val route = CrmRoutePlanner.plan(customers)
+        assertEquals(6576, route.size)
+        assertEquals(6576, route.map { it.customer.id }.toSet().size)
+    }
+
+    @Test
     fun largeCustomerSetUsesScalableFallbackAndKeepsEveryPoint() {
         val customers = (0 until 1200).map { index ->
             customer(
