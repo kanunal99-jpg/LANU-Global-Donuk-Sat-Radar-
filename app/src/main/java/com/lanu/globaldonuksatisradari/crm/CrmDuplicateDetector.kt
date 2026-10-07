@@ -10,37 +10,74 @@ data class CrmDuplicateCandidate(
     val reasons: List<String>,
 )
 
+private data class DuplicateFingerprint(
+    val customer: CrmCustomer,
+    val city: String,
+    val district: String,
+    val name: String,
+    val address: String,
+    val registry: String?,
+    val taxId: String?,
+    val phone: String?,
+)
+
 object CrmDuplicateDetector {
+    private const val MAX_STRONG_BUCKET_SIZE = 50
+    private const val MAX_WEAK_BUCKET_SIZE = 30
+    private const val MAX_WEAK_PAIRS = 20_000
+
     fun find(customers: List<CrmCustomer>, limit: Int = 100): List<CrmDuplicateCandidate> {
-        if (customers.size < 2) return emptyList()
+        if (customers.size < 2 || limit <= 0) return emptyList()
 
-        val active = customers.filter { it.mergedIntoCustomerId.isNullOrBlank() }
-        val byId = active.associateBy { it.id }
-        val candidatePairs = linkedSetOf<Pair<String, String>>()
-        val blocks = mutableMapOf<String, MutableList<String>>()
+        val fingerprints = customers.asSequence()
+            .filter { it.mergedIntoCustomerId.isNullOrBlank() }
+            .map(::fingerprint)
+            .toList()
+        if (fingerprints.size < 2) return emptyList()
 
-        active.forEach { customer ->
-            blockingKeys(customer).forEach { key ->
-                blocks.getOrPut(key) { mutableListOf() }.add(customer.id)
+        val byId = fingerprints.associateBy { it.customer.id }
+        val strongBlocks = mutableMapOf<String, MutableList<String>>()
+        val weakBlocks = mutableMapOf<String, MutableList<String>>()
+
+        fingerprints.forEach { fp ->
+            strongKeys(fp).forEach { key ->
+                strongBlocks.getOrPut(key) { mutableListOf() }.add(fp.customer.id)
+            }
+            weakKeys(fp).forEach { key ->
+                weakBlocks.getOrPut(key) { mutableListOf() }.add(fp.customer.id)
             }
         }
 
-        blocks.values.forEach { ids ->
-            val unique = ids.distinct().take(100)
-            for (i in 0 until unique.size) {
-                for (j in i + 1 until unique.size) {
-                    val a = unique[i]
-                    val b = unique[j]
-                    candidatePairs += if (a < b) a to b else b to a
-                }
-            }
+        val candidatePairs = LinkedHashSet<Pair<String, String>>()
+        strongBlocks.values.forEach { ids ->
+            addPairs(
+                ids = ids,
+                maxBucketSize = MAX_STRONG_BUCKET_SIZE,
+                output = candidatePairs,
+                pairBudget = Int.MAX_VALUE,
+            )
+        }
+
+        var weakPairBudget = MAX_WEAK_PAIRS
+        weakBlocks.values.forEach { ids ->
+            if (weakPairBudget <= 0) return@forEach
+            if (ids.size !in 2..MAX_WEAK_BUCKET_SIZE) return@forEach
+            val before = candidatePairs.size
+            addPairs(
+                ids = ids,
+                maxBucketSize = MAX_WEAK_BUCKET_SIZE,
+                output = candidatePairs,
+                pairBudget = weakPairBudget,
+            )
+            weakPairBudget -= candidatePairs.size - before
         }
 
         return candidatePairs.asSequence()
             .mapNotNull { (aId, bId) ->
                 val a = byId[aId] ?: return@mapNotNull null
                 val b = byId[bId] ?: return@mapNotNull null
-                if (a.ownerUserId != b.ownerUserId) return@mapNotNull null
+                if (a.customer.ownerUserId != b.customer.ownerUserId) return@mapNotNull null
+                if (a.city != b.city) return@mapNotNull null
                 score(a, b)
             }
             .filter { it.score >= 70 }
@@ -53,36 +90,48 @@ object CrmDuplicateDetector {
             .toList()
     }
 
-    private fun score(a: CrmCustomer, b: CrmCustomer): CrmDuplicateCandidate? {
+    private fun addPairs(
+        ids: List<String>,
+        maxBucketSize: Int,
+        output: MutableSet<Pair<String, String>>,
+        pairBudget: Int,
+    ) {
+        if (ids.size < 2 || pairBudget <= 0) return
+        val unique = ids.asSequence().distinct().take(maxBucketSize).toList()
+        var added = 0
+        loop@ for (i in 0 until unique.size) {
+            for (j in i + 1 until unique.size) {
+                if (added >= pairBudget) break@loop
+                val a = unique[i]
+                val b = unique[j]
+                val pair = if (a < b) a to b else b to a
+                if (output.add(pair)) added++
+            }
+        }
+    }
+
+    private fun score(a: DuplicateFingerprint, b: DuplicateFingerprint): CrmDuplicateCandidate? {
         var score = 0
         val reasons = mutableListOf<String>()
 
-        val registryA = identity(a.registryNumber)
-        val registryB = identity(b.registryNumber)
-        if (registryA != null && registryA == registryB) {
+        if (a.registry != null && a.registry == b.registry) {
             score += 100
             reasons += "Aynı sicil/MERSİS"
         }
 
-        val taxA = digits(a.taxOrNationalId)
-        val taxB = digits(b.taxOrNationalId)
-        if (taxA != null && taxA == taxB) {
+        if (a.taxId != null && a.taxId == b.taxId) {
             score += 100
             reasons += "Aynı VKN/TCKN"
         }
 
-        val phoneA = phone(a.phone)
-        val phoneB = phone(b.phone)
-        if (phoneA != null && phoneA == phoneB) {
+        if (a.phone != null && a.phone == b.phone) {
             score += 60
             reasons += "Aynı telefon"
         }
 
-        val nameA = normalize(a.signboardName ?: a.businessName)
-        val nameB = normalize(b.signboardName ?: b.businessName)
-        val similarity = tokenSimilarity(nameA, nameB)
+        val similarity = tokenSimilarity(a.name, b.name)
         when {
-            nameA.isNotBlank() && nameA == nameB -> {
+            a.name.isNotBlank() && a.name == b.name -> {
                 score += 45
                 reasons += "Aynı işletme/tabela adı"
             }
@@ -96,19 +145,19 @@ object CrmDuplicateDetector {
             }
         }
 
-        val addressA = normalize(a.address.orEmpty())
-        val addressB = normalize(b.address.orEmpty())
-        if (addressA.isNotBlank() && addressA == addressB) {
+        if (a.address.isNotBlank() && a.address == b.address) {
             score += 25
             reasons += "Aynı açık adres"
         }
 
-        if (a.latitude != null && a.longitude != null && b.latitude != null && b.longitude != null) {
+        val ac = a.customer
+        val bc = b.customer
+        if (ac.latitude != null && ac.longitude != null && bc.latitude != null && bc.longitude != null) {
             val distance = CrmRoutePlanner.distanceKm(
-                a.latitude,
-                a.longitude,
-                b.latitude,
-                b.longitude,
+                ac.latitude,
+                ac.longitude,
+                bc.latitude,
+                bc.longitude,
             )
             when {
                 distance <= 0.10 -> {
@@ -122,23 +171,44 @@ object CrmDuplicateDetector {
             }
         }
 
-        if (!a.city.equals(b.city, ignoreCase = true)) score -= 80
-        if (!a.district.equals(b.district, ignoreCase = true)) score -= 20
+        if (a.district != b.district) score -= 20
 
-        return if (reasons.isEmpty()) null else CrmDuplicateCandidate(a, b, score, reasons)
+        return if (reasons.isEmpty()) null else {
+            CrmDuplicateCandidate(a.customer, b.customer, score, reasons)
+        }
     }
 
-    private fun blockingKeys(customer: CrmCustomer): Set<String> = buildSet {
-        identity(customer.registryNumber)?.let { add("r:$it") }
-        digits(customer.taxOrNationalId)?.let { add("t:$it") }
-        phone(customer.phone)?.let { add("p:$it") }
-        val name = normalize(customer.signboardName ?: customer.businessName)
-        if (name.isNotBlank()) {
-            add("n:${normalize(customer.city)}:${normalize(customer.district)}:${name.take(24)}")
-            name.split(' ').filter { it.length >= 4 }.take(3).forEach {
-                add("w:${normalize(customer.city)}:${normalize(customer.district)}:$it")
-            }
+    private fun fingerprint(customer: CrmCustomer): DuplicateFingerprint = DuplicateFingerprint(
+        customer = customer,
+        city = normalize(customer.city),
+        district = normalize(customer.district),
+        name = normalize(customer.signboardName ?: customer.businessName),
+        address = normalize(customer.address.orEmpty()),
+        registry = identity(customer.registryNumber),
+        taxId = digits(customer.taxOrNationalId),
+        phone = phone(customer.phone),
+    )
+
+    private fun strongKeys(fp: DuplicateFingerprint): Set<String> = buildSet {
+        fp.registry?.let { add("r:$it") }
+        fp.taxId?.let { add("t:$it") }
+        fp.phone?.let { add("p:$it") }
+        if (fp.name.isNotBlank()) {
+            add("n:${fp.city}:${fp.district}:${fp.name}")
         }
+    }
+
+    private fun weakKeys(fp: DuplicateFingerprint): Set<String> = buildSet {
+        if (fp.name.isBlank()) return@buildSet
+        fp.name.split(' ')
+            .asSequence()
+            .filter { it.length >= 5 }
+            .filterNot { it in COMMON_NAME_TOKENS }
+            .distinct()
+            .take(3)
+            .forEach { token ->
+                add("w:${fp.city}:${fp.district}:$token")
+            }
     }
 
     private fun tokenSimilarity(a: String, b: String): Double {
@@ -176,4 +246,18 @@ object CrmDuplicateDetector {
             .replace('ç', 'c')
             .replace(Regex("[^a-z0-9]+"), " ")
             .trim()
+
+    private val COMMON_NAME_TOKENS = setOf(
+        "market",
+        "gida",
+        "ticaret",
+        "sanayi",
+        "limited",
+        "sirketi",
+        "anonim",
+        "restoran",
+        "restaurant",
+        "magaza",
+        "sube",
+    )
 }
