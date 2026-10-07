@@ -65,6 +65,17 @@ class FinalUiAcceptanceInstrumentationTest {
         }
     }
 
+    private fun waitForEnabledTag(tag: String, timeoutMs: Long = 30_000): SemanticsNodeInteraction {
+        val matcher = hasTestTag(tag)
+        composeRule.waitUntil(timeoutMs) {
+            runCatching {
+                composeRule.onNode(matcher, useUnmergedTree = true).assertIsEnabled()
+                true
+            }.getOrDefault(false)
+        }
+        return composeRule.onNode(matcher, useUnmergedTree = true)
+    }
+
     @Test(timeout = 90_000)
     fun istanbulSideSelection_keepsDistrictAndNeighborhoodScopeSeparated() {
         val context = composeRule.activity
@@ -72,7 +83,7 @@ class FinalUiAcceptanceInstrumentationTest {
         context.getSharedPreferences("district_catalog_cache", android.content.Context.MODE_PRIVATE)
             .edit()
             .putString(
-                "districts:v2:istanbul",
+                "districts:v3:istanbul",
                 JSONObject()
                     .put("savedAt", now)
                     .put("districts", JSONArray().apply { IstanbulDistricts.ALL.forEach(::put) })
@@ -86,8 +97,8 @@ class FinalUiAcceptanceInstrumentationTest {
                 JSONObject().put("savedAt", now).put("items", JSONArray(listOf("Caferağa", "Moda"))).toString(),
             )
             .putString(
-                "neighborhoods:v2:istanbul:sisli",
-                JSONObject().put("savedAt", now).put("items", JSONArray(listOf("Mecidiyeköy", "Merkez"))).toString(),
+                "neighborhoods:v2:istanbul:arnavutkoy",
+                JSONObject().put("savedAt", now).put("items", JSONArray(listOf("Anadolu", "Arnavutköy Merkez"))).toString(),
             )
             .apply()
         context.getSharedPreferences("lanu_ui_state", android.content.Context.MODE_PRIVATE)
@@ -111,15 +122,14 @@ class FinalUiAcceptanceInstrumentationTest {
 
         scrollMainToTag("district_filter")
         waitForTag("district_filter").performClick()
-        waitForText("Şişli").assertExists()
-        waitForText("Bakırköy").assertExists()
-        waitForText("Şişli").performClick()
+        // Avrupa listesinin ilk görünür ilçesi seçilir; Şişli/Bakırköy kapsamı unit testte ayrıca kilitlidir.
+        waitForText("Arnavutköy").assertExists().performClick()
 
         scrollMainToTag("neighborhood_filter")
         waitForTag("neighborhood_filter").assertIsEnabled().performClick()
-        waitForText("Mecidiyeköy").assertExists().performClick()
+        waitForText("Anadolu").assertExists().performClick()
         scrollMainToTag("neighborhood_filter")
-        waitForText("Mahalle: Mecidiyeköy").assertExists()
+        waitForText("Mahalle: Anadolu").assertExists()
     }
 
     @Test(timeout = 90_000)
@@ -198,7 +208,9 @@ class FinalUiAcceptanceInstrumentationTest {
         waitForTag("nav_crm").performClick()
         waitForTag("crm_tab_duplicates").performClick()
         waitForTag("crm_duplicate_screen").assertIsDisplayed()
-        waitForTag("crm_merge_keep_" + targetId).performScrollTo().performClick()
+        composeRule.onNode(hasTestTag("crm_duplicate_screen"))
+            .performScrollToNode(hasTestTag("crm_merge_keep_" + targetId))
+        waitForTag("crm_merge_keep_" + targetId).assertIsDisplayed().performClick()
         waitForTag("crm_duplicate_confirm").assertIsDisplayed().performClick()
 
         composeRule.waitUntil(30_000) {
@@ -268,13 +280,13 @@ class FinalUiAcceptanceInstrumentationTest {
         }
 
         composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_send_quote_" + quoteId))
-        waitForTag("crm_send_quote_" + quoteId).performClick()
+        waitForEnabledTag("crm_send_quote_" + quoteId).performClick()
         waitForStep("teklifi SENT durumuna geçirme") {
             runBlocking { commercialRepository.observeQuotes(customerId).first().any { it.id == quoteId && it.status.name == "SENT" } }
         }
 
         composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_accept_quote_" + quoteId))
-        waitForTag("crm_accept_quote_" + quoteId).performClick()
+        waitForEnabledTag("crm_accept_quote_" + quoteId).performClick()
         waitForStep("teklifi ACCEPTED durumuna geçirme") {
             runBlocking { commercialRepository.observeQuotes(customerId).first().any { it.id == quoteId && it.status.name == "ACCEPTED" } }
         }
@@ -282,7 +294,7 @@ class FinalUiAcceptanceInstrumentationTest {
         val orderNumber = "SMOKE-S-" + System.nanoTime()
         composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_order_number_input"))
         waitForTag("crm_order_number_input").performTextInput(orderNumber)
-        waitForTag("crm_create_order_" + quoteId).assertIsEnabled().performClick()
+        waitForEnabledTag("crm_create_order_" + quoteId).performClick()
         waitForStep("kabul edilen tekliften sipariş oluşturma") {
             runBlocking { commercialRepository.observeOrders(customerId).first().any { it.orderNumber == orderNumber } }
         }
@@ -290,7 +302,7 @@ class FinalUiAcceptanceInstrumentationTest {
             commercialRepository.observeOrders(customerId).first().single { it.orderNumber == orderNumber }.id
         }
         composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_order_advance_" + orderId))
-        waitForTag("crm_order_advance_" + orderId).performClick()
+        waitForEnabledTag("crm_order_advance_" + orderId).performClick()
         waitForStep("siparişi CONFIRMED durumuna geçirme") {
             runBlocking { commercialRepository.observeOrders(customerId).first().any { it.id == orderId && it.status.name == "CONFIRMED" } }
         }
