@@ -280,14 +280,14 @@ class FinalUiAcceptanceInstrumentationTest {
 
         composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_send_quote_" + quoteId))
         composeRule.waitForIdle()
-        waitForEnabledTag("crm_send_quote_" + quoteId).assertIsDisplayed().performClick()
+        waitForEnabledTag("crm_send_quote_" + quoteId).performScrollTo().performClick()
         waitForStep("teklifi SENT durumuna geçirme") {
             runBlocking { commercialRepository.observeQuotes(customerId).first().any { it.id == quoteId && it.status.name == "SENT" } }
         }
 
         composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_accept_quote_" + quoteId))
         composeRule.waitForIdle()
-        waitForEnabledTag("crm_accept_quote_" + quoteId).assertIsDisplayed().performClick()
+        waitForEnabledTag("crm_accept_quote_" + quoteId).performScrollTo().performClick()
         waitForStep("teklifi ACCEPTED durumuna geçirme") {
             runBlocking { commercialRepository.observeQuotes(customerId).first().any { it.id == quoteId && it.status.name == "ACCEPTED" } }
         }
@@ -295,7 +295,7 @@ class FinalUiAcceptanceInstrumentationTest {
         val orderNumber = "SMOKE-S-" + System.nanoTime()
         composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_order_number_input"))
         waitForTag("crm_order_number_input").performTextInput(orderNumber)
-        waitForEnabledTag("crm_create_order_" + quoteId).performClick()
+        waitForEnabledTag("crm_create_order_" + quoteId).performScrollTo().performClick()
         waitForStep("kabul edilen tekliften sipariş oluşturma") {
             runBlocking { commercialRepository.observeOrders(customerId).first().any { it.orderNumber == orderNumber } }
         }
@@ -303,7 +303,7 @@ class FinalUiAcceptanceInstrumentationTest {
             commercialRepository.observeOrders(customerId).first().single { it.orderNumber == orderNumber }.id
         }
         composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_order_advance_" + orderId))
-        waitForEnabledTag("crm_order_advance_" + orderId).performClick()
+        waitForEnabledTag("crm_order_advance_" + orderId).performScrollTo().performClick()
         waitForStep("siparişi CONFIRMED durumuna geçirme") {
             runBlocking { commercialRepository.observeOrders(customerId).first().any { it.id == orderId && it.status.name == "CONFIRMED" } }
         }
