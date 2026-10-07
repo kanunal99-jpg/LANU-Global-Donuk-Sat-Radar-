@@ -83,7 +83,7 @@ fun ManualPointScreen(
             modifier = Modifier.padding(top = 16.dp, bottom = 2.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text("Manuel Nokta", style = MaterialTheme.typography.headlineSmall)
+            Text("Manuel Nokta Kaydı", style = MaterialTheme.typography.headlineSmall)
             Text(
                 "Yeni müşteri veya işletmeyi doğrulanmış il/ilçe kapsamıyla CRM'e ekleyin.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -269,7 +269,7 @@ fun ManualPointScreen(
                 val lon = longitudeX.replace(',', '.').toDoubleOrNull()
                 val lat = latitudeY.replace(',', '.').toDoubleOrNull()
                 if (name.isBlank() || address.isBlank() || district.isBlank()) {
-                    message = "İşletme adı, açık adres ve ilçe zorunludur."
+                    message = "Ad, adres, il ve ilçe zorunludur."
                     return@Button
                 }
                 if (district !in selectedCity.fallbackDistricts) {
