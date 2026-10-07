@@ -226,27 +226,38 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     val neighborhoodRepository = remember(context) { NeighborhoodCatalogRepository(context) }
     val scanHistoryRepository = remember(context) { RadarScanHistoryRepository(context) }
     LaunchedEffect(selectedCity.label) {
-        districtLoading = true
-        availableDistricts = runCatching {
-            val fetched = districtRepository.getDistricts(selectedCity.name, selectedCity.districts)
-            if (selectedCity.name == "İstanbul" && selectedCity.districts.isNotEmpty()) {
-                fetched.filter { district ->
-                    selectedCity.districts.any { it.equals(district, ignoreCase = true) }
-                }.ifEmpty { selectedCity.districts }
-            } else {
-                fetched
+        val citySnapshot = selectedCity
+        // Yerel 81/973 katalog anında kullanılabilir; ağ yenilemesi menüyü bloke etmez.
+        availableDistricts = citySnapshot.districts
+        districtLoading = false
+
+        val refreshed = runCatching {
+            withContext(Dispatchers.IO) {
+                districtRepository.getDistricts(citySnapshot.name, citySnapshot.districts)
             }
         }.getOrElse { throwable ->
             if (throwable is CancellationException) throw throwable
             Log.w("LanuRadar", "İlçe kataloğu yenilenemedi; yerel liste kullanılıyor.", throwable)
-            selectedCity.districts
+            citySnapshot.districts
         }
+
+        // Anadolu/Avrupa aynı backend şehir adını kullanır. Eski bir async sonuç
+        // yeni seçilen yakayı asla ezmemeli.
+        if (selectedCity.label != citySnapshot.label) return@LaunchedEffect
+
+        val scoped = if (citySnapshot.name == "İstanbul" && citySnapshot.districts.isNotEmpty()) {
+            refreshed.filter { district ->
+                citySnapshot.districts.any { it.equals(district, ignoreCase = true) }
+            }.ifEmpty { citySnapshot.districts }
+        } else {
+            refreshed.ifEmpty { citySnapshot.districts }
+        }
+        availableDistricts = scoped
         if (selectedDistrict != "Tümü" &&
-            availableDistricts.none { it.equals(selectedDistrict, ignoreCase = true) }
+            scoped.none { it.equals(selectedDistrict, ignoreCase = true) }
         ) {
             selectedDistrict = "Tümü"
         }
-        districtLoading = false
     }
     LaunchedEffect(selectedCity.label, selectedDistrict) {
         selectedNeighborhood = "Tümü"
@@ -441,6 +452,23 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
         query = ""
     }
 
+    fun selectCityScope(city: City) {
+        invalidateSearch()
+        selectedCity = city
+        selectedDistrict = "Tümü"
+        selectedNeighborhood = "Tümü"
+        availableDistricts = city.districts
+        availableNeighborhoods = emptyList()
+        districtLoading = false
+        neighborhoodLoading = false
+        districtMenu = false
+        neighborhoodMenu = false
+        results = emptyList()
+        selectedBusiness = null
+        resetFilters()
+        cityMenu = false
+    }
+
     LanuGlobalTheme {
         Scaffold(
             topBar = {
@@ -561,7 +589,10 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                 Box(Modifier.weight(1f)) {
                                     OutlinedButton(onClick = { cityMenu = true }, modifier = Modifier.fillMaxWidth().testTag("city_filter")) { Text(selectedCity.label) }
-                                    DropdownMenu(cityMenu, { cityMenu = false }) { cities.forEach { city -> DropdownMenuItem({ Text(city.label) }, onClick = { invalidateSearch(); selectedCity = city; selectedDistrict = "Tümü"; results = emptyList(); resetFilters(); cityMenu = false }) } }
+                                    DropdownMenu(cityMenu, { cityMenu = false }) { cities.forEach { city -> DropdownMenuItem(
+                                        { Text(city.label) },
+                                        onClick = { selectCityScope(city) },
+                                    ) } }
                                 }
                                 Box(Modifier.weight(1f)) {
                                     OutlinedButton(onClick = { districtMenu = true }, modifier = Modifier.fillMaxWidth().testTag("district_filter")) { Text(if (districtLoading) "Yükleniyor…" else selectedDistrict) }
@@ -569,6 +600,29 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                                         DropdownMenuItem({ Text("Tümü") }, onClick = { invalidateSearch(); selectedDistrict = "Tümü"; results = emptyList(); resetFilters(); districtMenu = false })
                                         availableDistricts.forEach { district -> DropdownMenuItem({ Text(district) }, onClick = { invalidateSearch(); selectedDistrict = district; results = emptyList(); resetFilters(); districtMenu = false }) }
                                     }
+                                }
+                            }
+                        }
+                        if (selectedCity.name == "İstanbul") {
+                            item {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    val anatolian = cities.first { it.label == "İstanbul Anadolu" }
+                                    val european = cities.first { it.label == "İstanbul Avrupa" }
+                                    FilterChip(
+                                        selected = selectedCity.label == anatolian.label,
+                                        onClick = { selectCityScope(anatolian) },
+                                        label = { Text("Anadolu Yakası", maxLines = 1) },
+                                        modifier = Modifier.weight(1f).testTag("istanbul_side_anatolian"),
+                                    )
+                                    FilterChip(
+                                        selected = selectedCity.label == european.label,
+                                        onClick = { selectCityScope(european) },
+                                        label = { Text("Avrupa Yakası", maxLines = 1) },
+                                        modifier = Modifier.weight(1f).testTag("istanbul_side_european"),
+                                    )
                                 }
                             }
                         }
