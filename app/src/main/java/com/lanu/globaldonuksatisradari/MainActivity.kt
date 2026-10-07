@@ -1026,6 +1026,7 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                     AppSection.MANUAL_POINT -> ManualPointScreen(
                         repository = localCrmRepository,
                         defaultCity = selectedCity.name,
+                        defaultDistrict = selectedDistrict.takeUnless { it == "Tümü" },
                         ownerUserId = activeOwnerUserId,
                     ) { navigateTo(AppSection.ROUTINE) }
                     AppSection.AI_ASSISTANT -> SalesAiScreen(salesAiContext)
