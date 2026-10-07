@@ -203,7 +203,7 @@ data class RouteStop(
 )
 
 object CrmRoutePlanner {
-    const val EXACT_NEAREST_NEIGHBOR_LIMIT = 400
+    const val EXACT_NEAREST_NEIGHBOR_LIMIT = 96
 
     fun plan(
         customers: List<CrmCustomer>,

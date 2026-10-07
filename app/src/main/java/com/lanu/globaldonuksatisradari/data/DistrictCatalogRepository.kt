@@ -62,8 +62,16 @@ class DistrictCatalogRepository(context: Context) {
     suspend fun getDistricts(city: String, fallback: List<String> = emptyList()): List<String> = withContext(Dispatchers.IO) {
         if (city.isBlank()) return@withContext fallback
         val completeFallback = fallback.ifEmpty { TurkeyDistrictFallback.forCity(city) }
-        val key = "districts:v3:" + BusinessDeduplication.normalizeForComparison(city)
-        readCache(key)?.takeIf { it.isNotEmpty() }?.let { return@withContext it }
+        val normalizedScope = completeFallback
+            .map(BusinessDeduplication::normalizeForComparison)
+            .sorted()
+            .joinToString("|")
+        val key = "districts:v4:" +
+            BusinessDeduplication.normalizeForComparison(city) +
+            ":" + normalizedScope.hashCode()
+        readCache(key)?.takeIf { it.isNotEmpty() }?.let { cached ->
+            return@withContext selectVerifiedDistrictCatalog(cached, completeFallback)
+        }
 
         try {
             val primaryResult = primary.districts(city)

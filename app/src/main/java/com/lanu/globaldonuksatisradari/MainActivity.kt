@@ -80,6 +80,12 @@ private val cities = TurkeyCityCatalog.ALL.flatMap { entry ->
         listOf(City(entry.name, entry.fallbackDistricts))
     }
 }
+internal fun validInitialDistrict(city: City, savedDistrict: String?): String {
+    val value = savedDistrict?.trim().orEmpty()
+    if (value.isBlank() || value == "Tümü") return "Tümü"
+    return city.districts.firstOrNull { it.equals(value, ignoreCase = true) } ?: "Tümü"
+}
+
 private fun matchesInventoryPresence(value: String?, filter: String): Boolean = when (filter) {
     "Tümü" -> true
     "Var" -> !value.isNullOrBlank()
@@ -188,9 +194,10 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
     var neighborhoodMenu by remember { mutableStateOf(false) }
     var selectedDistrict by remember {
         mutableStateOf(
-            uiPreferences.getString("selected_district", "Tümü")
-                ?.takeIf(String::isNotBlank)
-                ?: "Tümü",
+            validInitialDistrict(
+                initialCity,
+                uiPreferences.getString("selected_district", "Tümü"),
+            ),
         )
     }
     var selectedNeighborhood by remember { mutableStateOf("Tümü") }

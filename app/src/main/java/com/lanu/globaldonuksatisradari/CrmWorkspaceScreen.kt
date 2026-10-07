@@ -1,5 +1,7 @@
 package com.lanu.globaldonuksatisradari
 
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,7 +23,7 @@ import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,12 +36,12 @@ import com.lanu.globaldonuksatisradari.crm.CrmDashboardMetrics
 import com.lanu.globaldonuksatisradari.crm.CrmDuplicateDetector
 import com.lanu.globaldonuksatisradari.crm.CrmNextAction
 import com.lanu.globaldonuksatisradari.crm.CrmNextActionType
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 private enum class CrmWorkspaceTab { TODAY, CUSTOMERS, DUPLICATES, DASHBOARD }
 
@@ -435,9 +437,20 @@ private fun CrmDuplicateReviewScreen(
     var candidatesState by remember(customers) {
         mutableStateOf<List<com.lanu.globaldonuksatisradari.crm.CrmDuplicateCandidate>?>(null)
     }
-    LaunchedEffect(customers) {
-        candidatesState = withContext(Dispatchers.Default) {
-            CrmDuplicateDetector.find(customers)
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    DisposableEffect(customers) {
+        val cancelled = AtomicBoolean(false)
+        val task = DUPLICATE_ANALYSIS_EXECUTOR.submit {
+            val result = CrmDuplicateDetector.find(customers)
+            if (!cancelled.get()) {
+                mainHandler.post {
+                    if (!cancelled.get()) candidatesState = result
+                }
+            }
+        }
+        onDispose {
+            cancelled.set(true)
+            task.cancel(true)
         }
     }
     val candidates = candidatesState.orEmpty()
@@ -563,3 +576,11 @@ private val DUE_FORMATTER = DateTimeFormatter.ofPattern(
     "dd.MM.yyyy HH:mm",
     Locale.forLanguageTag("tr-TR"),
 )
+
+
+private val DUPLICATE_ANALYSIS_EXECUTOR = Executors.newSingleThreadExecutor { runnable ->
+    Thread(runnable, "lanu-duplicate-analysis").apply {
+        isDaemon = true
+        priority = Thread.NORM_PRIORITY - 1
+    }
+}
