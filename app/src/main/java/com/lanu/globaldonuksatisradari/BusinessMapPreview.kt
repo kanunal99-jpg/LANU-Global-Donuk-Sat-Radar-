@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.yield
 import org.json.JSONObject
 
 private const val APP_USER_AGENT =
@@ -64,6 +65,7 @@ fun BusinessMapPreview(
 
     var mapReady by remember(htmlKey) { mutableStateOf(false) }
     var timedOut by remember(htmlKey) { mutableStateOf(false) }
+    var attachWebView by remember(htmlKey) { mutableStateOf(false) }
     val bridge = remember(htmlKey) {
         MapJavascriptBridge(
             onReady = {
@@ -75,6 +77,12 @@ fun BusinessMapPreview(
                 timedOut = true
             },
         )
+    }
+
+    LaunchedEffect(htmlKey) {
+        // Önce çevrimdışı dağılım görünümünü çiz; WebView kurulumu sekme geçişini bloke etmesin.
+        yield()
+        attachWebView = true
     }
 
     LaunchedEffect(htmlKey, mapReady) {
@@ -96,50 +104,52 @@ fun BusinessMapPreview(
             modifier = Modifier.fillMaxSize(),
         )
 
-        AndroidView(
-            modifier = Modifier
-                .fillMaxSize()
-                .alpha(if (mapReady) 1f else 0f)
-                .testTag("business_map_webview"),
-            factory = { context ->
-                WebView(context).apply {
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = false
-                    settings.allowFileAccess = false
-                    settings.allowContentAccess = false
-                    settings.javaScriptCanOpenWindowsAutomatically = false
-                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                    settings.cacheMode = WebSettings.LOAD_DEFAULT
-                    settings.userAgentString = APP_USER_AGENT
-                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                    addJavascriptInterface(bridge, "AndroidMapBridge")
-                    tag = htmlKey
-                    loadDataWithBaseURL(
-                        "https://lanumap.local/",
-                        html,
-                        "text/html",
-                        "UTF-8",
-                        null,
-                    )
-                }
-            },
-            update = { webView ->
-                if (webView.tag != htmlKey) {
-                    mapReady = false
-                    timedOut = false
-                    webView.removeJavascriptInterface("AndroidMapBridge")
-                    webView.addJavascriptInterface(bridge, "AndroidMapBridge")
-                    webView.tag = htmlKey
-                    webView.loadDataWithBaseURL(
-                        "https://lanumap.local/",
-                        html,
-                        "text/html",
-                        "UTF-8",
-                        null,
-                    )
-                }
-            },
-        )
+        if (attachWebView) {
+            AndroidView(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .alpha(if (mapReady) 1f else 0f)
+                    .testTag("business_map_webview"),
+                factory = { context ->
+                    WebView(context).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = false
+                        settings.allowFileAccess = false
+                        settings.allowContentAccess = false
+                        settings.javaScriptCanOpenWindowsAutomatically = false
+                        settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                        settings.cacheMode = WebSettings.LOAD_DEFAULT
+                        settings.userAgentString = APP_USER_AGENT
+                        setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                        addJavascriptInterface(bridge, "AndroidMapBridge")
+                        tag = htmlKey
+                        loadDataWithBaseURL(
+                            "https://lanumap.local/",
+                            html,
+                            "text/html",
+                            "UTF-8",
+                            null,
+                        )
+                    }
+                },
+                update = { webView ->
+                    if (webView.tag != htmlKey) {
+                        mapReady = false
+                        timedOut = false
+                        webView.removeJavascriptInterface("AndroidMapBridge")
+                        webView.addJavascriptInterface(bridge, "AndroidMapBridge")
+                        webView.tag = htmlKey
+                        webView.loadDataWithBaseURL(
+                            "https://lanumap.local/",
+                            html,
+                            "text/html",
+                            "UTF-8",
+                            null,
+                        )
+                    }
+                },
+            )
+        }
     }
 }
 
