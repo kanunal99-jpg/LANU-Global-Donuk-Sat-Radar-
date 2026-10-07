@@ -53,6 +53,18 @@ class FinalUiAcceptanceInstrumentationTest {
         composeRule.waitForIdle()
     }
 
+    private fun waitForStep(
+        label: String,
+        timeoutMs: Long = 30_000,
+        condition: () -> Boolean,
+    ) {
+        try {
+            composeRule.waitUntil(timeoutMs, condition)
+        } catch (error: Throwable) {
+            throw AssertionError("Kabul adımı zaman aşımına uğradı: $label", error)
+        }
+    }
+
     @Test(timeout = 90_000)
     fun istanbulSideSelection_keepsDistrictAndNeighborhoodScopeSeparated() {
         val context = composeRule.activity
@@ -240,7 +252,7 @@ class FinalUiAcceptanceInstrumentationTest {
         waitForTag("crm_quote_number_input").performTextInput(quoteNumber)
         waitForTag("crm_create_quote").assertIsEnabled().performClick()
 
-        composeRule.waitUntil(30_000) {
+        waitForStep("taslak teklif Room kaydı") {
             runBlocking { commercialRepository.observeQuotes(customerId).first().any { it.quoteNumber == quoteNumber } }
         }
         val quoteId = runBlocking {
@@ -251,19 +263,19 @@ class FinalUiAcceptanceInstrumentationTest {
         waitForTag("crm_quote_product_catalog_" + quoteId).performClick()
         waitForText(productName + " • 321,45 TRY").performClick()
         waitForTag("crm_add_quote_line_" + quoteId).assertIsEnabled().performClick()
-        composeRule.waitUntil(30_000) {
+        waitForStep("katalog ürünü teklif satırına ekleme") {
             runBlocking { commercialRepository.observeQuoteLines(quoteId).first().isNotEmpty() }
         }
 
         composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_send_quote_" + quoteId))
         waitForTag("crm_send_quote_" + quoteId).performClick()
-        composeRule.waitUntil(30_000) {
+        waitForStep("teklifi SENT durumuna geçirme") {
             runBlocking { commercialRepository.observeQuotes(customerId).first().any { it.id == quoteId && it.status.name == "SENT" } }
         }
 
         composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_accept_quote_" + quoteId))
         waitForTag("crm_accept_quote_" + quoteId).performClick()
-        composeRule.waitUntil(30_000) {
+        waitForStep("teklifi ACCEPTED durumuna geçirme") {
             runBlocking { commercialRepository.observeQuotes(customerId).first().any { it.id == quoteId && it.status.name == "ACCEPTED" } }
         }
 
@@ -271,7 +283,7 @@ class FinalUiAcceptanceInstrumentationTest {
         composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_order_number_input"))
         waitForTag("crm_order_number_input").performTextInput(orderNumber)
         waitForTag("crm_create_order_" + quoteId).assertIsEnabled().performClick()
-        composeRule.waitUntil(30_000) {
+        waitForStep("kabul edilen tekliften sipariş oluşturma") {
             runBlocking { commercialRepository.observeOrders(customerId).first().any { it.orderNumber == orderNumber } }
         }
         val orderId = runBlocking {
@@ -279,7 +291,7 @@ class FinalUiAcceptanceInstrumentationTest {
         }
         composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_order_advance_" + orderId))
         waitForTag("crm_order_advance_" + orderId).performClick()
-        composeRule.waitUntil(30_000) {
+        waitForStep("siparişi CONFIRMED durumuna geçirme") {
             runBlocking { commercialRepository.observeOrders(customerId).first().any { it.id == orderId && it.status.name == "CONFIRMED" } }
         }
     }
