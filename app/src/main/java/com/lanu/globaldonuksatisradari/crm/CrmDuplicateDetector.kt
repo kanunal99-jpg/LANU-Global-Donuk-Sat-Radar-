@@ -16,9 +16,13 @@ object CrmDuplicateDetector {
     private const val GRID_SIZE_DEGREES = 0.0025
 
     fun find(customers: List<CrmCustomer>, limit: Int = 100): List<CrmDuplicateCandidate> {
-        if (customers.size < 2) return emptyList()
+        if (customers.size < 2 || limit <= 0 || cancelled()) return emptyList()
 
-        val active = customers.filter { it.mergedIntoCustomerId.isNullOrBlank() }
+        val active = ArrayList<CrmCustomer>(customers.size)
+        for (customer in customers) {
+            if (cancelled()) return emptyList()
+            if (customer.mergedIntoCustomerId.isNullOrBlank()) active += customer
+        }
         if (active.size < 2) return emptyList()
 
         val byId = active.associateBy { it.id }
@@ -32,6 +36,7 @@ object CrmDuplicateDetector {
         val gridBlocks = mutableMapOf<String, MutableList<String>>()
 
         active.forEach { customer ->
+            if (cancelled()) return emptyList()
             identity(customer.registryNumber)?.let { registryBlocks.add(it, customer.id) }
             digits(customer.taxOrNationalId)?.let { taxBlocks.add(it, customer.id) }
             phone(customer.phone)?.let { phoneBlocks.add(it, customer.id) }
@@ -60,34 +65,40 @@ object CrmDuplicateDetector {
             }
         }
 
-        fun consume(blocks: Map<String, List<String>>, weak: Boolean) {
+        fun consume(blocks: Map<String, List<String>>, weak: Boolean): Boolean {
             for (ids in blocks.values) {
-                if (candidatePairs.size >= MAX_CANDIDATE_PAIRS) return
+                if (cancelled()) return false
+                if (candidatePairs.size >= MAX_CANDIDATE_PAIRS) return true
                 val unique = ids.distinct()
                 if (unique.size < 2) continue
                 if (weak && unique.size > MAX_WEAK_BLOCK_SIZE) continue
 
                 val capped = if (weak) unique else unique.take(100)
                 for (i in 0 until capped.lastIndex) {
+                    if (cancelled()) return false
                     for (j in i + 1 until capped.size) {
+                        if (cancelled()) return false
                         val a = capped[i]
                         val b = capped[j]
                         candidatePairs += if (a < b) a to b else b to a
-                        if (candidatePairs.size >= MAX_CANDIDATE_PAIRS) return
+                        if (candidatePairs.size >= MAX_CANDIDATE_PAIRS) return true
                     }
                 }
             }
+            return true
         }
 
         // Güçlü kimlikler önce işlenir; yeni kayıtlar kalabalık isim blokları yüzünden kaybolmaz.
-        consume(registryBlocks, weak = false)
-        consume(taxBlocks, weak = false)
-        consume(phoneBlocks, weak = false)
-        consume(exactNameBlocks, weak = true)
-        consume(prefixBlocks, weak = true)
-        consume(gridBlocks, weak = true)
+        if (!consume(registryBlocks, weak = false)) return emptyList()
+        if (!consume(taxBlocks, weak = false)) return emptyList()
+        if (!consume(phoneBlocks, weak = false)) return emptyList()
+        if (!consume(exactNameBlocks, weak = true)) return emptyList()
+        if (!consume(prefixBlocks, weak = true)) return emptyList()
+        if (!consume(gridBlocks, weak = true)) return emptyList()
+        if (cancelled()) return emptyList()
 
         return candidatePairs.asSequence()
+            .takeWhile { !cancelled() }
             .mapNotNull { (aId, bId) ->
                 val a = byId[aId] ?: return@mapNotNull null
                 val b = byId[bId] ?: return@mapNotNull null
@@ -103,6 +114,8 @@ object CrmDuplicateDetector {
             .take(limit)
             .toList()
     }
+
+    private fun cancelled(): Boolean = Thread.currentThread().isInterrupted
 
     private fun <K> MutableMap<K, MutableList<String>>.add(key: K, customerId: String) {
         getOrPut(key) { mutableListOf() }.add(customerId)
