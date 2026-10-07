@@ -31,6 +31,25 @@ class CrmRegionScopeTest {
     }
 
     @Test
+    fun staleEuropeanDistrictIsRejectedForAnatolianScope() {
+        val anatolian = City(
+            name = "İstanbul",
+            districts = IstanbulDistricts.ANATOLIAN,
+            label = "İstanbul Anadolu",
+        )
+        val european = City(
+            name = "İstanbul",
+            districts = IstanbulDistricts.EUROPEAN,
+            label = "İstanbul Avrupa",
+        )
+
+        assertEquals("Tümü", validInitialDistrict(anatolian, "Şişli"))
+        assertEquals("Kadıköy", validInitialDistrict(anatolian, "kadıköy"))
+        assertEquals("Tümü", validInitialDistrict(european, "Pendik"))
+        assertEquals("Bakırköy", validInitialDistrict(european, "Bakırköy"))
+    }
+
+    @Test
     fun districtScopeIsCaseInsensitiveAndConsistent() {
         val customers = listOf(
             customer("one", "İstanbul", "Sultanbeyli"),
