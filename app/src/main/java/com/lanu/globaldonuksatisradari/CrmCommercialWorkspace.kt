@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import com.lanu.globaldonuksatisradari.crm.CommercialCrmRepository
 import com.lanu.globaldonuksatisradari.crm.CrmOrderStatus
@@ -18,18 +19,22 @@ fun CrmCommercialWorkspace(
     onMessage: (String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    val quotes by repository.observeQuotes(customerId).collectAsState(initial = emptyList())
-    val orders by repository.observeOrders(customerId).collectAsState(initial = emptyList())
+    val quotes by remember(repository, customerId) { repository.observeQuotes(customerId) }
+        .collectAsState(initial = emptyList())
+    val orders by remember(repository, customerId) { repository.observeOrders(customerId) }
+        .collectAsState(initial = emptyList())
     val products by productRepository.products.collectAsState()
 
     val quoteLines = mutableMapOf<String, List<com.lanu.globaldonuksatisradari.crm.CrmCommercialLine>>()
     for (quote in quotes) {
-        val lines by repository.observeQuoteLines(quote.id).collectAsState(initial = emptyList())
+        val lines by remember(repository, quote.id) { repository.observeQuoteLines(quote.id) }
+            .collectAsState(initial = emptyList())
         quoteLines[quote.id] = lines
     }
     val orderLines = mutableMapOf<String, List<com.lanu.globaldonuksatisradari.crm.CrmCommercialLine>>()
     for (order in orders) {
-        val lines by repository.observeOrderLines(order.id).collectAsState(initial = emptyList())
+        val lines by remember(repository, order.id) { repository.observeOrderLines(order.id) }
+            .collectAsState(initial = emptyList())
         orderLines[order.id] = lines
     }
 
@@ -64,7 +69,10 @@ fun CrmCommercialWorkspace(
                         unitPriceMinor = unitPriceMinor,
                     )
                 }.onSuccess { onMessage("Ürün teklif satırına eklendi.") }
-                    .onFailure { onMessage("Teklif satırı eklenemedi: " + it.message.orEmpty()) }
+                    .onFailure { error ->
+                        Log.e("LanuCommercial", "Teklif satırı eklenemedi: $quoteId", error)
+                        onMessage("Teklif satırı eklenemedi: " + error.message.orEmpty())
+                    }
             }
         },
         onSendQuote = { quoteId ->
@@ -84,7 +92,10 @@ fun CrmCommercialWorkspace(
             scope.launch {
                 runCatching { repository.transitionQuoteStatus(quoteId, CrmQuoteStatus.ACCEPTED) }
                     .onSuccess { onMessage("Teklif kabul edildi olarak işaretlendi.") }
-                    .onFailure { onMessage("Teklif güncellenemedi: " + it.message.orEmpty()) }
+                    .onFailure { error ->
+                        Log.e("LanuCommercial", "Teklif ACCEPTED durumuna geçirilemedi: $quoteId", error)
+                        onMessage("Teklif güncellenemedi: " + error.message.orEmpty())
+                    }
             }
         },
         onCreateOrder = { quoteId, orderNumber ->

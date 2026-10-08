@@ -53,6 +53,16 @@ class FinalUiAcceptanceInstrumentationTest {
         composeRule.waitForIdle()
     }
 
+    /** Wait for Room -> Compose state, then scroll the actual (unmerged) control. */
+    private fun waitForDetailTag(tag: String, timeoutMs: Long = 20_000): SemanticsNodeInteraction {
+        val node = waitForTag(tag, timeoutMs)
+        // performScrollToNode uses a merged semantics traversal that can miss nested
+        // controls inside Cards; an existing unmerged node can scroll its ancestors.
+        node.performScrollTo()
+        composeRule.waitForIdle()
+        return node
+    }
+
     private fun waitForStep(
         label: String,
         timeoutMs: Long = 30_000,
@@ -272,22 +282,22 @@ class FinalUiAcceptanceInstrumentationTest {
             commercialRepository.observeQuotes(customerId).first().single { it.quoteNumber == quoteNumber }.id
         }
 
-        composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_quote_product_catalog_" + quoteId))
+        waitForDetailTag("crm_quote_product_catalog_" + quoteId)
         waitForTag("crm_quote_product_catalog_" + quoteId).performClick()
         waitForText(productName + " • 321,45 TRY").performClick()
-        waitForTag("crm_add_quote_line_" + quoteId).assertIsEnabled().performClick()
+        waitForEnabledTag("crm_add_quote_line_" + quoteId).performScrollTo().performClick()
         waitForStep("katalog ürünü teklif satırına ekleme") {
             runBlocking { commercialRepository.observeQuoteLines(quoteId).first().isNotEmpty() }
         }
 
-        composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_send_quote_" + quoteId))
+        waitForDetailTag("crm_send_quote_" + quoteId)
         composeRule.waitForIdle()
         waitForEnabledTag("crm_send_quote_" + quoteId).performScrollTo().performClick()
         waitForStep("teklifi SENT durumuna geçirme") {
             runBlocking { commercialRepository.observeQuotes(customerId).first().any { it.id == quoteId && it.status.name == "SENT" } }
         }
 
-        composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_accept_quote_" + quoteId))
+        waitForDetailTag("crm_accept_quote_" + quoteId)
         composeRule.waitForIdle()
         waitForEnabledTag("crm_accept_quote_" + quoteId).performScrollTo().performClick()
         waitForStep("teklifi ACCEPTED durumuna geçirme") {
@@ -295,7 +305,7 @@ class FinalUiAcceptanceInstrumentationTest {
         }
 
         val orderNumber = "SMOKE-S-" + System.nanoTime()
-        composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_order_number_input"))
+        waitForDetailTag("crm_order_number_input")
         waitForTag("crm_order_number_input").performTextInput(orderNumber)
         waitForEnabledTag("crm_create_order_" + quoteId).performScrollTo().performClick()
         waitForStep("kabul edilen tekliften sipariş oluşturma") {
@@ -306,7 +316,7 @@ class FinalUiAcceptanceInstrumentationTest {
         }
         // Room kaydı, Compose semantiğine bir sonraki frame'de yansıyabilir.
         val orderAdvanceTag = "crm_order_advance_" + orderId
-        waitForTag(orderAdvanceTag, timeoutMs = 15_000)
+        waitForDetailTag(orderAdvanceTag, timeoutMs = 20_000)
         waitForEnabledTag(orderAdvanceTag, timeoutMs = 15_000).performScrollTo().performClick()
         waitForStep("siparişi CONFIRMED durumuna geçirme") {
             runBlocking { commercialRepository.observeOrders(customerId).first().any { it.id == orderId && it.status.name == "CONFIRMED" } }
