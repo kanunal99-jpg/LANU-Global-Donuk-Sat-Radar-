@@ -53,16 +53,24 @@ fun RoutineScreen(
                 longitude in -180.0..180.0
         }
     }
+    var automaticPlanRequestVersion by remember(routable, startId) { mutableIntStateOf(0) }
+    val automaticPlanRequested = automaticPlanRequestVersion > 0
+    var automaticPlanPlanning by remember(routable, startId) { mutableStateOf(false) }
     var automaticPlan by remember(routable, startId) {
         mutableStateOf<MonthlyRoutinePlan?>(null)
     }
-    LaunchedEffect(routable, startId) {
-        automaticPlan = null
-        // Sekme önce anında çizilir; ağır aylık plan ilk frame sonrasında arka planda hazırlanır.
+    LaunchedEffect(routable, startId, automaticPlanRequestVersion) {
+        if (!automaticPlanRequested) {
+            automaticPlan = null
+            automaticPlanPlanning = false
+            return@LaunchedEffect
+        }
+        automaticPlanPlanning = true
         yield()
         automaticPlan = withContext(Dispatchers.Default) {
             MonthlyRoutinePlanner.plan(routable, startId)
         }
+        automaticPlanPlanning = false
     }
 
     var routeRequestVersion by remember(routable) { mutableIntStateOf(0) }
@@ -104,7 +112,7 @@ fun RoutineScreen(
     }
 
     val missingCoordinates = scopedCustomers.size - routable.size
-    val planning = automaticPlan == null && routable.isNotEmpty()
+    val planning = automaticPlanPlanning
     val startName = when {
         startId != null -> routable.firstOrNull { it.id == startId }?.businessName ?: "Seçili başlangıç"
         else -> "Otomatik başlangıç"
@@ -178,31 +186,61 @@ fun RoutineScreen(
         }
 
         item {
-            if (automaticPlan == null) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("routine_planning"),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+            when {
+                !automaticPlanRequested -> {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("routine_monthly_plan_control"),
                     ) {
-                        Text("Rutin hazırlanıyor", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Büyük CRM listesi arka planda hesaplanıyor; uygulama ve sekmeler kullanılmaya devam edebilir.",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text("Aylık ziyaret planı", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Sekme anında açılır. Binlerce CRM kaydının aylık planı yalnızca istediğinizde hesaplanır.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            OutlinedButton(
+                                onClick = { automaticPlanRequestVersion++ },
+                                enabled = routable.isNotEmpty(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("routine_prepare_monthly_plan"),
+                            ) {
+                                Text("Aylık planı hazırla")
+                            }
+                        }
                     }
                 }
-            } else {
-                automaticPlan?.let { plan ->
-                    RoutinePlanSummaryCard(
-                        title = "Otomatik Aylık Ziyaret Planı",
-                        plan = plan,
-                        detail = "Aktif müşteri/Sipariş: 7 gün • Teklif/Numune/Görüşme/Ziyaret: 14 gün • Aday: 28 gün • Kayıp: otomatik plan dışında",
-                        exportLabel = "Otomatik",
-                    )
+                planning -> {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("routine_planning"),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text("Aylık plan hazırlanıyor", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Hesaplama arka planda sürüyor; uygulama ve diğer sekmeler kullanılabilir.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
+                else -> {
+                    automaticPlan?.let { plan ->
+                        RoutinePlanSummaryCard(
+                            title = "Otomatik Aylık Ziyaret Planı",
+                            plan = plan,
+                            detail = "Aktif müşteri/Sipariş: 7 gün • Teklif/Numune/Görüşme/Ziyaret: 14 gün • Aday: 28 gün • Kayıp: otomatik plan dışında",
+                            exportLabel = "Otomatik",
+                        )
+                    }
                 }
             }
         }
@@ -250,10 +288,10 @@ fun RoutineScreen(
             }
         }
 
-        item {
-            Text("Otomatik plan • 4 haftalık dağılım", style = MaterialTheme.typography.titleMedium)
-        }
         automaticPlan?.let { plan ->
+            item {
+                Text("Otomatik plan • 4 haftalık dağılım", style = MaterialTheme.typography.titleMedium)
+            }
             items((1..MonthlyRoutinePlanner.WEEKS).toList(), key = { "auto-week-" + it }) { week ->
                 WeekPlanCard(
                     week = week,
