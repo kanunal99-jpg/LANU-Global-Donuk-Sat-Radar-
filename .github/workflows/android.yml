@@ -282,6 +282,8 @@ jobs:
             Lanu-Global-Donuk-Satis-Radari-latest.apk
             Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256
             Lanu-Global-Donuk-Satis-Radari-latest.build-info.txt
+      - name: Validate release script syntax
+        run: bash -n scripts/publish_latest_apk.sh
       - name: Publish latest successful APK
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
@@ -289,33 +291,7 @@ jobs:
           APK_PATH: Lanu-Global-Donuk-Satis-Radari-latest.apk
           SHA_PATH: Lanu-Global-Donuk-Satis-Radari-latest.apk.sha256
           BUILD_INFO_PATH: Lanu-Global-Donuk-Satis-Radari-latest.build-info.txt
-        run: |
-          set -euo pipefail
-          gh release view latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
-            gh release create latest \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "Latest APK" \
-              --notes "Automatically published from the latest successful main CI build. Commit: $GITHUB_SHA" \
-              --target "$GITHUB_SHA"
-
-          gh release edit latest \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "Latest APK" \
-            --notes "Automatically published from the latest successful main CI build. Commit: $GITHUB_SHA" \
-            --target "$GITHUB_SHA"
-
-          for asset in app-debug.apk app-debug.apk.sha256 "$APK_PATH" "$SHA_PATH" "$BUILD_INFO_PATH"; do
-            gh release delete-asset latest "$asset" \
-              --repo "$GITHUB_REPOSITORY" --yes >/dev/null 2>&1 || true
-          done
-
-          gh release upload latest \
-            --repo "$GITHUB_REPOSITORY" \
-            --clobber \
-            "$APK_PATH" \
-            "$SHA_PATH" \
-            "$BUILD_INFO_PATH"
-
+        run: bash scripts/publish_latest_apk.sh
 
       - name: Verify published APK download
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -330,7 +306,9 @@ jobs:
           mkdir -p "$VERIFY_DIR"
 
           TARGET="$(gh release view latest --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq '.targetCommitish')"
+          TAG_SHA="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/latest" --jq '.object.sha')"
           test "$TARGET" = "$GITHUB_SHA"
+          test "$TAG_SHA" = "$GITHUB_SHA"
 
           gh release download latest \
             --repo "$GITHUB_REPOSITORY" \
