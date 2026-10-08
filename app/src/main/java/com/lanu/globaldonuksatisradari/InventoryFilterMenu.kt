@@ -34,11 +34,6 @@ fun InventoryFilterMenu(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelLarge,
-        )
-
         if (options.size > 4) {
             Box(Modifier.fillMaxWidth()) {
                 OutlinedButton(
@@ -46,7 +41,7 @@ fun InventoryFilterMenu(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(
-                        selected,
+                        "$label: $selected",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -73,6 +68,10 @@ fun InventoryFilterMenu(
                 }
             }
         } else {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge,
+            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
