@@ -162,6 +162,9 @@ class SupabaseAuthClient(context: Context) {
         try {
             val verifiedUser = request("GET", "/auth/v1/user", accessToken = current.accessToken)
                 .optString("id")
+            // An in-flight response from account A must not authorize work after
+            // sign-out or after account B has signed in.
+            if (_session.value != current) return@withContext null
             if (verifiedUser != current.userId) {
                 signOut()
                 null
@@ -171,7 +174,8 @@ class SupabaseAuthClient(context: Context) {
         } catch (error: SupabaseHttpException) {
             // Refresh only expired/revoked access tokens; network/5xx fail closed.
             if (error.code != 401 && error.code != 403) return@withContext null
-            if (refresh().isSuccess) _session.value else null
+            if (_session.value != current) return@withContext null
+            if (refresh().isSuccess) _session.value?.takeIf { it.userId == current.userId } else null
         } catch (_: Exception) {
             null
         }
