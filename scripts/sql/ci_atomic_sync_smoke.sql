@@ -81,3 +81,60 @@ BEGIN
 END $$;
 RESET ROLE;
 SELECT 'Atomic RPC version, retry, race, tenant isolation PASS' AS result;
+
+
+-- Core CRM: next-action and opportunity now share the atomic RPC.
+-- This is an isolated CI-only multi-version/idempotent contract test.
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
+DO $$
+DECLARE
+  customer uuid := '00000000-0000-0000-0000-000000000011';
+  action_id uuid := '00000000-0000-0000-0000-000000000071';
+  opportunity_id uuid := '00000000-0000-0000-0000-000000000072';
+  action_payload jsonb;
+  opportunity_payload jsonb;
+  status text;
+BEGIN
+  action_payload := jsonb_build_object(
+    'id',action_id,'customer_id',customer,'type','CALL',
+    'due_at','2026-10-09T12:00:00Z','note','Initial follow-up',
+    'version',1
+  );
+  status := public.lanu_apply_versioned_crm_mutation(
+    '00000000-0000-0000-0000-000000000091','next_action',action_payload,0);
+  IF status <> 'APPLIED' THEN RAISE EXCEPTION 'Next-action create failed: %',status; END IF;
+
+  action_payload := action_payload || jsonb_build_object('note','Updated follow-up','version',2);
+  status := public.lanu_apply_versioned_crm_mutation(
+    '00000000-0000-0000-0000-000000000092','next_action',action_payload,1);
+  IF status <> 'APPLIED' THEN RAISE EXCEPTION 'Next-action update failed: %',status; END IF;
+  IF public.lanu_apply_versioned_crm_mutation(
+    '00000000-0000-0000-0000-000000000093','next_action',action_payload,1) <> 'CONFLICT'
+  THEN RAISE EXCEPTION 'Next-action stale update was accepted'; END IF;
+  IF (SELECT version FROM public.lanu_crm_next_actions WHERE id=action_id) <> 2
+  THEN RAISE EXCEPTION 'Next-action version overwritten'; END IF;
+
+  opportunity_payload := jsonb_build_object(
+    'id',opportunity_id,'customer_id',customer,'title','CI Opportunity',
+    'status','OPEN','amount','123.45','currency','TRY',
+    'amount_origin','MANUAL','version',1
+  );
+  IF public.lanu_apply_versioned_crm_mutation(
+    '00000000-0000-0000-0000-000000000094','opportunity',opportunity_payload,0) <> 'APPLIED'
+  THEN RAISE EXCEPTION 'Opportunity create failed'; END IF;
+  IF public.lanu_apply_versioned_crm_mutation(
+    '00000000-0000-0000-0000-000000000094','opportunity',opportunity_payload,0) <> 'APPLIED'
+  THEN RAISE EXCEPTION 'Opportunity retry not idempotent'; END IF;
+  opportunity_payload := opportunity_payload || jsonb_build_object('title','CI Opportunity v2','version',2);
+  IF public.lanu_apply_versioned_crm_mutation(
+    '00000000-0000-0000-0000-000000000095','opportunity',opportunity_payload,1) <> 'APPLIED'
+  THEN RAISE EXCEPTION 'Opportunity update failed'; END IF;
+  IF public.lanu_apply_versioned_crm_mutation(
+    '00000000-0000-0000-0000-000000000096','opportunity',opportunity_payload,1) <> 'CONFLICT'
+  THEN RAISE EXCEPTION 'Opportunity stale update accepted'; END IF;
+  IF (SELECT title FROM public.lanu_crm_opportunities WHERE id=opportunity_id) <> 'CI Opportunity v2'
+  THEN RAISE EXCEPTION 'Opportunity data overwritten'; END IF;
+END $$;
+RESET ROLE;
+SELECT 'Core opportunity/next-action atomic CAS + idempotency PASS' AS result;

@@ -22,6 +22,8 @@ internal fun buildAtomicCrmMutationRequest(
         CommercialCrmSync.ENTITY_QUOTE_LINE,
         CommercialCrmSync.ENTITY_ORDER,
         CommercialCrmSync.ENTITY_ORDER_LINE,
+        LocalCrmRepository.ENTITY_NEXT_ACTION,
+        LocalCrmRepository.ENTITY_OPPORTUNITY,
     )) { "Atomik senkronizasyon için desteklenmeyen varlık türü." }
     require(UUID.fromString(operation.id).toString() == operation.id.lowercase()) {
         "Senkronizasyon işlemi için geçersiz UUID."

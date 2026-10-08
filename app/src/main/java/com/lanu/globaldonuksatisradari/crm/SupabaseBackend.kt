@@ -162,6 +162,9 @@ class SupabaseAuthClient(context: Context) {
         try {
             val verifiedUser = request("GET", "/auth/v1/user", accessToken = current.accessToken)
                 .optString("id")
+            // An in-flight response from account A must not authorize work after
+            // sign-out or after account B has signed in.
+            if (_session.value != current) return@withContext null
             if (verifiedUser != current.userId) {
                 signOut()
                 null
@@ -171,7 +174,8 @@ class SupabaseAuthClient(context: Context) {
         } catch (error: SupabaseHttpException) {
             // Refresh only expired/revoked access tokens; network/5xx fail closed.
             if (error.code != 401 && error.code != 403) return@withContext null
-            if (refresh().isSuccess) _session.value else null
+            if (_session.value != current) return@withContext null
+            if (refresh().isSuccess) _session.value?.takeIf { it.userId == current.userId } else null
         } catch (_: Exception) {
             null
         }
@@ -224,6 +228,7 @@ class SupabaseAuthClient(context: Context) {
         body: String?,
         accessToken: String,
         returnRepresentation: Boolean = false,
+        ignoreDuplicates: Boolean = false,
     ): String {
         val connection = (URL(SupabaseConfig.URL + path).openConnection() as HttpURLConnection).apply {
             requestMethod = method
@@ -234,9 +239,10 @@ class SupabaseAuthClient(context: Context) {
             setRequestProperty("Authorization", "Bearer " + accessToken)
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Content-Type", "application/json")
+            val resolution = if (ignoreDuplicates) "ignore-duplicates" else "merge-duplicates"
             setRequestProperty(
                 "Prefer",
-                "resolution=merge-duplicates,return=" + if (returnRepresentation) "representation" else "minimal",
+                "resolution=$resolution,return=" + if (returnRepresentation) "representation" else "minimal",
             )
             if (body != null) doOutput = true
         }
@@ -276,24 +282,59 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                 LocalCrmRepository.ENTITY_OPPORTUNITY -> opportunityRow(payload, session.userId)
                 else -> error("unreachable")
             }
-            val remoteVersion = fetchRemoteVersion(table, payload.optString("id"), operation.entityType, session)
-            if (remoteVersion != null && operation.entityType != LocalCrmRepository.ENTITY_ACTIVITY &&
-                remoteVersion > operation.payloadVersion
-            ) {
-                return RemoteSyncResult.Conflict(
-                    "Uzak kayıt sürümü daha yeni: remote=" + remoteVersion + " local=" + operation.payloadVersion,
-                )
+            when (operation.entityType) {
+                LocalCrmRepository.ENTITY_NEXT_ACTION,
+                LocalCrmRepository.ENTITY_OPPORTUNITY -> {
+                    // The existing server RPC executes version check + write + receipt in one TX.
+                    val request = buildAtomicCrmMutationRequest(operation, row)
+                    val reply = auth.rawRequest(
+                        "POST", "/rest/v1/rpc/lanu_apply_versioned_crm_mutation",
+                        request, session.accessToken, returnRepresentation = true,
+                    )
+                    when (parseAtomicCrmMutationStatus(reply)) {
+                        AtomicCrmMutationStatus.APPLIED -> RemoteSyncResult.Success
+                        AtomicCrmMutationStatus.CONFLICT ->
+                            RemoteSyncResult.Conflict("Uzak fırsat/aksiyon kaydı daha yeni; yerel veri korundu.")
+                        AtomicCrmMutationStatus.INVALID_VERSION ->
+                            RemoteSyncResult.Conflict("Fırsat/aksiyon sürüm uyuşmazlığı; yazma engellendi.")
+                    }
+                }
+                LocalCrmRepository.ENTITY_CUSTOMER -> {
+                    val plan = planSafeCustomerWrite(operation, row)
+                    val reply = auth.rawRequest(
+                        plan.method,
+                        plan.path,
+                        if (plan.createOnly) JSONArray().put(row).toString() else row.toString(),
+                        session.accessToken,
+                        returnRepresentation = true,
+                        ignoreDuplicates = plan.createOnly,
+                    )
+                    val written = JSONArray(reply)
+                    // 2xx + zero rows may mean a stale version or RLS blocking the update.
+                    // Neither case is proof of success: retain the dirty local copy.
+                    if (written.length() == 1 &&
+                        written.optJSONObject(0)?.optString("id") == operation.entityId
+                    ) RemoteSyncResult.Success
+                    else RemoteSyncResult.Conflict("Müşteri sürümü çakıştı veya sunucu yazmayı reddetti.")
+                }
+                LocalCrmRepository.ENTITY_ACTIVITY -> {
+                    // Append-only historical rows retain the existing transport. RLS and
+                    // matching row acknowledgment remain mandatory.
+                    val acknowledgment = auth.rawRequest(
+                        "POST", "/rest/v1/" + table + "?on_conflict=id",
+                        JSONArray().put(row).toString(), session.accessToken,
+                        returnRepresentation = true,
+                    )
+                    requireRemoteWriteAcknowledgement(acknowledgment, payload.getString("id"))
+                    RemoteSyncResult.Success
+                }
+                else -> RemoteSyncResult.PermanentFailure("Bilinmeyen CRM entity türü")
             }
-            val acknowledgment = auth.rawRequest(
-                "POST", "/rest/v1/" + table + "?on_conflict=id",
-                JSONArray().put(row).toString(), session.accessToken,
-                returnRepresentation = true,
-            )
-            requireRemoteWriteAcknowledgement(acknowledgment, payload.getString("id"))
-            RemoteSyncResult.Success
         }.getOrElse { error ->
             when (error) {
                 is SupabaseHttpException -> when {
+                    // Missing RPC or Data API table: leave the outbox untouched.
+                    error.code == 404 -> RemoteSyncResult.NotConfigured
                     error.code == 401 -> RemoteSyncResult.RetryableFailure("Oturum süresi doldu.")
                     error.code == 409 || error.code == 412 -> RemoteSyncResult.Conflict(error.message)
                     error.code in 408..599 -> RemoteSyncResult.RetryableFailure(error.message)
@@ -302,31 +343,6 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                 else -> RemoteSyncResult.RetryableFailure(error.message ?: "Bilinmeyen ağ hatası")
             }
         }
-    }
-
-    private fun fetchRemoteVersion(
-        table: String,
-        id: String,
-        entityType: String,
-        session: SupabaseSession,
-    ): Long? {
-        if (id.isBlank()) return null
-        val column = when (entityType) {
-            LocalCrmRepository.ENTITY_CUSTOMER -> "sync_version"
-            LocalCrmRepository.ENTITY_NEXT_ACTION,
-            LocalCrmRepository.ENTITY_OPPORTUNITY -> "version"
-            else -> "id"
-        }
-        if (column == "id") return null
-        val text = auth.rawRequest(
-            "GET",
-            "/rest/v1/" + table + "?select=" + column + "&id=eq." + id + "&limit=1",
-            null,
-            session.accessToken,
-        )
-        val array = JSONArray(text)
-        if (array.length() == 0) return null
-        return array.getJSONObject(0).optLong(column, 1L)
     }
 
     override suspend fun pullInto(database: LanuCrmDatabase): RemotePullResult {
