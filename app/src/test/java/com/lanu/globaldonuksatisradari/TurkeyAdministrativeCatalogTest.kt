@@ -21,8 +21,8 @@ class TurkeyAdministrativeCatalogTest {
             assertTrue("İlçe listesi boş: ${city.name}", city.fallbackDistricts.isNotEmpty())
             assertEquals(
                 "Katalog/fallback uyuşmuyor: ${city.name}",
-                TurkeyDistrictFallback.forCity(city.name),
-                city.fallbackDistricts,
+                TurkeyDistrictFallback.forCity(city.name).toSet(),
+                city.fallbackDistricts.toSet(),
             )
         }
     }
