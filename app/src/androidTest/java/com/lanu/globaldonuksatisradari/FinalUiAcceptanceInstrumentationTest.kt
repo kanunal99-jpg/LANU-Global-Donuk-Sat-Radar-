@@ -304,8 +304,9 @@ class FinalUiAcceptanceInstrumentationTest {
         val orderId = runBlocking {
             commercialRepository.observeOrders(customerId).first().single { it.orderNumber == orderNumber }.id
         }
-        composeRule.onNode(hasTestTag("crm_detail_scroll")).performScrollToNode(hasTestTag("crm_order_advance_" + orderId))
-        waitForEnabledTag("crm_order_advance_" + orderId).performScrollTo().performClick()
+        val orderAdvanceTag = "crm_order_advance_" + orderId
+        waitForTag(orderAdvanceTag, timeoutMs = 15_000)
+        waitForEnabledTag(orderAdvanceTag, timeoutMs = 15_000).performScrollTo().performClick()
         waitForStep("siparişi CONFIRMED durumuna geçirme") {
             runBlocking { commercialRepository.observeOrders(customerId).first().any { it.id == orderId && it.status.name == "CONFIRMED" } }
         }
