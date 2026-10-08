@@ -205,15 +205,24 @@ Bir özellik kanıtlanmadan tamamlanmış sayılmaz.
 **Yedek:** `backup/2026-10-08-before-four-phase-audit`.
 **Çalışma:** `audit/four-phase-2026-10-08`.
 
-### Faz 1 — Kritik öncelik (uygulanıyor; release değil)
-- [x] Envanter: 174 dosya, 38 dizin; kod, test, iş akışı ve migrations dahil.
-- [x] GitHub `main` çalıştırması `37748111642` sonucunda Android instrumentation 38 testten 1 hata: sipariş advance Compose düğümü Room kaydından sonra henüz semantics'a düşmemiş. Unit/lint/assembleDebug adımları başarılı.
-- [x] Kök nedenle uyumlu bekleme koruması çalışma dalına uygulandı; PR #77 aynı hata için ayrı dalda başarılı CI ile doğrulanmış.
-- [x] `20261005140000_reproducible_crm_schema_and_rls.sql` başında kapanmamış VKN/TCKN regex ifadesi ve `create table` kapanışı bulundu, çalışma dalında düzeltildi.
-- [x] Ücretsiz ve bağımlılıksız SQL yapısal preflight + CI kapısı çalışma dalına eklendi.
-- [ ] Faz 1 çalışma dalı PR CI lint/unit/Android emulator tamamen yeşil.
-- [ ] Migration'lar yeni/izole Supabase/PostgreSQL ortamında gerçekten yürütülüp RLS doğrulandı.
-- [ ] Main'e kontrollü merge ve Release APK'nın SHA-256 indirme doğrulaması.
+### Faz 1 — KRİTİK HATALAR VE APK YAYINI (tamamlandı; CI ve Release kanıtlı)
+- [x] 174 dosya / 38 dizinlik kaynak ağacı ve `backup/2026-10-08-before-four-phase-audit` geri dönüş dalı.
+- [x] CRM sipariş/teklif Compose düğüm yarış koşulları incelendi; `CrmCommercialWorkspace.kt` Room Flow gözlemcileri müşteri/kayıt kimlikleriyle `remember` kullanılarak sabitlendi. Android kabul testi için görünür öğeye güvenilir kaydırma/bekleme uygulandı.
+- [x] `20261005140000_reproducible_crm_schema_and_rls.sql` eksik CHECK/tablo kapanışı ve 371 satırlık yinelenmiş/bozuk SQL bölümü düzeltildi.
+- [x] Bağımlılıksız SQL structural preflight CI'a eklendi.
+- [x] Geçici PostgreSQL 17 üzerinde üç migration sıfırdan uygulandı; 12 CRM tablosu RLS açık; anonim rol kısıtı ile iki ayrı kimlik için müşteri/teklif/sipariş/satır izolasyonu doğrulandı. **Bu test üretim Supabase'de gerçek iki hesapla E2E testin yerine geçmez**; o görev Faz 2'de açıktır.
+- [x] GitHub PR #83: https://github.com/kanunal99-jpg/LANU-Global-Donuk-Sat-Radar-/pull/83
+- [x] GitHub PR #85: https://github.com/kanunal99-jpg/LANU-Global-Donuk-Sat-Radar-/pull/85 ; son PR CI #37758835607 lint/unit/38 emülatör testi/SQL/Postgres/build başarıyla tamamlandı.
+- [x] PR #85 `main` commit `a9f636afc5215e4f33d66769c49aaef1ab1e51d5` üzerinde birleştirildi.
+- [x] Ana dal CI #37759867120 tamamen başarılı: Android emülatör kabul, debug APK üretimi, artifact, GitHub `latest` Release yüklemesi, indirilen APK SHA-256 ve build-info doğrulaması.
+- [x] `latest` Release hedef commit'i, gerçek Git etiketi ve ana dal commit'i `a9f636afc5215e4f33d66769c49aaef1ab1e51d5` eşleşti; APK ve SHA dosyası GitHub Release'de mevcut.
+- [x] `scripts/publish_latest_apk.sh`: güncel commit kontrolü, mevcut doğrulanmış asset'in yedeği, başarısız yayın için geri alma, gerçek `latest` Git ref güncellemesi ve yeniden indirme/checksum testi.
+
+**Faz 1 doğrulama:** https://github.com/kanunal99-jpg/LANU-Global-Donuk-Sat-Radar-/actions/runs/37759867120
+
+**Faz 1 APK:** https://github.com/kanunal99-jpg/LANU-Global-Donuk-Sat-Radar-/releases/download/latest/Lanu-Global-Donuk-Satis-Radari-latest.apk
+
+**Kapsam sınırı:** Faz 1 emülatör kabul ve izole PostgreSQL doğrulaması tamamlandı. Fiziksel cihaz kurulum testi ve üretim Supabase oturumlu E2E testi sırasıyla Faz 4 ve Faz 2'de açık kalır.
 
 ### Faz 2 — Backend / güvenlik (açık)
 - [ ] Supabase Auth + RLS owner/child table IDOR testleri ve başarılı/başarısız oturum senaryoları.
@@ -230,4 +239,4 @@ Bir özellik kanıtlanmadan tamamlanmış sayılmaz.
 - [ ] CI yeşil → Release APK + SHA/build-info → indirilebilirlik/kurulum/doğrulama.
 - [ ] Kalan görevleri kayıt/kanıtlarla kapat, üretim riski kalmadığını kanıtla.
 
-**Önemli:** Bu belgede `uygulandı` yazması yalnızca çalışma dalındaki kod değişikliğini ifade eder; CI yeşil, merge, cihaz kabulü veya yeni APK yayımlandı iddiası değildir.
+**İlke:** Faz 1 kanıtı belirli başarılı commit/CI/Release ile sınırlıdır. Faz 2–4 maddeleri ilgili E2E ve cihaz testleri tamamlanmadan bitmiş sayılamaz. Her yeni `main` commit'i için CI ve `latest` Release eşleşmesi yeniden doğrulanır.
