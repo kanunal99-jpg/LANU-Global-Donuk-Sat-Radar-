@@ -197,3 +197,37 @@ Bir özellik kanıtlanmadan tamamlanmış sayılmaz.
 - Rutin ekranı şehir/ilçe kapsamı, başlangıç müşterisi seçimi, adım mesafesi ve kümülatif mesafeyi gösteriyor.
 - Supabase CRM customer tablosuna address/latitude/longitude alanları ve indeks eklendi; push/pull adapter bu alanları senkronize ediyor.
 - Manuel nokta ve rota için unit/instrumentation testleri eklendi.
+
+
+## Dört Fazlı Denetim — 2026-10-08
+
+**Kaynak:** main @ `3171381fa4f16b568b8a5c2e166fae11bff99052`.
+**Yedek:** `backup/2026-10-08-before-four-phase-audit`.
+**Çalışma:** `audit/four-phase-2026-10-08`.
+
+### Faz 1 — Kritik öncelik (uygulanıyor; release değil)
+- [x] Envanter: 174 dosya, 38 dizin; kod, test, iş akışı ve migrations dahil.
+- [x] GitHub `main` çalıştırması `37748111642` sonucunda Android instrumentation 38 testten 1 hata: sipariş advance Compose düğümü Room kaydından sonra henüz semantics'a düşmemiş. Unit/lint/assembleDebug adımları başarılı.
+- [x] Kök nedenle uyumlu bekleme koruması çalışma dalına uygulandı; PR #77 aynı hata için ayrı dalda başarılı CI ile doğrulanmış.
+- [x] `20261005140000_reproducible_crm_schema_and_rls.sql` başında kapanmamış VKN/TCKN regex ifadesi ve `create table` kapanışı bulundu, çalışma dalında düzeltildi.
+- [x] Ücretsiz ve bağımlılıksız SQL yapısal preflight + CI kapısı çalışma dalına eklendi.
+- [ ] Faz 1 çalışma dalı PR CI lint/unit/Android emulator tamamen yeşil.
+- [ ] Migration'lar yeni/izole Supabase/PostgreSQL ortamında gerçekten yürütülüp RLS doğrulandı.
+- [ ] Main'e kontrollü merge ve Release APK'nın SHA-256 indirme doğrulaması.
+
+### Faz 2 — Backend / güvenlik (açık)
+- [ ] Supabase Auth + RLS owner/child table IDOR testleri ve başarılı/başarısız oturum senaryoları.
+- [ ] Fresh migration, Room/offline sync, idempotency, token saklama ve conflict çözümü uçtan uca doğrulama.
+- [ ] Yetkisiz data erişimi, gizli değer, KVKK ve gereksiz erişim denetimi.
+
+### Faz 3 — Veri/CRM/performans (açık)
+- [ ] Kaynak/lisans/uygun ölçek; Türkiye geneli kapsama, nokta doğruluk ve filtreler.
+- [ ] Büyük CRM veri setinde arama, duplicate, rota, aylık rutin, Excel export, ürün katalog ve teklif/sipariş testleri.
+- [ ] Offline/cache/fallback ve invalid veri senaryoları.
+
+### Faz 4 — Kullanıcı kabulü / yayın (açık)
+- [ ] Ekran/erişilebilirlik/hız/kritik saha akışları emülatör ve mümkünse gerçek cihaz.
+- [ ] CI yeşil → Release APK + SHA/build-info → indirilebilirlik/kurulum/doğrulama.
+- [ ] Kalan görevleri kayıt/kanıtlarla kapat, üretim riski kalmadığını kanıtla.
+
+**Önemli:** Bu belgede `uygulandı` yazması yalnızca çalışma dalındaki kod değişikliğini ifade eder; CI yeşil, merge, cihaz kabulü veya yeni APK yayımlandı iddiası değildir.
