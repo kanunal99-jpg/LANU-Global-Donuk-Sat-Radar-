@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -40,11 +41,13 @@ class ManualPointCanonicalLocationInstrumentationTest {
         }
 
         composeRule.onNode(hasTestTag("manual_city_filter"))
+            .performScrollTo()
             .assertIsDisplayed()
             .assertHasClickAction()
-            .assertTextContains("İstanbul")
+            .assertTextContains("İstanbul Anadolu")
 
         composeRule.onNode(hasTestTag("manual_district_filter"))
+            .performScrollTo()
             .assertIsDisplayed()
             .assertHasClickAction()
             .assertTextContains("Kadıköy")
