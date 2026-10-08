@@ -42,8 +42,8 @@ class AtomicCrmMutationTest {
     }
 
     @Test
-    fun allFiveCommercialEntities_areSupported() {
-        for (type in listOf("contact", "quote", "quote_line", "order", "order_line")) {
+    fun sevenCommercialAndCoreEntities_areSupported() {
+        for (type in listOf("contact", "quote", "quote_line", "order", "order_line", "next_action", "opportunity")) {
             val request = JSONObject(buildAtomicCrmMutationRequest(
                 op(type = type), JSONObject().put("id", entityId).put("version", 1L),
             ))
