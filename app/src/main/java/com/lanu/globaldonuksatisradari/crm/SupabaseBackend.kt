@@ -114,6 +114,7 @@ class SupabaseAuthClient(context: Context) {
         )
         // Signup may return a user but no session until email confirmation.
         readSupabaseSession(response)?.let(::saveSession)
+        Unit
     } }
 
     private suspend fun authenticate(path: String, email: String, password: String): Result<Unit> = withContext(Dispatchers.IO) { runCatching {
