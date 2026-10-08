@@ -31,6 +31,20 @@ object SupabaseConfig {
 
 data class SupabaseSession(val accessToken: String, val refreshToken: String, val userId: String)
 
+/** GoTrue password-token responses are top-level; signup may provide a nested session. */
+internal fun readSupabaseSession(response: JSONObject): SupabaseSession? {
+    val tokens = response.optJSONObject("session") ?: response
+    val user = response.optJSONObject("user") ?: tokens.optJSONObject("user")
+    val access = tokens.optString("access_token")
+    val refresh = tokens.optString("refresh_token")
+    val userId = user?.optString("id").orEmpty()
+    return if (access.isNotBlank() && refresh.isNotBlank() && userId.isNotBlank()) {
+        SupabaseSession(access, refresh, userId)
+    } else {
+        null
+    }
+}
+
 private class SecureTokenStore(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("lanu_secure_session", Context.MODE_PRIVATE)
@@ -98,14 +112,9 @@ class SupabaseAuthClient(context: Context) {
             "POST", "/auth/v1/signup",
             JSONObject().put("email", email.trim()).put("password", password).toString(),
         )
-        val session = response.optJSONObject("session")
-        val user = response.optJSONObject("user")
-        val access = session?.optString("access_token").orEmpty()
-        val refresh = session?.optString("refresh_token").orEmpty()
-        val userId = user?.optString("id").orEmpty()
-        if (access.isNotBlank() && refresh.isNotBlank() && userId.isNotBlank()) {
-            saveSession(SupabaseSession(access, refresh, userId))
-        }
+        // Signup may return a user but no session until email confirmation.
+        readSupabaseSession(response)?.let(::saveSession)
+        Unit
     } }
 
     private suspend fun authenticate(path: String, email: String, password: String): Result<Unit> = withContext(Dispatchers.IO) { runCatching {
@@ -115,46 +124,56 @@ class SupabaseAuthClient(context: Context) {
             "POST", path,
             JSONObject().put("email", email.trim()).put("password", password).toString(),
         )
-        val session = response.optJSONObject("session")
-        val user = response.optJSONObject("user")
-        val access = session?.optString("access_token").orEmpty()
-        val refresh = session?.optString("refresh_token").orEmpty()
-        val userId = user?.optString("id").orEmpty()
-        if (access.isBlank() || refresh.isBlank() || userId.isBlank()) {
-            throw IllegalStateException(
-                response.optString("msg").ifBlank {
-                    response.optString("message").ifBlank { "Hesap doğrulaması bekleniyor veya oturum oluşturulamadı." }
-                },
-            )
-        }
-        saveSession(SupabaseSession(access, refresh, userId))
+        val parsed = readSupabaseSession(response)
+            ?: throw IllegalStateException("Hesap doğrulaması bekleniyor veya oturum oluşturulamadı.")
+        saveSession(parsed)
     } }
 
-    suspend fun refresh(): Result<Unit> = withContext(Dispatchers.IO) { runCatching {
-        val current = _session.value ?: error("Aktif oturum yok.")
-        val response = request(
-            "POST", "/auth/v1/token?grant_type=refresh_token",
-            JSONObject().put("refresh_token", current.refreshToken).toString(),
-        )
-        val access = response.optString("access_token")
-        require(access.isNotBlank()) { "Oturum yenilenemedi." }
-        saveSession(
-            SupabaseSession(
-                access,
-                response.optString("refresh_token").ifBlank { current.refreshToken },
-                response.optJSONObject("user")?.optString("id").orEmpty().ifBlank { current.userId },
-            ),
-        )
-    } }
+    suspend fun refresh(): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val current = _session.value ?: error("Aktif oturum yok.")
+            val response = request(
+                "POST", "/auth/v1/token?grant_type=refresh_token",
+                JSONObject().put("refresh_token", current.refreshToken).toString(),
+            )
+            val access = response.optString("access_token")
+            require(access.isNotBlank()) { "Oturum yenilenemedi." }
+            val responseUserId = response.optJSONObject("user")?.optString("id").orEmpty()
+            require(responseUserId.isBlank() || responseUserId == current.userId) {
+                "Yenilenen oturum farklı bir kullanıcıya ait."
+            }
+            require(_session.value == current) { "Oturum yenilenirken değişti." }
+            saveSession(
+                SupabaseSession(
+                    access,
+                    response.optString("refresh_token").ifBlank { current.refreshToken },
+                    current.userId,
+                ),
+            )
+        }.onFailure { error ->
+            // Invalid refresh token: revoke local session. Network failure: keep
+            // encrypted token for later, but do not authorize cloud traffic now.
+            if (error is SupabaseHttpException && error.code in setOf(400, 401, 403)) signOut()
+        }
+    }
 
     suspend fun ensureSession(): SupabaseSession? = withContext(Dispatchers.IO) {
         val current = _session.value ?: return@withContext null
-        runCatching {
-            request("GET", "/auth/v1/user", accessToken = current.accessToken)
-            current
-        }.getOrElse {
-            refresh().getOrNull()
-            _session.value
+        try {
+            val verifiedUser = request("GET", "/auth/v1/user", accessToken = current.accessToken)
+                .optString("id")
+            if (verifiedUser != current.userId) {
+                signOut()
+                null
+            } else {
+                current
+            }
+        } catch (error: SupabaseHttpException) {
+            // Refresh only expired/revoked access tokens; network/5xx fail closed.
+            if (error.code != 401 && error.code != 403) return@withContext null
+            if (refresh().isSuccess) _session.value else null
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -199,7 +218,13 @@ class SupabaseAuthClient(context: Context) {
         }
     }
 
-    fun rawRequest(method: String, path: String, body: String?, accessToken: String): String {
+    fun rawRequest(
+        method: String,
+        path: String,
+        body: String?,
+        accessToken: String,
+        returnRepresentation: Boolean = false,
+    ): String {
         val connection = (URL(SupabaseConfig.URL + path).openConnection() as HttpURLConnection).apply {
             requestMethod = method
             connectTimeout = 15_000
@@ -209,7 +234,10 @@ class SupabaseAuthClient(context: Context) {
             setRequestProperty("Authorization", "Bearer " + accessToken)
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("Prefer", "resolution=merge-duplicates,return=minimal")
+            setRequestProperty(
+                "Prefer",
+                "resolution=merge-duplicates,return=" + if (returnRepresentation) "representation" else "minimal",
+            )
             if (body != null) doOutput = true
         }
         try {
@@ -256,7 +284,12 @@ class SupabaseCrmRemoteDataSource(private val auth: SupabaseAuthClient) : Remote
                     "Uzak kayıt sürümü daha yeni: remote=" + remoteVersion + " local=" + operation.payloadVersion,
                 )
             }
-            auth.rawRequest("POST", "/rest/v1/" + table + "?on_conflict=id", JSONArray().put(row).toString(), session.accessToken)
+            val acknowledgment = auth.rawRequest(
+                "POST", "/rest/v1/" + table + "?on_conflict=id",
+                JSONArray().put(row).toString(), session.accessToken,
+                returnRepresentation = true,
+            )
+            requireRemoteWriteAcknowledgement(acknowledgment, payload.getString("id"))
             RemoteSyncResult.Success
         }.getOrElse { error ->
             when (error) {
