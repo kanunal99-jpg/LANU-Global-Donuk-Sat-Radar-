@@ -55,6 +55,7 @@ class SupabaseCommercialRemoteDataSource(
                 "/rest/v1/rpc/lanu_apply_versioned_crm_mutation",
                 request,
                 session.accessToken,
+                returnRepresentation = true,
             )
             when (parseAtomicCrmMutationStatus(response)) {
                 AtomicCrmMutationStatus.APPLIED -> RemoteSyncResult.Success
