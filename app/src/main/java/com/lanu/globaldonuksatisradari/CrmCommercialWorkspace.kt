@@ -69,7 +69,10 @@ fun CrmCommercialWorkspace(
                         unitPriceMinor = unitPriceMinor,
                     )
                 }.onSuccess { onMessage("Ürün teklif satırına eklendi.") }
-                    .onFailure { onMessage("Teklif satırı eklenemedi: " + it.message.orEmpty()) }
+                    .onFailure { error ->
+                        Log.e("LanuCommercial", "Teklif satırı eklenemedi: $quoteId", error)
+                        onMessage("Teklif satırı eklenemedi: " + error.message.orEmpty())
+                    }
             }
         },
         onSendQuote = { quoteId ->
