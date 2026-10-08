@@ -34,6 +34,18 @@ import androidx.compose.ui.unit.dp
 import com.lanu.globaldonuksatisradari.crm.LocalCrmRepository
 import kotlinx.coroutines.launch
 
+private val manualCityScopes: List<City> = TurkeyCityCatalog.ALL.flatMap { entry ->
+    if (entry.name == "İstanbul") {
+        listOf(
+            City("İstanbul", IstanbulDistricts.ANATOLIAN, "İstanbul Anadolu"),
+            City("İstanbul", IstanbulDistricts.EUROPEAN, "İstanbul Avrupa"),
+        )
+    } else {
+        listOf(City(entry.name, entry.fallbackDistricts))
+    }
+}
+
+
 @Composable
 fun ManualPointScreen(
     repository: LocalCrmRepository,
@@ -43,8 +55,9 @@ fun ManualPointScreen(
     onSaved: () -> Unit,
 ) {
     val initialCity = remember(defaultCity) {
-        TurkeyCityCatalog.ALL.firstOrNull { it.name.equals(defaultCity, ignoreCase = true) }
-            ?: TurkeyCityCatalog.ALL.first()
+        manualCityScopes.firstOrNull { it.label.equals(defaultCity, ignoreCase = true) }
+            ?: manualCityScopes.firstOrNull { it.name.equals(defaultCity, ignoreCase = true) }
+            ?: manualCityScopes.first()
     }
 
     var name by remember { mutableStateOf("") }
@@ -58,7 +71,7 @@ fun ManualPointScreen(
     var district by remember(defaultCity, defaultDistrict) {
         mutableStateOf(
             defaultDistrict?.takeIf { wanted ->
-                initialCity.fallbackDistricts.any { it.equals(wanted, ignoreCase = true) }
+                initialCity.districts.any { it.equals(wanted, ignoreCase = true) }
             }.orEmpty(),
         )
     }
@@ -166,7 +179,7 @@ fun ManualPointScreen(
                         modifier = Modifier.fillMaxWidth().testTag("manual_city_filter"),
                     ) {
                         Text(
-                            selectedCity.name,
+                            selectedCity.label,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -175,9 +188,9 @@ fun ManualPointScreen(
                         expanded = cityMenu,
                         onDismissRequest = { cityMenu = false },
                     ) {
-                        TurkeyCityCatalog.ALL.forEach { city ->
+                        manualCityScopes.forEach { city ->
                             DropdownMenuItem(
-                                text = { Text(city.name) },
+                                text = { Text(city.label) },
                                 onClick = {
                                     selectedCity = city
                                     district = ""
@@ -193,7 +206,7 @@ fun ManualPointScreen(
                 Box(Modifier.weight(1f)) {
                     OutlinedButton(
                         onClick = { districtMenu = true },
-                        enabled = selectedCity.fallbackDistricts.isNotEmpty(),
+                        enabled = selectedCity.districts.isNotEmpty(),
                         modifier = Modifier.fillMaxWidth().testTag("manual_district_filter"),
                     ) {
                         Text(
@@ -206,7 +219,7 @@ fun ManualPointScreen(
                         expanded = districtMenu,
                         onDismissRequest = { districtMenu = false },
                     ) {
-                        selectedCity.fallbackDistricts.forEach { option ->
+                        selectedCity.districts.forEach { option ->
                             DropdownMenuItem(
                                 text = { Text(option) },
                                 onClick = {
@@ -272,7 +285,7 @@ fun ManualPointScreen(
                     message = "Ad, adres, il ve ilçe zorunludur."
                     return@Button
                 }
-                if (district !in selectedCity.fallbackDistricts) {
+                if (district !in selectedCity.districts) {
                     message = "İlçe seçilen ile ait doğrulanmış listeden seçilmelidir."
                     return@Button
                 }
