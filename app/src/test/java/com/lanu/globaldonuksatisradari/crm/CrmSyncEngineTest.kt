@@ -80,22 +80,30 @@ class CrmSyncEngineTest {
     }
 
     @Test
-    fun retryExhaustion_marksOperationFailed_andEntityFailed() = runTest {
+    fun prolongedOfflineOutage_doesNotParkOperation_andSyncsAfterNetworkReturns() = runTest {
         val dao = FakeSyncOperationDao(listOf(operation(attemptCount = 4)))
         val stateStore = FakeSyncStateStore()
+        var online = false
         val engine = CrmSyncEngine(
             dao,
             remote = object : RemoteCrmDataSource {
                 override suspend fun apply(operation: SyncOperationEntity) =
-                    RemoteSyncResult.RetryableFailure("still offline")
+                    if (online) RemoteSyncResult.Success
+                    else RemoteSyncResult.RetryableFailure("still offline")
             },
             stateStore = stateStore,
         )
 
-        assertEquals(SyncProcessResult.Failed("op-1", "still offline"), engine.processOne())
-        assertEquals(SyncOperationState.FAILED.name, dao.operationById("op-1")?.state)
-        assertEquals(SyncState.FAILED, stateStore.syncStates["customer-1"])
-        assertEquals(SyncProcessResult.NoWork, engine.processOne())
+        repeat(8) {
+            assertEquals(SyncProcessResult.Deferred("op-1", 5, "still offline"), engine.processOne())
+            assertEquals(SyncOperationState.PENDING.name, dao.operationById("op-1")?.state)
+            assertEquals(5, dao.operationById("op-1")?.attemptCount)
+        }
+        // An offline edit is kept and syncs once the network is back.
+        online = true
+        assertEquals(SyncProcessResult.Synced("op-1"), engine.processOne())
+        assertEquals(null, dao.operationById("op-1"))
+        assertEquals(SyncState.SYNCED, stateStore.syncStates["customer-1"])
     }
 
     @Test
