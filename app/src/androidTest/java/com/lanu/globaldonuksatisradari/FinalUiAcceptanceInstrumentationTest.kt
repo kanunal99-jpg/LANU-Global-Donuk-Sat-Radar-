@@ -53,26 +53,14 @@ class FinalUiAcceptanceInstrumentationTest {
         composeRule.waitForIdle()
     }
 
-    /**
-     * A Room Flow emission and the corresponding Compose semantics tree may land on
-     * different frames. Retry the scroll until the newly rendered target is present.
-     * This protects transitions without masking a permanently missing control.
-     */
+    /** Wait for Room -> Compose state, then scroll the actual (unmerged) control. */
     private fun waitForDetailTag(tag: String, timeoutMs: Long = 20_000): SemanticsNodeInteraction {
-        val matcher = hasTestTag(tag)
-        try {
-            composeRule.waitUntil(timeoutMs) {
-                runCatching {
-                    composeRule.onNode(hasTestTag("crm_detail_scroll"))
-                        .performScrollToNode(matcher)
-                    composeRule.onNode(matcher, useUnmergedTree = true).assertExists()
-                    true
-                }.getOrDefault(false)
-            }
-        } catch (error: Throwable) {
-            throw AssertionError("CRM detail control not rendered in time: $tag", error)
-        }
-        return composeRule.onNode(matcher, useUnmergedTree = true)
+        val node = waitForTag(tag, timeoutMs)
+        // performScrollToNode uses a merged semantics traversal that can miss nested
+        // controls inside Cards; an existing unmerged node can scroll its ancestors.
+        node.performScrollTo()
+        composeRule.waitForIdle()
+        return node
     }
 
     private fun waitForStep(
