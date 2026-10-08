@@ -199,7 +199,7 @@ class CrmSyncEngine(
                 // permanently stuck FAILED outbox row. Saturate the retry counter so
                 // WorkManager's bounded backoff may continue until connectivity returns.
                 // Only permanent server errors and explicit version conflicts are parked.
-                val nextAttempt = (operation.attemptCount + 1).coerceAtMost(policy.maxAttempts)
+                val nextAttempt = operation.attemptCount.coerceIn(0, policy.maxAttempts - 1) + 1
                 syncDao.updateAttemptAndState(
                     id = operation.id,
                     attemptCount = nextAttempt,
