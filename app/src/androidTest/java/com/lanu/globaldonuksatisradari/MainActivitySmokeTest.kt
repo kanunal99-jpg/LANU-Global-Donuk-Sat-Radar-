@@ -380,8 +380,15 @@ class MainActivitySmokeTest {
         }
 
         composeRule.activityRule.scenario.recreate()
-        waitForText("Rutin").performClick()
-        waitForText("Otomatik Aylık Ziyaret Planı").assertIsDisplayed()
+        waitForTag("nav_routine").assertHasClickAction().performClick()
+        waitForTag("routine_screen", timeoutMs = 5_000).assertIsDisplayed()
+        composeRule.onNodeWithTag("routine_screen")
+            .performScrollToNode(hasTestTag("routine_prepare_monthly_plan"))
+        waitForTag("routine_prepare_monthly_plan")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
+        waitForText("Otomatik Aylık Ziyaret Planı", timeoutMs = 45_000).assertIsDisplayed()
         waitForTag("routine_excel_save")
             .performScrollTo()
             .assertIsDisplayed()
