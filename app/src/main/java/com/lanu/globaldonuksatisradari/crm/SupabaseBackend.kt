@@ -45,9 +45,12 @@ internal fun readSupabaseSession(response: JSONObject): SupabaseSession? {
     }
 }
 
-private class SecureTokenStore(context: Context) {
+internal class SecureTokenStore(
+    context: Context,
+    preferencesName: String = "lanu_secure_session",
+) {
     private val prefs: SharedPreferences =
-        context.getSharedPreferences("lanu_secure_session", Context.MODE_PRIVATE)
+        context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
     private val keyAlias = "lanu_supabase_session_key"
 
     private fun key(): SecretKey {
@@ -94,11 +97,15 @@ private class SecureTokenStore(context: Context) {
         return SupabaseSession(access, refresh, user)
     }
 
+    fun currentOwnerId(): String? = prefs.getString("user", null)
+
     fun clear() = prefs.edit().clear().apply()
 }
 
-class SupabaseAuthClient(context: Context) {
-    private val store = SecureTokenStore(context.applicationContext)
+class SupabaseAuthClient internal constructor(
+    private val store: SecureTokenStore,
+) {
+    constructor(context: Context) : this(SecureTokenStore(context.applicationContext))
     private val _session = MutableStateFlow(store.load())
     val session: StateFlow<SupabaseSession?> = _session.asStateFlow()
 
@@ -130,8 +137,10 @@ class SupabaseAuthClient(context: Context) {
     } }
 
     suspend fun refresh(): Result<Unit> = withContext(Dispatchers.IO) {
+        val initial = _session.value
         runCatching {
-            val current = _session.value ?: error("Aktif oturum yok.")
+            val current = initial ?: error("Aktif oturum yok.")
+            require(store.load() == current) { "Oturum başka istemcide değişti." }
             val response = request(
                 "POST", "/auth/v1/token?grant_type=refresh_token",
                 JSONObject().put("refresh_token", current.refreshToken).toString(),
@@ -142,7 +151,9 @@ class SupabaseAuthClient(context: Context) {
             require(responseUserId.isBlank() || responseUserId == current.userId) {
                 "Yenilenen oturum farklı bir kullanıcıya ait."
             }
-            require(_session.value == current) { "Oturum yenilenirken değişti." }
+            require(_session.value == current && store.load() == current) {
+                "Oturum yenilenirken değişti."
+            }
             saveSession(
                 SupabaseSession(
                     access,
@@ -153,18 +164,33 @@ class SupabaseAuthClient(context: Context) {
         }.onFailure { error ->
             // Invalid refresh token: revoke local session. Network failure: keep
             // encrypted token for later, but do not authorize cloud traffic now.
-            if (error is SupabaseHttpException && error.code in setOf(400, 401, 403)) signOut()
+            if (error is SupabaseHttpException && error.code in setOf(400, 401, 403) &&
+                initial != null && _session.value == initial &&
+                store.load() == initial
+            ) signOut()
         }
     }
 
     suspend fun ensureSession(): SupabaseSession? = withContext(Dispatchers.IO) {
-        val current = _session.value ?: return@withContext null
+        val original = _session.value ?: return@withContext null
+        // WorkManager and the UI have independent auth instances.
+        // Reconcile a token rotation for the SAME owner; fail closed across
+        // logout/account switches even if this instance still holds old tokens.
+        val stored = store.load()
+        if (stored == null || stored.userId != original.userId) {
+            _session.value = null
+            return@withContext null
+        }
+        if (stored != original) _session.value = stored
+        val current = stored
         try {
             val verifiedUser = request("GET", "/auth/v1/user", accessToken = current.accessToken)
                 .optString("id")
             // An in-flight response from account A must not authorize work after
             // sign-out or after account B has signed in.
-            if (_session.value != current) return@withContext null
+            if (_session.value != current || store.currentOwnerId() != current.userId) {
+                return@withContext null
+            }
             if (verifiedUser != current.userId) {
                 signOut()
                 null
@@ -174,7 +200,9 @@ class SupabaseAuthClient(context: Context) {
         } catch (error: SupabaseHttpException) {
             // Refresh only expired/revoked access tokens; network/5xx fail closed.
             if (error.code != 401 && error.code != 403) return@withContext null
-            if (_session.value != current) return@withContext null
+            if (_session.value != current || store.currentOwnerId() != current.userId) {
+                return@withContext null
+            }
             if (refresh().isSuccess) _session.value?.takeIf { it.userId == current.userId } else null
         } catch (_: Exception) {
             null
@@ -182,8 +210,10 @@ class SupabaseAuthClient(context: Context) {
     }
 
     fun signOut() {
+        val owner = _session.value?.userId
         _session.value = null
-        store.clear()
+        // Never delete newer credentials written by a different user/session.
+        if (owner != null && store.currentOwnerId() == owner) store.clear()
     }
 
     private fun saveSession(session: SupabaseSession) {
@@ -230,6 +260,11 @@ class SupabaseAuthClient(context: Context) {
         returnRepresentation: Boolean = false,
         ignoreDuplicates: Boolean = false,
     ): String {
+        val owner = _session.value?.userId
+            ?: throw SecurityException("CRM oturumu kapanmış.")
+        if (store.currentOwnerId() != owner) {
+            throw SecurityException("CRM hesabı değişti; eski oturum isteği engellendi.")
+        }
         val connection = (URL(SupabaseConfig.URL + path).openConnection() as HttpURLConnection).apply {
             requestMethod = method
             connectTimeout = 15_000
@@ -253,6 +288,9 @@ class SupabaseAuthClient(context: Context) {
             val text = stream?.let {
                 BufferedReader(InputStreamReader(it, Charsets.UTF_8)).use(BufferedReader::readText)
             }.orEmpty()
+            if (store.currentOwnerId() != owner) {
+                throw SecurityException("CRM hesabı istek sırasında değişti.")
+            }
             if (code !in 200..299) throw SupabaseHttpException(code, text)
             return text
         } finally {
