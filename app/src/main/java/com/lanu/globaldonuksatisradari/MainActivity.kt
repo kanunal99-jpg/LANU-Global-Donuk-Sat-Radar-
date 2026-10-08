@@ -681,8 +681,16 @@ fun SalesRadarApp(auth: SupabaseAuthClient? = null) {
                             }
                         }
                         item {
-                            Card(modifier = Modifier.fillMaxWidth().testTag("inventory_filters_card")) {
-                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth().testTag("inventory_filters_card"),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                ),
+                            ) {
+                                Column(
+                                    Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Column(Modifier.weight(1f)) {
                                             Text("Hızlı filtreler", style = MaterialTheme.typography.titleMedium)
