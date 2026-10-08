@@ -175,3 +175,41 @@ Bir iş yalnız kod yazıldığı için bitmiş sayılmaz. Tamamlama döngüsü:
 `Araştır → kök nedeni bul → düzelt → uygula → build → test → doğrula → deploy → production/smoke test → kanıtla`
 
 Kritik hata görülürse bir sonraki özelliğe geçmeden önce kök neden giderilir. Ürün çıktısı hazır olana kadar bu döngü sürdürülür.
+
+
+## 28. Dört fazlı denetim ve kademeli yayın — KALICI GELİŞTİRME SÖZLEŞMESİ
+Yeni kapsamlı kod denetimleri ve iyileştirmeler dört izlenebilir fazda yönetilir. Her faz bağımsız olarak:
+`ARAŞTIR → KÖK NEDEN → DÜZELT → UYGULA → TEST → DOĞRULA → GÜVENLİ YAYIN → KANIT`
+döngüsünden geçirilir. Ara bulgular veya inceleme notları tamamlanmış iş sayılmaz.
+
+### Faz 1 — Kritik engeller / build ve yayın güvenilirliği
+- Ana dalın geçerli kaynak kodunu, geçmişini, CI sonuçlarını, APK ve checksum durumunu incele; önce geri alınabilir kopya al.
+- Bozuk migration, başarısız cihaz testi, yanlış kabul testi, bozuk yayın zinciri ve veri kaybı riski önceliklidir.
+- Her düzeltmeyi regression testi/CI kontrolüyle koru; kırmızı CI ile merge/yayın yapma.
+
+### Faz 2 — Backend, güvenlik ve offline CRM veri bütünlüğü
+- Supabase Auth, RLS, sahiplik, veritabanı migration'ları, gizli anahtar yönetimi, Room/WorkManager, senkronizasyon/idempotency/conflict ve KVKK riskleri.
+- Gerçek kullanıcı hesabı, yetkili veri seti ve izole test ortamında uçtan uca sınama; haklar doğrulanmadan canlı veritabanını değiştirme.
+- `ANA SERVİS → ALTERNATİF → GERÇEK FALLBACK → HATA YÖNETİMİ → GÜVENLİ VARSAYILAN → LOG/İZLEME → SMOKE TEST` zorunlu.
+
+### Faz 3 — İşletme keşfi, veri kalitesi, rota, CRM ve performans
+- Türkiye 81 il / 973 ilçe, ilçe/mahalle kapsamı, Overture/Overpass/Nominatim lisans-ratelimit şartları ve kalıcı kalite/tekrar/kaynak izlenebilirliği.
+- CRM arama, ekleme, birleştirme, teklif/sipariş, katalog, rota, Excel aktarımı ve UI thread performansını gerçekçi veri hacminde test et.
+- Gerçek olmayan veri, sahte KPI ve tahmini işletme bilgisi doğrulanmış gibi sunulamaz.
+
+### Faz 4 — Ürün kabulü, kullanıcı deneyimi, güvenlik ve APK yayınlama
+- Dar ekran, büyük yazı, cihaz emülatörü, mümkünse fiziksel cihaz, offline/online, yanlış giriş ve kritik kullanıcı akışlarının uçtan uca kabul testleri.
+- Güvenli yayın için başarılı `main` CI, commit'e bağlı APK build-info, indirilip checksum'u doğrulanmış Release asset'i ve smoke kanıtı gerekir.
+- Başarısız yayın denemesi `latest` çalışan sürümü değiştiremez; kurtarma ve geri dönüş adımları belgelenir.
+
+### Faz geçiş kapısı
+- Her fazın sorumlulukları issue/PR ve değişen kod satırlarıyla takip edilir; `açık / uygulanıyor / test bekliyor / yayımlandı / bloke` durumları kullanılmalıdır.
+- Test/CI/SHA/production kanıtı yoksa durum asla `yayımlandı` olamaz.
+- Başarısız fazın kalan işleri ve çözülmemiş kök nedenleri saklanamaz; acil kritik sorunlar faz önceliğini değiştirir.
+- Başlangıçta `main` yedeği alınır; PR üstünde kontrollü değişim yapılır; dal kapanışı/merge yalnız doğrulanmış testlerle.
+- Ücretsiz/açık kaynak/yerel çözüm önceliği korunur; kullanıcının onayı olmadan ücret doğuracak bağımlılık veya servis başlatılmaz.
+
+## 29. Denetim kanıtı ve durum bildirimi
+- Her adım için kaynak commit, etkilenen dosya, tekrar üretilebilir komut, test sonucu, GitHub Actions run bağlantısı, sürüm/Release ve checksum bağlantısı belgelenir.
+- İncelenen dosya sayısı ve taranmayan alanlar açıkça belirtilir; statik inceleme, gerçek cihaz testi veya canlı DB doğrulaması gibi sunulmaz.
+- Dış servis/CI kapalı veya erişilemiyorsa o kapı `bloke` kaydedilir, geçilmiş gibi işaretlenmez.
