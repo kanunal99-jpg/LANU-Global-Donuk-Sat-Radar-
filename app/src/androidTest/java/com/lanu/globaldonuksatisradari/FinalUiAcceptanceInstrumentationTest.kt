@@ -285,7 +285,7 @@ class FinalUiAcceptanceInstrumentationTest {
         waitForDetailTag("crm_quote_product_catalog_" + quoteId)
         waitForTag("crm_quote_product_catalog_" + quoteId).performClick()
         waitForText(productName + " • 321,45 TRY").performClick()
-        waitForTag("crm_add_quote_line_" + quoteId).assertIsEnabled().performClick()
+        waitForEnabledTag("crm_add_quote_line_" + quoteId).performScrollTo().performClick()
         waitForStep("katalog ürünü teklif satırına ekleme") {
             runBlocking { commercialRepository.observeQuoteLines(quoteId).first().isNotEmpty() }
         }
