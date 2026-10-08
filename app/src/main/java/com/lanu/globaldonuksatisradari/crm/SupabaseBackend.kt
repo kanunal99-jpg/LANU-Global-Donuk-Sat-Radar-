@@ -135,7 +135,7 @@ class SupabaseAuthClient(context: Context) {
         val initial = _session.value
         runCatching {
             val current = initial ?: error("Aktif oturum yok.")
-            require(store.currentOwnerId() == current.userId) { "Oturum başka kullanıcıya geçti." }
+            require(store.load() == current) { "Oturum başka istemcide değişti." }
             val response = request(
                 "POST", "/auth/v1/token?grant_type=refresh_token",
                 JSONObject().put("refresh_token", current.refreshToken).toString(),
@@ -146,7 +146,7 @@ class SupabaseAuthClient(context: Context) {
             require(responseUserId.isBlank() || responseUserId == current.userId) {
                 "Yenilenen oturum farklı bir kullanıcıya ait."
             }
-            require(_session.value == current && store.currentOwnerId() == current.userId) {
+            require(_session.value == current && store.load() == current) {
                 "Oturum yenilenirken değişti."
             }
             saveSession(
@@ -161,19 +161,23 @@ class SupabaseAuthClient(context: Context) {
             // encrypted token for later, but do not authorize cloud traffic now.
             if (error is SupabaseHttpException && error.code in setOf(400, 401, 403) &&
                 initial != null && _session.value == initial &&
-                store.currentOwnerId() == initial.userId
+                store.load() == initial
             ) signOut()
         }
     }
 
     suspend fun ensureSession(): SupabaseSession? = withContext(Dispatchers.IO) {
-        val current = _session.value ?: return@withContext null
-        // WorkManager and the UI have independent auth instances. A stale
-        // in-memory session must never outlive a sign-out or account switch.
-        if (store.currentOwnerId() != current.userId) {
+        val original = _session.value ?: return@withContext null
+        // WorkManager and the UI have independent auth instances.
+        // Reconcile a token rotation for the SAME owner; fail closed across
+        // logout/account switches even if this instance still holds old tokens.
+        val stored = store.load()
+        if (stored == null || stored.userId != original.userId) {
             _session.value = null
             return@withContext null
         }
+        if (stored != original) _session.value = stored
+        val current = stored
         try {
             val verifiedUser = request("GET", "/auth/v1/user", accessToken = current.accessToken)
                 .optString("id")
