@@ -164,7 +164,7 @@ fun RoutineScreen(
                     ) {
                         Text("Rota detayı", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "Aylık plan arka planda hazırlanır. Tek tek rota sırası yalnızca istediğinizde hesaplanır; böylece binlerce CRM kaydı sekme geçişini yavaşlatmaz.",
+                            "Aylık plan ve tek tek rota sırası yalnızca istediğinizde hesaplanır; böylece binlerce CRM kaydı sekme geçişini yavaşlatmaz.",
                             style = MaterialTheme.typography.bodySmall,
                         )
                         OutlinedButton(
