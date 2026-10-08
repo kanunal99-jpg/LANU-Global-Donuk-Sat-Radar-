@@ -195,22 +195,18 @@ class CrmSyncEngine(
                 SyncProcessResult.Failed(operation.id, result.reason)
             }
             is RemoteSyncResult.RetryableFailure -> {
-                val nextAttempt = operation.attemptCount + 1
-                val shouldRetry = policy.shouldRetry(nextAttempt)
-                if (!shouldRetry) {
-                    stateStore.mark(operation.entityType, operation.entityId, SyncState.FAILED)
-                }
+                // A long network outage must NEVER turn recoverable local edits into a
+                // permanently stuck FAILED outbox row. Saturate the retry counter so
+                // WorkManager's bounded backoff may continue until connectivity returns.
+                // Only permanent server errors and explicit version conflicts are parked.
+                val nextAttempt = operation.attemptCount.coerceIn(0, policy.maxAttempts - 1) + 1
                 syncDao.updateAttemptAndState(
                     id = operation.id,
                     attemptCount = nextAttempt,
                     lastError = result.reason,
-                    state = if (shouldRetry) SyncOperationState.PENDING.name else SyncOperationState.FAILED.name,
+                    state = SyncOperationState.PENDING.name,
                 )
-                if (shouldRetry) {
-                    SyncProcessResult.Deferred(operation.id, nextAttempt, result.reason)
-                } else {
-                    SyncProcessResult.Failed(operation.id, result.reason)
-                }
+                SyncProcessResult.Deferred(operation.id, nextAttempt, result.reason)
             }
         }
     }
