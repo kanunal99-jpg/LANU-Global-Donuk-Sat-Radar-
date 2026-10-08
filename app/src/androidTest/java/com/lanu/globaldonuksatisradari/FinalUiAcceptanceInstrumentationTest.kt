@@ -314,13 +314,17 @@ class FinalUiAcceptanceInstrumentationTest {
     }
 
     @Test(timeout = 30_000)
-    fun routineTab_opensBeforeRouteComputation() {
+    fun routineTab_opensBeforeAnyHeavyRouteOrMonthlyPlanComputation() {
         waitForTag("nav_routine").assertHasClickAction().performClick()
-        waitForTag("routine_screen", timeoutMs = 5_000).assertIsDisplayed()
+        waitForTag("routine_screen", timeoutMs = 3_000).assertIsDisplayed()
+
+        composeRule.onNode(hasTestTag("routine_screen"))
+            .performScrollToNode(hasTestTag("routine_monthly_plan_control"))
+        waitForTag("routine_prepare_monthly_plan", timeoutMs = 10_000).assertHasClickAction()
 
         composeRule.onNode(hasTestTag("routine_screen"))
             .performScrollToNode(hasTestTag("route_detail_control"))
-        waitForTag("route_detail_control", timeoutMs = 15_000).assertIsDisplayed()
+        waitForTag("route_detail_control", timeoutMs = 10_000).assertIsDisplayed()
         waitForTag("routine_prepare_route").assertHasClickAction()
     }
 
