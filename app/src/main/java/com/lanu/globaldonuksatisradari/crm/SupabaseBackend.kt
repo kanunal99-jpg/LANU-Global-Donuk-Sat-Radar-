@@ -45,9 +45,12 @@ internal fun readSupabaseSession(response: JSONObject): SupabaseSession? {
     }
 }
 
-private class SecureTokenStore(context: Context) {
+internal class SecureTokenStore(
+    context: Context,
+    preferencesName: String = "lanu_secure_session",
+) {
     private val prefs: SharedPreferences =
-        context.getSharedPreferences("lanu_secure_session", Context.MODE_PRIVATE)
+        context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
     private val keyAlias = "lanu_supabase_session_key"
 
     private fun key(): SecretKey {
@@ -99,8 +102,10 @@ private class SecureTokenStore(context: Context) {
     fun clear() = prefs.edit().clear().apply()
 }
 
-class SupabaseAuthClient(context: Context) {
-    private val store = SecureTokenStore(context.applicationContext)
+class SupabaseAuthClient internal constructor(
+    private val store: SecureTokenStore,
+) {
+    constructor(context: Context) : this(SecureTokenStore(context.applicationContext))
     private val _session = MutableStateFlow(store.load())
     val session: StateFlow<SupabaseSession?> = _session.asStateFlow()
 
