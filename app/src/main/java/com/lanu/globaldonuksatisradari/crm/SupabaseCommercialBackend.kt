@@ -48,23 +48,24 @@ class SupabaseCommercialRemoteDataSource(
         val session = auth.ensureSession() ?: return RemoteSyncResult.NotConfigured
         return runCatching {
             val payload = JSONObject(operation.payloadJson)
-            val table = tableFor(operation.entityType)
-            val remoteVersion = fetchRemoteVersion(table, payload.getString("id"), session)
-            if (remoteVersion != null && remoteVersion > operation.payloadVersion) {
-                return RemoteSyncResult.Conflict(
-                    "Uzak kayıt sürümü daha yeni: remote=$remoteVersion local=${operation.payloadVersion}",
-                )
-            }
             val row = rowFor(operation.entityType, payload)
-            val acknowledgment = auth.rawRequest(
+            val request = buildAtomicCrmMutationRequest(operation, row)
+            val response = auth.rawRequest(
                 "POST",
-                "/rest/v1/$table?on_conflict=id",
-                JSONArray().put(row).toString(),
+                "/rest/v1/rpc/lanu_apply_versioned_crm_mutation",
+                request,
                 session.accessToken,
                 returnRepresentation = true,
             )
-            requireRemoteWriteAcknowledgement(acknowledgment, payload.getString("id"))
-            RemoteSyncResult.Success
+            when (parseAtomicCrmMutationStatus(response)) {
+                AtomicCrmMutationStatus.APPLIED -> RemoteSyncResult.Success
+                AtomicCrmMutationStatus.CONFLICT -> RemoteSyncResult.Conflict(
+                    "Uzak kayıt sürümü yerel sürümle çakışıyor; yerel veri korunuyor.",
+                )
+                AtomicCrmMutationStatus.INVALID_VERSION -> RemoteSyncResult.Conflict(
+                    "Yerel kayıt sürümü geçersiz; otomatik üstüne yazma engellendi.",
+                )
+            }
         }.getOrElse { error -> mapFailure(error) }
     }
 
@@ -224,15 +225,6 @@ class SupabaseCommercialRemoteDataSource(
         return currentId
     }
 
-    private fun tableFor(entityType: String): String = when (entityType) {
-        CommercialCrmSync.ENTITY_CONTACT -> "lanu_crm_contacts"
-        CommercialCrmSync.ENTITY_QUOTE -> "lanu_crm_quotes"
-        CommercialCrmSync.ENTITY_QUOTE_LINE -> "lanu_crm_quote_lines"
-        CommercialCrmSync.ENTITY_ORDER -> "lanu_crm_orders"
-        CommercialCrmSync.ENTITY_ORDER_LINE -> "lanu_crm_order_lines"
-        else -> error("Bilinmeyen ticari CRM entity: $entityType")
-    }
-
     private fun rowFor(entityType: String, p: JSONObject): JSONObject = when (entityType) {
         CommercialCrmSync.ENTITY_CONTACT -> JSONObject().apply {
             put("id", p.getString("id"))
@@ -296,18 +288,6 @@ class SupabaseCommercialRemoteDataSource(
             put("version", p.optLong("version", 1L))
         }
 
-    private fun fetchRemoteVersion(table: String, id: String, session: SupabaseSession): Long? {
-        val text = auth.rawRequest(
-            "GET",
-            "/rest/v1/$table?select=version&id=eq.$id&limit=1",
-            null,
-            session.accessToken,
-        )
-        val array = JSONArray(text)
-        if (array.length() == 0) return null
-        return array.getJSONObject(0).optLong("version", 1L)
-    }
-
     private fun fetchRlsScoped(
         table: String,
         orderColumn: String,
@@ -335,6 +315,9 @@ class SupabaseCommercialRemoteDataSource(
 
     private fun mapFailure(error: Throwable): RemoteSyncResult = when (error) {
         is SupabaseHttpException -> when {
+            // A fresh database without the RPC must keep its local queue intact.
+            // Falling back to blind POST upsert would reintroduce lost updates.
+            error.code == 404 -> RemoteSyncResult.NotConfigured
             error.code == 401 -> RemoteSyncResult.RetryableFailure("Oturum süresi doldu.")
             error.code == 409 || error.code == 412 -> RemoteSyncResult.Conflict(error.message)
             error.code in 408..599 -> RemoteSyncResult.RetryableFailure(error.message)

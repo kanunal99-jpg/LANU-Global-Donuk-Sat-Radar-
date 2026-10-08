@@ -61,6 +61,7 @@ jobs:
             psql -X -v ON_ERROR_STOP=1 -f "$migration"
           done
           psql -X -v ON_ERROR_STOP=1 -f scripts/sql/ci_rls_smoke.sql
+          psql -X -v ON_ERROR_STOP=1 -f scripts/sql/ci_atomic_sync_smoke.sql
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
