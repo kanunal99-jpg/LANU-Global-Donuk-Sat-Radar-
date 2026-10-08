@@ -56,12 +56,14 @@ class SupabaseCommercialRemoteDataSource(
                 )
             }
             val row = rowFor(operation.entityType, payload)
-            auth.rawRequest(
+            val acknowledgment = auth.rawRequest(
                 "POST",
                 "/rest/v1/$table?on_conflict=id",
                 JSONArray().put(row).toString(),
                 session.accessToken,
+                returnRepresentation = true,
             )
+            requireRemoteWriteAcknowledgement(acknowledgment, payload.getString("id"))
             RemoteSyncResult.Success
         }.getOrElse { error -> mapFailure(error) }
     }
