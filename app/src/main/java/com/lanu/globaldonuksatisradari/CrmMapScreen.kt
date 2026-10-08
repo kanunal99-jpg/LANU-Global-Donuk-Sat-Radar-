@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +27,7 @@ import com.lanu.globaldonuksatisradari.crm.CrmCustomer
 import com.lanu.globaldonuksatisradari.crm.CrmStage
 import com.lanu.globaldonuksatisradari.data.DataSourceDescriptor
 import com.lanu.globaldonuksatisradari.data.VerifiedBusiness
+import kotlinx.coroutines.yield
 
 private enum class MapLayer { CRM, RADAR, BOTH }
 
@@ -88,6 +90,12 @@ fun CrmMapScreen(
             MapLayer.RADAR -> scopedRadar.take(MAX_MAP_POINTS)
             MapLayer.BOTH -> (crmMapBusinesses + scopedRadar).take(MAX_MAP_POINTS)
         }
+    }
+    var mapReady by remember(mapBusinesses) { mutableStateOf(false) }
+    LaunchedEffect(mapBusinesses) {
+        // İlk frame'i WebView oluşturma yükünden ayır: navigasyon önce görünür, harita hemen ardından yüklenir.
+        yield()
+        mapReady = true
     }
 
     LazyColumn(
@@ -210,9 +218,17 @@ fun CrmMapScreen(
                         Modifier.padding(16.dp),
                     )
                 }
+            } else if (!mapReady) {
+                Card(Modifier.fillMaxWidth().testTag("crm_map_loading")) {
+                    Text(
+                        "Harita hazırlanıyor…",
+                        Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             } else {
                 BusinessMapPreview(
-                    businesses = mapBusinesses.take(MAX_MAP_POINTS),
+                    businesses = mapBusinesses,
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("crm_map_preview"),
