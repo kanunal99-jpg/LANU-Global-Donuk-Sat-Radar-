@@ -224,6 +224,7 @@ class SupabaseAuthClient(context: Context) {
         body: String?,
         accessToken: String,
         returnRepresentation: Boolean = false,
+        ignoreDuplicates: Boolean = false,
     ): String {
         val connection = (URL(SupabaseConfig.URL + path).openConnection() as HttpURLConnection).apply {
             requestMethod = method
@@ -234,9 +235,10 @@ class SupabaseAuthClient(context: Context) {
             setRequestProperty("Authorization", "Bearer " + accessToken)
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Content-Type", "application/json")
+            val resolution = if (ignoreDuplicates) "ignore-duplicates" else "merge-duplicates"
             setRequestProperty(
                 "Prefer",
-                "resolution=merge-duplicates,return=" + if (returnRepresentation) "representation" else "minimal",
+                "resolution=$resolution,return=" + if (returnRepresentation) "representation" else "minimal",
             )
             if (body != null) doOutput = true
         }
